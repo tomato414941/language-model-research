@@ -5,13 +5,19 @@ probability of a continuation after a context, whatever it is made of. Besides t
 benchmark reports the bits per byte of its correct choices, which moves with every gain in the
 answer's probability, so small models show progress before their answers change; see DataDecide
 (arXiv:2504.11393) and Signal and Noise (arXiv:2508.13144).
+
+Finding whether a change helped needs far fewer questions than a benchmark holds, so by default each
+benchmark asks a fixed sample, and each question's result is kept for comparing models question by
+question.
 """
 
 import argparse
 import json
 import math
+import random
 import statistics
 from importlib.metadata import version
+from pathlib import Path
 
 import torch
 from lm_eval import evaluator
@@ -164,14 +170,25 @@ def correct_choice(task, sample):
 
 
 def answer_bits(task, sample):
-    context, continuation = sample["arguments"][correct_choice(task, sample)]
-    return bits_per_byte(context, continuation, sample["filtered_resps"][correct_choice(task, sample)][0])
+    gold = correct_choice(task, sample)
+    context, continuation = sample["arguments"][gold]
+    return bits_per_byte(context, continuation, sample["filtered_resps"][gold][0])
+
+
+def choose_questions(sizes, questions):
+    """The same questions every time: a sample shared among a benchmark's tasks by their sizes."""
+    total = sum(sizes.values())
+    return {
+        task: sorted(random.Random(task).sample(range(size), min(size, max(1, round(questions * size / total)))))
+        for task, size in sizes.items()
+    }
 
 
 def summarize(rows_by_benchmark):
     """Each benchmark's scores over its questions, and each language's mean over its benchmarks.
 
-    `rows_by_benchmark` holds each question's accuracy and correct answer's bits per byte.
+    `rows_by_benchmark` holds each question's accuracy and correct answer's bits per byte, in an
+    order that every model shares.
     """
     benchmarks, languages = {}, {}
     for name, rows in rows_by_benchmark.items():
@@ -185,6 +202,13 @@ def summarize(rows_by_benchmark):
         }
         languages.setdefault(language, []).append(benchmarks[name])
     return {
+        "questions": {
+            name: {
+                "correct": [row["accuracy"] for row in rows],
+                "bits": [round(row["bits"], 6) for row in rows],
+            }
+            for name, rows in rows_by_benchmark.items()
+        },
         "benchmarks": benchmarks,
         "languages": {
             language: {
@@ -196,31 +220,38 @@ def summarize(rows_by_benchmark):
     }
 
 
-def score(model, names=None, limit=None):
-    """Ask a model the benchmarks; any limit makes the result a sample rather than a score."""
+def score(model, names=None, questions=None):
+    """Ask a model the benchmarks: each one's whole set, or that many questions from it."""
     names = list(BENCHMARKS if names is None else names)
     manager = TaskManager()
     loaded = manager.load([jglue_task(manager, name) if name in JGLUE_TASKS else name for name in names])
     chosen = [loaded["groups"][name] if name in loaded["groups"] else loaded["tasks"][name] for name in names]
+    members = {
+        name: [task.task_name for task in loaded["groups"][name].get_all_tasks()]
+        if name in loaded["groups"]
+        else [name]
+        for name in names
+    }
+    samples = None
+    if questions is not None:
+        samples = {}
+        for name in names:
+            sizes = {member: len(loaded["tasks"][member].eval_docs) for member in members[name]}
+            samples.update(choose_questions(sizes, questions))
     result = evaluator.simple_evaluate(
-        model=model, tasks=chosen, task_manager=manager, limit=limit, log_samples=True
+        model=model, tasks=chosen, task_manager=manager, samples=samples, log_samples=True
     )
     rows = {}
     for name in names:
-        members = (
-            [task.task_name for task in loaded["groups"][name].get_all_tasks()]
-            if name in loaded["groups"]
-            else [name]
-        )
         metric = BENCHMARKS[name][1]
         rows[name] = [
             {"accuracy": sample[metric], "bits": answer_bits(loaded["tasks"][member], sample)}
-            for member in members
-            for sample in result["samples"][member]
+            for member in members[name]
+            for sample in sorted(result["samples"][member], key=lambda sample: sample["doc_id"])
         ]
     return {
         **summarize(rows),
-        "scope": "full" if limit is None else "sample",
+        "scope": "full" if questions is None else "sample",
         "harness": version("lm_eval"),
     }
 
@@ -229,10 +260,8 @@ def huggingface_model(path, device, precision, batch_tokens):
     """A model in Hugging Face's format, with the tokenizer saved beside it."""
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
-    network = AutoModelForCausalLM.from_pretrained(
-        path, torch_dtype=getattr(torch, precision), trust_remote_code=True
-    ).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(path)
+    network = AutoModelForCausalLM.from_pretrained(path, dtype=getattr(torch, precision)).to(device)
     network.eval()
     return ContinuationModel(
         logits=lambda tokens: network(tokens).logits,
@@ -244,18 +273,49 @@ def huggingface_model(path, device, precision, batch_tokens):
     )
 
 
+def nanogpt_model(directory, tokenizer_path, device, precision, batch_tokens):
+    """A checkpoint that train.py saved, with the tokenizer that prepare.py trained."""
+    from tokenizers import Tokenizer
+
+    from model import GPT, GPTConfig
+    from prepare import BOS
+
+    checkpoint = torch.load(Path(directory) / "ckpt.pt", map_location=device)
+    network = GPT(GPTConfig(**checkpoint["model_args"]))
+    network.load_state_dict({key.removeprefix("_orig_mod."): value for key, value in checkpoint["model"].items()})
+    network.to(device, dtype=getattr(torch, precision))
+    network.eval()
+    tokenizer = Tokenizer.from_file(str(tokenizer_path))
+    return ContinuationModel(
+        # Given targets, nanoGPT's model returns every position's logits rather than the last one's.
+        logits=lambda tokens: network(tokens, tokens)[0],
+        encode=lambda text: tokenizer.encode(text, add_special_tokens=False).ids,
+        context=network.config.block_size,
+        prefix=tokenizer.token_to_id(BOS),
+        device=device,
+        batch_tokens=batch_tokens,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("model", help="directory of a model in Hugging Face's format")
+    parser.add_argument("model", help="train.py's output directory, or a Hugging Face model")
+    parser.add_argument("--tokenizer", help="prepare.py's tokenizer, which marks the model as nanoGPT's")
     parser.add_argument("--output", required=True, help="where to write the scores, as JSON")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--precision", default="bfloat16")
     parser.add_argument("--batch-tokens", type=int, default=262144)
-    parser.add_argument("--benchmark", action="append", choices=BENCHMARKS, help="only this one")
-    parser.add_argument("--limit", type=int, help="ask only this many questions, as a sample")
+    parser.add_argument("--language", choices=["en", "ja"], default="en")
+    parser.add_argument("--questions", type=int, default=200, help="from each benchmark; 0 for all of them")
     arguments = parser.parse_args()
-    model = huggingface_model(arguments.model, arguments.device, arguments.precision, arguments.batch_tokens)
-    result = score(model, arguments.benchmark, arguments.limit)
+    load = [arguments.device, arguments.precision, arguments.batch_tokens]
+    model = (
+        nanogpt_model(arguments.model, arguments.tokenizer, *load)
+        if arguments.tokenizer
+        else huggingface_model(arguments.model, *load)
+    )
+    names = [name for name, (language, _) in BENCHMARKS.items() if language == arguments.language]
+    result = score(model, names, arguments.questions or None)
     with open(arguments.output, "w", encoding="utf-8") as output:
         json.dump(result, output, ensure_ascii=False, indent=2)
         output.write("\n")

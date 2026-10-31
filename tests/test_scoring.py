@@ -11,7 +11,8 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scoring import ContinuationModel, bits_per_byte, summarize
+from compare import compare
+from scoring import ContinuationModel, bits_per_byte, choose_questions, summarize
 
 
 def counting_model(batch_tokens=4096):
@@ -78,6 +79,49 @@ class BitsPerByteTest(unittest.TestCase):
         self.assertAlmostEqual(bits_per_byte("質問", "はい", -math.log(2) * 6), 1.0)
 
 
+class ChooseQuestionsTest(unittest.TestCase):
+    def test_chooses_the_same_questions_every_time(self):
+        self.assertEqual(choose_questions({"sciq": 1000}, 200), choose_questions({"sciq": 1000}, 200))
+
+    def test_asks_as_many_questions_as_it_was_told(self):
+        self.assertEqual(len(choose_questions({"sciq": 1000}, 200)["sciq"]), 200)
+
+    def test_shares_the_sample_among_a_benchmark_s_tasks_by_their_sizes(self):
+        chosen = choose_questions({"large": 900, "small": 100}, 200)
+        self.assertEqual({task: len(ids) for task, ids in chosen.items()}, {"large": 180, "small": 20})
+
+    def test_asks_at_least_one_question_of_every_task(self):
+        self.assertEqual(len(choose_questions({"large": 100000, "small": 10}, 10)["small"]), 1)
+
+    def test_asks_no_more_questions_than_a_task_holds(self):
+        self.assertEqual(choose_questions({"small": 5}, 200)["small"], [0, 1, 2, 3, 4])
+
+
+class CompareTest(unittest.TestCase):
+    def score(self, **bits):
+        return {
+            "questions": {name: {"bits": values} for name, values in bits.items()},
+            "benchmarks": {name: {"language": "en"} for name in bits},
+        }
+
+    def test_measures_the_change_on_each_question(self):
+        result = compare(self.score(sciq=[1.0, 2.0, 3.0, 4.0]), self.score(sciq=[0.9, 1.9, 2.8, 3.8]))
+        self.assertAlmostEqual(result["benchmarks"]["sciq"]["change"], -0.15)
+
+    def test_is_surer_of_a_steady_change(self):
+        steady = compare(self.score(sciq=[1.0, 2.0, 3.0, 4.0]), self.score(sciq=[0.9, 1.9, 2.9, 3.9]))
+        unsteady = compare(self.score(sciq=[1.0, 2.0, 3.0, 4.0]), self.score(sciq=[0.5, 2.3, 2.6, 4.2]))
+        self.assertLess(steady["benchmarks"]["sciq"]["stderr"], unsteady["benchmarks"]["sciq"]["stderr"])
+
+    def test_averages_the_benchmarks_of_a_language(self):
+        result = compare(self.score(sciq=[1.0, 1.0], piqa=[2.0, 2.0]), self.score(sciq=[0.9, 0.9], piqa=[2.3, 2.3]))
+        self.assertAlmostEqual(result["languages"]["en"]["change"], 0.1)
+
+    def test_refuses_scores_of_different_questions(self):
+        with self.assertRaisesRegex(ValueError, "same questions"):
+            compare(self.score(sciq=[1.0, 2.0]), self.score(sciq=[1.0]))
+
+
 class SummaryTest(unittest.TestCase):
     def test_averages_questions_within_a_benchmark_and_benchmarks_within_a_language(self):
         summary = summarize(
@@ -98,6 +142,10 @@ class SummaryTest(unittest.TestCase):
                 "ja": {"accuracy": 0.0, "gold_bits_per_byte": 4.0},
             },
         )
+
+    def test_keeps_each_question_s_result(self):
+        summary = summarize({"sciq": [{"accuracy": 1.0, "bits": 1.5}, {"accuracy": 0.0, "bits": 2.5}]})
+        self.assertEqual(summary["questions"]["sciq"], {"correct": [1.0, 0.0], "bits": [1.5, 2.5]})
 
 
 if __name__ == "__main__":
