@@ -7,7 +7,8 @@ cd "$(dirname "$0")"
 stamp() { date -u +"%H:%M:%S $*"; }
 
 stamp packages
-pip install -q tokenizers pyarrow numpy
+# The image's Python refuses other packages by default; a rented machine is thrown away afterwards.
+pip install -q --break-system-packages tokenizers pyarrow
 nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total,power.limit --format=csv,noheader
 python -c 'import torch; print("torch", torch.__version__)'
 mkdir -p results models
