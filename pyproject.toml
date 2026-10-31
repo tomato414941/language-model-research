@@ -1,0 +1,13 @@
+[project]
+name = "language-model-research"
+version = "0.1.0"
+description = "Testing whether a change gives a better language model for the same money"
+requires-python = ">=3.11"
+dependencies = [
+    "lm-eval[hf]==0.4.13",
+    "numpy>=2.2,<3",
+    "torch>=2.14,<3",
+]
+
+[tool.uv]
+package = false
