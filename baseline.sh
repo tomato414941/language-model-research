@@ -15,7 +15,7 @@ mkdir -p results models
 
 for seed in "$@"; do
     stamp "train $seed"
-    python train.py configs/baseline.py --seed="$seed" --out_dir="out/seed$seed" > "results/train-$seed.log" 2>&1
+    python -u train.py configs/baseline.py --seed="$seed" --out_dir="out/seed$seed" > "results/train-$seed.log" 2>&1
     stamp "score $seed"
     python scoring.py "out/seed$seed" --tokenizer data/climbmix/tokenizer.json --validation data/climbmix/val.bin \
         --questions data/questions.jsonl --output "results/seed$seed.json" > "results/score-$seed.log" 2>&1
