@@ -9,3 +9,28 @@
 リンクは `topics/` から他の2つへの一方向にする。データセットのカードの内容はそのデータの `topics/` のメモに書き、コードは引用するメモに出典を書く。論文の本文やデータそのものは置かない。チャットの発言は入れず、公開の論文や記録で裏を取ってから、その出典のメモに書く。
 
 `language-model` の記録にある内容は写さず、そちらを指す。
+
+## テーマ
+
+- [h100.md](topics/h100.md)
+- [scoring.md](topics/scoring.md)
+- [climbmix.md](topics/climbmix.md)
+
+## 出典
+
+- [autoresearch.md](sources/autoresearch.md)
+- [nanogpt.md](sources/nanogpt.md)
+- [modded-nanogpt-first-commit.md](sources/modded-nanogpt-first-commit.md)
+- [retro.md](sources/retro.md)
+- [flash-attention.md](sources/flash-attention.md)
+- [transformer-engine.md](sources/transformer-engine.md)
+
+## 実験
+
+- [baseline.md](experiments/baseline.md)
+- [gpu-prices.md](experiments/gpu-prices.md)
+
+## `language-model` にある関係の記録
+
+- まとめ：[compute-optimal-size](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/compute-optimal-size.md)、[batch-size](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/batch-size.md)、[normuon](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/normuon.md)、[head-dim-128](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/head-dim-128.md)、[qk-norm](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/qk-norm.md)、[swiglu](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/swiglu.md)、[zero-output-init](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/zero-output-init.md)、[vocabulary-size](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/vocabulary-size.md)、[interruptible-gpu](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/interruptible-gpu.md)
+- 出典：[chinchilla](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/chinchilla.md)、[power-lines](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/power-lines.md)、[climb](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/climb.md)、[nanochat-log](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/nanochat-log.md)、[modded-nanogpt-anvil2](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/modded-nanogpt-anvil2.md)、[marin-nano-arch-ablations](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/marin-nano-arch-ablations.md)
