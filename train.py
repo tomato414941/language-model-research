@@ -59,6 +59,7 @@ value_embeddings = False # do we add a table per token to the values of some lay
 rotary = False # do positions come from rotary embeddings instead of a table?
 rms_norm = False # do we use RMSNorm with no weights instead of LayerNorm?
 qk_norm = False # do we normalize queries and keys before they meet?
+relu_squared = False # do we use ReLU squared in the MLP instead of GELU?
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -162,7 +163,7 @@ if os.path.exists(meta_path):
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size, bias=bias,
                   vocab_size=None, dropout=dropout, value_embeddings=value_embeddings, rotary=rotary,
-                  rms_norm=rms_norm, qk_norm=qk_norm) # start with model_args from command line
+                  rms_norm=rms_norm, qk_norm=qk_norm, relu_squared=relu_squared) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -182,7 +183,7 @@ elif init_from == 'resume':
     # the rest of the attributes (e.g. dropout) can stay as desired from command line
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = checkpoint_model_args[k]
-    for k in ['value_embeddings', 'rotary', 'rms_norm', 'qk_norm']:
+    for k in ['value_embeddings', 'rotary', 'rms_norm', 'qk_norm', 'relu_squared']:
         model_args[k] = checkpoint_model_args.get(k, False)
     # create the model
     gptconf = GPTConfig(**model_args)

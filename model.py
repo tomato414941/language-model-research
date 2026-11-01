@@ -163,18 +163,24 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
+class ReLUSquared(nn.Module):
+    """ Squares the positive values and zeroes the others, with no weights to learn """
+
+    def forward(self, input):
+        return F.relu(input).square()
+
 class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
         self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.gelu    = nn.GELU()
+        self.activation = ReLUSquared() if config.relu_squared else nn.GELU()
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
         x = self.c_fc(x)
-        x = self.gelu(x)
+        x = self.activation(x)
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
@@ -206,6 +212,7 @@ class GPTConfig:
     rotary: bool = False # True: positions by rotary embeddings, not by a table of position embeddings
     rms_norm: bool = False # True: RMSNorm with no weights to learn, not LayerNorm
     qk_norm: bool = False # True: queries and keys are normalized before they meet
+    relu_squared: bool = False # True: ReLU squared in the MLP, not GELU
 
 class GPT(nn.Module):
 

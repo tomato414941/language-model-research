@@ -5,3 +5,4 @@ out_dir = 'out/bundle2'
 rotary = True
 rms_norm = True
 qk_norm = True
+relu_squared = True

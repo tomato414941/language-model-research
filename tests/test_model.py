@@ -12,8 +12,8 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from attention_check import agree
-from model import (GPT, GPTConfig, RMSNorm, choose_attention, has_value_embedding, load_flash_attention, rotary_tables,
-                   rotate)
+from model import (GPT, GPTConfig, ReLUSquared, RMSNorm, choose_attention, has_value_embedding, load_flash_attention,
+                   rotary_tables, rotate)
 from muon import configure_muon
 
 
@@ -319,6 +319,40 @@ class QKNormTest(unittest.TestCase):
 
     def test_learns_a_fixed_batch_with_muon(self):
         model = shaped_model(qk_norm=True, rotary=True, rms_norm=True, value_embeddings=True)
+        optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.004)
+        batch = tokens()
+        losses = []
+        for _ in range(30):
+            _, loss = model(batch[:, :-1], batch[:, 1:].contiguous())
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            losses.append(loss.item())
+        self.assertLess(losses[-1], losses[0] * 0.8)
+
+
+class ReLUSquaredTest(unittest.TestCase):
+    def test_squares_positive_values_and_zeroes_the_others(self):
+        output = ReLUSquared()(torch.tensor([-2.0, 0.0, 3.0]))
+        self.assertTrue(torch.equal(output, torch.tensor([0.0, 0.0, 9.0])))
+
+    def test_runs_inside_the_mlp(self):
+        mlp = shaped_model(relu_squared=True).transformer.h[0].mlp
+        vectors = torch.randn(2, 5, 32)
+        expected = mlp.c_proj(mlp.c_fc(vectors).clamp_min(0) ** 2)
+        self.assertTrue(torch.allclose(mlp(vectors), expected))
+
+    def test_leaves_gelu_in_the_mlp_when_off(self):
+        mlp = shaped_model().transformer.h[0].mlp
+        vectors = torch.randn(2, 5, 32)
+        expected = mlp.c_proj(torch.nn.functional.gelu(mlp.c_fc(vectors)))
+        self.assertTrue(torch.allclose(mlp(vectors), expected))
+
+    def test_learns_no_weights_of_its_own(self):
+        self.assertEqual(set(shaped_model(relu_squared=True).state_dict()), set(shaped_model().state_dict()))
+
+    def test_learns_a_fixed_batch_with_muon(self):
+        model = shaped_model(relu_squared=True, qk_norm=True, rotary=True, rms_norm=True, value_embeddings=True)
         optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.004)
         batch = tokens()
         losses = []

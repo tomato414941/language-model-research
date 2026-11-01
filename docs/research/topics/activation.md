@@ -36,6 +36,8 @@ SwiGLU は GELU より良いという報告が多い（[GLU Variants](../sources
 
 **速さ：** xIELU の論文の11億で、GELU 544ミリ秒に対して ReLU² 534ミリ秒（1.8%速い）。xIELU は560ミリ秒で ReLU² より4.9%遅い（最適化なし）。xIPReLU は542ミリ秒で1.5%遅い。今の換算で、それぞれ約0.1%の得、約0.27%の損、約0.08%の損。今の H100 では測っていない。
 
+PyTorch の自動の16ビット計算（autocast）では、GPU の上で2乗だけが32ビットになるはず（`square` は `pow` を呼び、`pow` は `autocast_mode.h` の32ビットの一覧にある。`F.rms_norm` も同じ一覧にある）。GPU では確かめていない。nanochat、autoresearch、modded-nanogpt のコードも同じ書き方で、`torch.compile` の下で差がどれくらいかは分からない。
+
 **初期値：** ReLU² の出力は入力の大きさの2乗で変わるので、MLP の入口の重みの大きさに左右される。入力の2乗平均が1のときの入口の出力の標準偏差は、nanochat 0.4、modded-nanogpt 約0.58、autoresearch 1.0 で、最初の束の初期値は幅640で約0.51（どれも自分たちの計算）。
 
 **他の用途：** ReLU² は推論で疎にしやすい（ReLU² Wins）。[Stochastic activations](../sources/stochastic-activations.md) も推論を速くする話で、今の BPB の候補ではない。
