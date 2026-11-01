@@ -26,6 +26,28 @@ class LayerNorm(nn.Module):
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
+class RMSNorm(nn.Module):
+    """ Divides by the root mean square, with no mean to subtract and no weights to learn """
+
+    def forward(self, input):
+        return F.rms_norm(input, (input.size(-1),))
+
+def make_norm(config):
+    return RMSNorm() if config.rms_norm else LayerNorm(config.n_embd, bias=config.bias)
+
+def rotary_tables(length, head_dim, base=10000):
+    """The cosine and sine that turn each pair of a head's channels at each position, as in karpathy/nanochat."""
+    rates = 1.0 / (base ** (torch.arange(0, head_dim, 2).float() / head_dim))
+    angles = torch.outer(torch.arange(length).float(), rates)
+    return angles.cos()[None, :, None, :], angles.sin()[None, :, None, :]
+
+def rotate(x, cos, sin):
+    """Turns x of shape (B, T, nh, hs) by its position, so that a query and a key meet by their distance alone."""
+    cos, sin = cos[:, :x.size(1)].to(x.dtype), sin[:, :x.size(1)].to(x.dtype)
+    half = x.size(-1) // 2
+    first, second = x[..., :half], x[..., half:]
+    return torch.cat([first * cos + second * sin, second * cos - first * sin], dim=-1)
+
 VALUE_GATE_CHANNELS = 12
 
 def has_value_embedding(layer, n_layer):
@@ -84,6 +106,13 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        # positions by turning the queries and keys, in place of the table of position embeddings
+        self.rotary = config.rotary
+        if self.rotary:
+            assert (config.n_embd // config.n_head) % 2 == 0
+            cos, sin = rotary_tables(config.block_size, config.n_embd // config.n_head)
+            self.register_buffer("rotary_cos", cos, persistent=False)
+            self.register_buffer("rotary_sin", sin, persistent=False)
         # set through GPT.use_flash_attention, in place of PyTorch's attention
         self.flash_attention = None
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
@@ -102,14 +131,16 @@ class CausalSelfAttention(nn.Module):
         if value_embedding is not None:
             gate = 3 * torch.sigmoid(self.value_gate(x[..., :VALUE_GATE_CHANNELS])) # (B, T, nh), range (0, 3)
             v = v + gate.repeat_interleave(C // self.n_head, dim=-1) * value_embedding
+        k = k.view(B, T, self.n_head, C // self.n_head) # (B, T, nh, hs)
+        q = q.view(B, T, self.n_head, C // self.n_head) # (B, T, nh, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head) # (B, T, nh, hs)
+        if self.rotary:
+            q, k = rotate(q, self.rotary_cos, self.rotary_sin), rotate(k, self.rotary_cos, self.rotary_sin)
         if self.flash_attention is not None:
-            # Heads come after time here. All three must be bf16, as autocast makes them for PyTorch's attention.
-            shape = (B, T, self.n_head, C // self.n_head)
-            y = self.flash_attention(q.view(shape).bfloat16(), k.view(shape).bfloat16(), v.view(shape).bfloat16(), causal=True)
+            # All three must be bf16, as autocast makes them for PyTorch's attention.
+            y = self.flash_attention(q.bfloat16(), k.bfloat16(), v.bfloat16(), causal=True)
             return self.resid_dropout(self.c_proj(y.contiguous().view(B, T, C)))
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        k, q, v = k.transpose(1, 2), q.transpose(1, 2), v.transpose(1, 2) # (B, nh, T, hs)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -148,9 +179,9 @@ class Block(nn.Module):
 
     def __init__(self, config, layer):
         super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_1 = make_norm(config)
         self.attn = CausalSelfAttention(config, layer)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_2 = make_norm(config)
         self.mlp = MLP(config)
 
     def forward(self, x, value_embedding=None):
@@ -168,6 +199,8 @@ class GPTConfig:
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     value_embeddings: bool = False # True: a table per token that adds to the values of some layers
+    rotary: bool = False # True: positions by rotary embeddings, not by a table of position embeddings
+    rms_norm: bool = False # True: RMSNorm with no weights to learn, not LayerNorm
 
 class GPT(nn.Module):
 
@@ -179,10 +212,10 @@ class GPT(nn.Module):
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
+            **({} if config.rotary else dict(wpe = nn.Embedding(config.block_size, config.n_embd))),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config, layer) for layer in range(config.n_layer)]),
-            ln_f = LayerNorm(config.n_embd, bias=config.bias),
+            ln_f = make_norm(config),
         ))
         self.value_embeds = nn.ModuleDict({
             str(layer): nn.Embedding(config.vocab_size, config.n_embd) for layer in range(config.n_layer)
@@ -223,7 +256,8 @@ class GPT(nn.Module):
         """
         n_params = sum(p.numel() for p in self.parameters())
         if non_embedding:
-            n_params -= self.transformer.wpe.weight.numel()
+            if not self.config.rotary:
+                n_params -= self.transformer.wpe.weight.numel()
             n_params -= sum(p.numel() for p in self.value_embeds.parameters())
         return n_params
 
@@ -239,12 +273,13 @@ class GPT(nn.Module):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
 
         # forward the GPT model itself
-        tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        x = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
+        if not self.config.rotary:
+            pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
+            x = x + self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
+        x = self.transformer.drop(x)
         for layer, block in enumerate(self.transformer.h):
             table = self.value_embeds[str(layer)] if str(layer) in self.value_embeds else None
             x = block(x, table(idx) if table is not None else None)
@@ -267,7 +302,8 @@ class GPT(nn.Module):
         # but want to use a smaller block size for some smaller, simpler model
         assert block_size <= self.config.block_size
         self.config.block_size = block_size
-        self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:block_size])
+        if not self.config.rotary:
+            self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:block_size])
         for block in self.transformer.h:
             if hasattr(block.attn, 'bias'):
                 block.attn.bias = block.attn.bias[:,:,:block_size,:block_size]
