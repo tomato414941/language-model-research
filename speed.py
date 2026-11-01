@@ -1,10 +1,11 @@
-"""Measures what each way of running the first bundle costs on this machine, and prints the training
+"""Measures what each way of running the second bundle costs on this machine, and prints the training
 options of the cheapest. Every way reads the same tokens per update, so a cheaper one buys more updates
 for the cost of the baseline, which is run here too so that the machine's own speed cancels out.
 
-It first compares the ways of running attention, then tries the number of sequences per pass with the
-best of them, since trying every pair would cost several times as much. The times go to results/speed.json
-and the runs' logs beside it.
+It first compares the ways of running attention, then tries the type of the values through the layers and
+the number of sequences per pass with the best so far, since trying every combination would cost several
+times as much. It also times the bundle without each part whose cost is in doubt. Those runs change the model,
+so they are only recorded and never chosen. The times go to results/speed.json and the runs' logs beside it.
 
 Usage: speed.py [TRAIN_OPTION...]. The options go to every run, so that a small model can try this
 script without a GPU.
@@ -25,33 +26,49 @@ SETTLING_UPDATES = 5
 RUN_SECONDS_LIMIT = 600
 # The baseline took about 0.83 seconds per update on its H100, and some hosts run at half the usual speed.
 SLOW_BASELINE_SECONDS = 0.83 * 1.5
-ATTENTIONS = ("sdpa", "fa2", "fa3", "fa4")
-USUAL_PASS = (64, 8)
-OTHER_PASSES = ((32, 16), (128, 4), (256, 2))
+# The first bundle measured these two as fast as the other ways, which take extra installing.
+ATTENTIONS = ("sdpa", "fa2")
+USUAL_PASS = (128, 4)
+OTHER_PASSES = ((64, 8), (256, 2))
+PARTS_IN_DOUBT = {
+    "without-qk-norm": {"qk_norm": False},
+    "without-residual-weights": {"residual_weights": False},
+    "without-softcap": {"logit_softcap": 0.0},
+    "with-gelu": {"relu_squared": False},
+}
 
 
-def bundle_way(attention, batch_size=USUAL_PASS[0], accumulation=USUAL_PASS[1], block_size=1024, compile_model=True):
+def bundle_way(attention, batch_size=USUAL_PASS[0], accumulation=USUAL_PASS[1], block_size=1024, compile_model=True,
+               stream=False, part=None):
     """A way of running the bundle. All of them read 524,288 tokens per update."""
     name = f"{attention}-{batch_size}x{accumulation}"
+    options = {
+        "attention": attention,
+        "batch_size": batch_size,
+        "gradient_accumulation_steps": accumulation,
+        "block_size": block_size,
+        "compile": compile_model,
+    }
     if block_size != 1024:
         name += f"-context-{block_size}"
     if not compile_model:
         name += "-uncompiled"
+    if stream:
+        name += "-stream"
+        options["stream_bfloat16"] = True
+    if part is not None:
+        name += f"-{part}"
+        options.update(PARTS_IN_DOUBT[part])
     return {
         "name": name,
-        "config": "configs/bundle.py",
+        "config": "configs/bundle2.py",
         "attention": attention,
-        "options": {
-            "attention": attention,
-            "batch_size": batch_size,
-            "gradient_accumulation_steps": accumulation,
-            "block_size": block_size,
-            "compile": compile_model,
-        },
+        "keeps_model": block_size == 1024 and part is None,
+        "options": options,
     }
 
 
-BASELINE = {"name": "baseline", "config": "configs/baseline.py", "attention": "sdpa", "options": {}}
+BASELINE = {"name": "baseline", "config": "configs/baseline.py", "attention": "sdpa", "keeps_model": False, "options": {}}
 
 
 def as_options(options):
@@ -70,10 +87,15 @@ def attention_used(log):
     return found.group(1) if found else None
 
 
-def cost(log, total_seconds, updates, attention):
+def stream_in_bfloat16(log):
+    found = re.search(r"^stream: (.+)", log, re.MULTILINE)
+    return found is not None and "bfloat16" in found.group(1)
+
+
+def cost(log, total_seconds, updates, attention, stream=False):
     """Seconds per update and the seconds around the updates, or None if the run did not do what was asked."""
     seconds = seconds_per_update(log)
-    if seconds is None or attention_used(log) != attention:
+    if seconds is None or attention_used(log) != attention or stream_in_bfloat16(log) != stream:
         return None
     return {"seconds_per_update": seconds, "startup_seconds": max(total_seconds - updates * seconds, 0.0)}
 
@@ -91,15 +113,16 @@ def measure(way, extra):
     total_seconds = time.monotonic() - began
     (RESULTS / f"speed-{way['name']}.log").write_text(log)
     # The loop stops after one update more than max_iters.
-    return None if failed else cost(log, total_seconds, MEASURED_UPDATES + 1, way["attention"])
+    stream = way["options"].get("stream_bfloat16", False)
+    return None if failed else cost(log, total_seconds, MEASURED_UPDATES + 1, way["attention"], stream)
 
 
-def agrees_with_default(attention):
-    """Whether this way of running attention gives what PyTorch's default gives, on this machine."""
-    if attention == "sdpa":
+def agrees_with_default(way):
+    """Whether this way of running gives what PyTorch's default gives, on this machine."""
+    if way == "sdpa":
         return True
-    done = subprocess.run([sys.executable, "attention_check.py", attention], capture_output=True, text=True)
-    (RESULTS / f"speed-check-{attention}.log").write_text(done.stdout + done.stderr)
+    done = subprocess.run([sys.executable, "attention_check.py", way], capture_output=True, text=True)
+    (RESULTS / f"speed-check-{way}.log").write_text(done.stdout + done.stderr)
     return done.returncode == 0
 
 
@@ -111,7 +134,7 @@ def updates_for_the_cost(baseline_updates, baseline, way):
 
 def cheapest(ways, costs, baseline_updates):
     """The way that buys the most updates, among those that worked and keep the bundle's model."""
-    usable = [way for way in ways if way["options"]["block_size"] == 1024 and costs.get(way["name"]) is not None]
+    usable = [way for way in ways if way["keeps_model"] and costs.get(way["name"]) is not None]
     if not usable:
         return None
     return max(usable, key=lambda way: updates_for_the_cost(baseline_updates, costs["baseline"], costs[way["name"]]))
@@ -144,7 +167,7 @@ def main():
     if costs["baseline"]["seconds_per_update"] > SLOW_BASELINE_SECONDS:
         raise SystemExit(f"This machine is too slow: {costs['baseline']}")
 
-    agreeing = {attention: agrees_with_default(attention) for attention in ATTENTIONS}
+    agreeing = {way: agrees_with_default(way) for way in (*ATTENTIONS, "stream")}
     print(f"agrees with PyTorch's default: {agreeing}", file=sys.stderr, flush=True)
     ways = [bundle_way(attention) for attention in ATTENTIONS if agreeing[attention]]
     for way in ways:
@@ -153,17 +176,21 @@ def main():
     if best is None:
         raise SystemExit("No way of running the bundle worked.")
 
-    others = [bundle_way(best["attention"], batch_size, accumulation) for batch_size, accumulation in OTHER_PASSES]
-    others.append(bundle_way(best["attention"], compile_model=False))
-    # A longer context changes the model, so these are only recorded for later.
-    others.append(bundle_way(best["attention"], 32, 8, block_size=2048))
-    others.append(bundle_way("sdpa", 32, 8, block_size=2048))
-    for way in others:
-        if way["name"] not in costs:
-            run(way)
-    ways += others
+    if agreeing["stream"]:
+        ways.append(bundle_way(best["attention"], stream=True))
+        run(ways[-1])
+    best = cheapest(ways, costs, baseline_updates)
+    stream = "stream_bfloat16" in best["options"]
+
+    for batch_size, accumulation in OTHER_PASSES:
+        ways.append(bundle_way(best["attention"], batch_size, accumulation, stream=stream))
+        run(ways[-1])
 
     chosen = cheapest(ways, costs, baseline_updates)
+    options = chosen["options"]
+    for part in PARTS_IN_DOUBT:
+        run(bundle_way(chosen["attention"], options["batch_size"], options["gradient_accumulation_steps"],
+                       stream="stream_bfloat16" in options, part=part))
     updates = updates_for_the_cost(baseline_updates, costs["baseline"], costs[chosen["name"]])
     (RESULTS / "speed.json").write_text(json.dumps(
         {"agrees_with_default": agreeing, "costs": costs, "chosen": chosen["name"], "updates": updates}, indent=1) + "\n")

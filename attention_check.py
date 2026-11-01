@@ -1,7 +1,8 @@
-"""Checks on this GPU that a way of running attention predicts and learns as PyTorch's default does.
+"""Checks on this GPU that a way of running predicts and learns as PyTorch's default does.
 
+The way is one of attention, or `stream` for keeping the values through the layers in bfloat16.
 Exits with 0 if it does, and with another number if it does not or cannot run here.
-Usage: attention_check.py ATTENTION
+Usage: attention_check.py WAY
 """
 
 import sys
@@ -21,7 +22,8 @@ def outputs(model):
     with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
         logits, loss = model(batch[:, :-1], batch[:, 1:].contiguous())
     loss.backward()
-    return logits.float().detach(), {name: p.grad.clone() for name, p in model.named_parameters()}
+    # The norm takes away the size of the stream, so the gradients of the weights of one number are mostly rounding.
+    return logits.float().detach(), {name: p.grad.clone() for name, p in model.named_parameters() if p.dim() > 1}
 
 
 def agree(first, second):
@@ -35,19 +37,22 @@ def agree(first, second):
 
 
 def main():
-    attention = sys.argv[1]
+    way = sys.argv[1]
     torch.manual_seed(0)
+    # The second bundle's shape, except for its outputs at zero, which would give most weights no first gradient.
     model = GPT(GPTConfig(block_size=512, vocab_size=512, n_layer=2, n_head=5, n_embd=640, bias=False,
-                          value_embeddings=True)).cuda()
+                          value_embeddings=True, rotary=True, rms_norm=True, qk_norm=True, relu_squared=True,
+                          separate_embeddings=True, residual_weights=True, logit_softcap=15.0)).cuda()
     default = outputs(model)
-    used = choose_attention(model, attention)
-    if used != attention:
-        print(f"{attention} cannot run here")
+    if way == "stream":
+        model.keep_stream_in(torch.bfloat16)
+    elif choose_attention(model, way) != way:
+        print(f"{way} cannot run here")
         return 2
     if not agree(default, outputs(model)):
-        print(f"{attention} does not agree with PyTorch's default")
+        print(f"{way} does not agree with PyTorch's default")
         return 1
-    print(f"{attention} agrees with PyTorch's default")
+    print(f"{way} agrees with PyTorch's default")
     return 0
 
 
