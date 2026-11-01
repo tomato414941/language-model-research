@@ -17,7 +17,7 @@
 | 料金（[Vast の料金](../experiments/gpu-prices.md)） | 借りた $2.41/時が最安の $1.74 になれば約1.8%、半額なら3.9% | 最安の機械はドライバが古い。モデルは変わらない |
 | 中断ありの貸出 | 約65%安いので最大5.9% | `language-model` の [メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/interruptible-gpu.md)では、H100 は1分で止まって戻らなかった |
 | 準備の時間 | 100秒まで縮めば約1.6% | 連続で回せば小さくなる。大規模には関係しない |
-| 注意の計算（[FlashAttention-3](../sources/flashattention-3.md)） | 0.5〜1% | 注意の計算だけで1.5〜2倍。式の上では計算の18%が注意で、実時間の割合は未測定 |
+| 注意の計算の方式（attention-kernel.md） | 不明 | 基準の PyTorch は既定で cuDNN を使うはずで、FlashAttention-2 と比べた数字は当てはまらない。式の上では計算の18%が注意で、実時間の割合は分かっていない |
 | 効率全体 | 46%まで上がれば約0.8% | 差の原因は未調査 |
 | 1回に流す本数 | 不明 | メモリは80GBのうち約28GB で余裕がある。短い計測で確かめられる |
 | FP8 | 今の規模では0か損 | `language-model` の [メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/fp8.md)では、26層で1.17倍速いが同じ損失では約5%、12層ではかえって遅い |

@@ -32,6 +32,39 @@ def has_value_embedding(layer, n_layer):
     """Value embeddings sit on every other layer and always on the last, as in karpathy/nanochat."""
     return layer % 2 == (n_layer - 1) % 2
 
+def load_flash_attention():
+    """FlashAttention-3's attention function, or None where it cannot run. Its kernels stop at Hopper GPUs."""
+    if not torch.cuda.is_available() or torch.cuda.get_device_capability()[0] > 9:
+        return None
+    try:
+        from kernels import get_kernel
+        return get_kernel("kernels-community/flash-attn3", version=2).flash_attn_func
+    except Exception as error:
+        print(f"FlashAttention-3 could not be loaded: {error}")
+        return None
+
+def choose_attention(model, attention):
+    """Makes attention run as asked on this GPU and returns what runs, 'sdpa' if the asked one cannot.
+
+    'sdpa' leaves the choice to PyTorch, which takes cuDNN on recent GPUs. 'fa2' is the FlashAttention-2
+    built into PyTorch and 'fa4' is FlashAttention-4 behind PyTorch's call, both with cuDNN turned off.
+    'fa3' is called directly, since PyTorch's own route to it only finds a build made from source.
+    """
+    if attention == 'fa3':
+        function = load_flash_attention()
+        if function is None:
+            return 'sdpa'
+        model.use_flash_attention(function)
+    elif attention == 'fa4':
+        try:
+            torch.nn.attention.activate_flash_attention_impl('FA4')
+        except Exception as error:
+            print(f"FlashAttention-4 could not be loaded: {error}")
+            return 'sdpa'
+    if attention in ('fa2', 'fa4'):
+        torch.backends.cuda.enable_cudnn_sdp(False)
+    return attention
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config, layer):
@@ -51,6 +84,8 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        # set through GPT.use_flash_attention, in place of PyTorch's attention
+        self.flash_attention = None
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
@@ -67,6 +102,11 @@ class CausalSelfAttention(nn.Module):
         if value_embedding is not None:
             gate = 3 * torch.sigmoid(self.value_gate(x[..., :VALUE_GATE_CHANNELS])) # (B, T, nh), range (0, 3)
             v = v + gate.repeat_interleave(C // self.n_head, dim=-1) * value_embedding
+        if self.flash_attention is not None:
+            # Heads come after time here. All three must be bf16, as autocast makes them for PyTorch's attention.
+            shape = (B, T, self.n_head, C // self.n_head)
+            y = self.flash_attention(q.view(shape).bfloat16(), k.view(shape).bfloat16(), v.view(shape).bfloat16(), causal=True)
+            return self.resid_dropout(self.c_proj(y.contiguous().view(B, T, C)))
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -168,6 +208,11 @@ class GPT(nn.Module):
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
+
+    def use_flash_attention(self, function):
+        """Sends attention through this function. It is no part of the weights, so it is not saved with them."""
+        for block in self.transformer.h:
+            block.attn.flash_attention = function
 
     def get_num_params(self, non_embedding=True):
         """

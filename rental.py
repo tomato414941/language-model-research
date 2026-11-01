@@ -1,0 +1,164 @@
+"""Rents an H100 on Vast.ai, sends it this repository and the data, starts a script, fetches what it
+made and removes the machine.
+
+Commands: offers, rent, send, start SCRIPT [ARGUMENT...], shell COMMAND, fetch, destroy, guard MINUTES.
+`guard`, left running in the background, removes the machine after that long if nothing else has.
+
+It rents through runs/vast_rental.py of the language-model repository, checked out next to this one,
+so that both projects follow one rental policy and share one record of the machines that failed. That
+module delivers the Vast.ai key. DATA_SOURCE names the machine and directory that hold prepare.py's
+climbmix directory and harness.py's questions.jsonl, as HOST:DIRECTORY. Nothing here prints an address or a key.
+"""
+
+import json
+import os
+import shlex
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+REPOSITORY = Path(__file__).resolve().parent
+sys.path.insert(0, str(REPOSITORY.parent / "language-model" / "runs"))
+import vast_rental as rental  # noqa: E402
+
+HERE = REPOSITORY / "out" / "rental"
+STATE = HERE / "state.json"
+REMOTE = "/root/lmr"
+# The image of the baseline, so that a change of PyTorch does not mix into a comparison with it.
+IMAGE = "pytorch/pytorch:2.15.0-cuda13.2-cudnn9-runtime"
+DISK_GB = 60
+MAX_DOLLARS_PER_HOUR = 2.80
+TRIES = 2
+LABEL = "language-model-research"
+QUERY = {
+    "gpu_name": {"eq": "H100 SXM"},
+    "num_gpus": {"eq": 1},
+    "cuda_max_good": {"gte": 13.2},
+    "reliability2": {"gte": 0.97},
+    "inet_down": {"gte": 500},
+    "disk_space": {"gte": DISK_GB},
+    "cpu_ram": {"gte": 32000},
+    "cpu_cores_effective": {"gte": 4},
+}
+OFFER_FIELDS = ("id", "machine_id", "dph_total", "inet_up", "inet_down", "reliability2", "gpu_mem_bw", "cuda_max_good")
+
+
+def instance():
+    return json.loads(STATE.read_text())["instance"]
+
+
+def find_offers():
+    offers = [offer for offer in rental.search(QUERY, DISK_GB) if offer["dph_total"] <= MAX_DOLLARS_PER_HOUR]
+    return sorted(offers, key=lambda offer: (offer["dph_total"], -offer.get("inet_up", 0)))
+
+
+def show_offers():
+    print(json.dumps([{key: offer.get(key) for key in OFFER_FIELDS} for offer in find_offers()][:5]))
+
+
+def rent():
+    offers = find_offers()
+    if not offers:
+        raise SystemExit("no offer within the price")
+    began = time.time()
+    rented = rental.rent(offers, HERE / "diagnostics", TRIES, image=IMAGE, disk=DISK_GB, label=LABEL)
+    if rented is None:
+        raise SystemExit("no offer started")
+    number, offer = rented
+    HERE.mkdir(parents=True, exist_ok=True)
+    STATE.write_text(json.dumps({"instance": number, "dph": offer["dph_total"], "machine": offer["machine_id"]}))
+    print(json.dumps({"rented": number, "dph": offer["dph_total"], "machine": offer["machine_id"],
+                      "where": offer.get("geolocation"), "seconds_to_ready": round(time.time() - began)}))
+
+
+def ssh_to_instance():
+    """The ssh command for the instance, without its last argument, the command to run there."""
+    row = rental.vast().show_instance(instance())
+    mapped = (row.get("ports") or {}).get("22/tcp") or []
+    host, port = (row["public_ipaddr"], mapped[0]["HostPort"]) if mapped else (row["ssh_host"], row["ssh_port"])
+    return ["ssh", "-i", str(rental.SSH_KEY), "-p", str(port), "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
+            "-o", f"UserKnownHostsFile={rental.KNOWN_HOSTS / str(instance())}", "-o", "LogLevel=ERROR", f"root@{host}"]
+
+
+def stream(source, target_command):
+    """Pipe a local command's output into a command on the instance, and report how long it took."""
+    began = time.time()
+    producer = subprocess.Popen(source, stdout=subprocess.PIPE)
+    done = subprocess.run([*ssh_to_instance(), target_command], stdin=producer.stdout, capture_output=True, text=True)
+    producer.stdout.close()
+    producer.wait()
+    print(json.dumps({"seconds": round(time.time() - began), "source": producer.returncode, "target": done.returncode,
+                      "error": rental.hide_addresses(done.stderr)[-500:]}))
+    if producer.returncode or done.returncode:
+        raise SystemExit("sending failed")
+
+
+def send():
+    stream(["git", "-C", str(REPOSITORY), "archive", "HEAD"], f"mkdir -p {REMOTE} && tar -x -C {REMOTE}")
+    host, directory = os.environ["DATA_SOURCE"].split(":", 1)
+    remote_tar = f"tar -C {shlex.quote(directory)} -cf - climbmix questions.jsonl"
+    stream(["ssh", "-o", "BatchMode=yes", host, remote_tar], f"mkdir -p {REMOTE}/data && tar -x -C {REMOTE}/data")
+
+
+def shell(command, timeout=120):
+    completed = rental.login(instance(), command, timeout=int(timeout))
+    print(completed.stdout[-6000:], end="")
+    if completed.returncode:
+        print(rental.hide_addresses(completed.stderr)[-1500:], file=sys.stderr)
+    return completed.returncode
+
+
+def start(script, *arguments):
+    words = " ".join(shlex.quote(word) for word in [script, *arguments])
+    return shell(f"cd {REMOTE} && nohup bash {words} > run.log 2>&1 < /dev/null & echo started")
+
+
+def fetch():
+    HERE.mkdir(parents=True, exist_ok=True)
+    began = time.time()
+    source = subprocess.Popen([*ssh_to_instance(), f"tar -C {REMOTE} -cf - run.log results models"], stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, text=False)
+    unpack = subprocess.run(["tar", "-x", "-C", str(HERE)], stdin=source.stdout, capture_output=True, text=True)
+    source.stdout.close()
+    error = source.stderr.read().decode(errors="replace")
+    source.wait()
+    print(json.dumps({"seconds": round(time.time() - began), "source": source.returncode, "unpack": unpack.returncode,
+                      "error": rental.hide_addresses(error + unpack.stderr)[-400:]}))
+    return source.returncode or unpack.returncode
+
+
+def destroy():
+    number = instance()
+    answer = rental.vast().destroy_instance(number)
+    STATE.unlink()
+    left = [row["id"] for row in rental.vast().show_instances() if row.get("label") == LABEL and row["id"] != number]
+    print(json.dumps({"destroyed": number, "answer": answer, "other_instances_of_this_project": left}, default=str)[:300])
+
+
+def guard(minutes):
+    number = instance()
+    time.sleep(minutes * 60)
+    # The machine may be gone by then, and one rented since is not the one this was left to watch.
+    if STATE.exists() and instance() == number:
+        destroy()
+
+
+def main():
+    command, *arguments = sys.argv[1:] or ["help"]
+    if command == "help":
+        print(__doc__)
+        return 0
+    if "VAST_API_KEY" not in os.environ:
+        limit = int(arguments[0]) * 60 + 300 if command == "guard" else 3000
+        done = rental.with_key(Path(__file__).resolve(), command, *arguments, timeout=limit)
+        print(done.stdout, end="")
+        print(rental.hide_addresses(done.stderr), end="", file=sys.stderr)
+        return done.returncode
+    actions = {"offers": show_offers, "rent": rent, "send": send, "start": start, "shell": shell, "fetch": fetch,
+               "destroy": destroy, "guard": lambda minutes: guard(int(minutes))}
+    return actions[command](*arguments) or 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

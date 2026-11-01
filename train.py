@@ -27,7 +27,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from model import GPTConfig, GPT
+from model import GPTConfig, GPT, choose_attention
 from muon import configure_muon, set_schedule
 
 # -----------------------------------------------------------------------------
@@ -84,6 +84,7 @@ seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
+attention = 'sdpa' # how attention runs on a GPU: 'sdpa', 'fa2', 'fa3' or 'fa4'; see choose_attention in model.py
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -204,6 +205,10 @@ if block_size < model.config.block_size:
     model.crop_block_size(block_size)
     model_args['block_size'] = block_size # so that the checkpoint will have the right value
 model.to(device)
+
+# The other ways of running attention have no dropout and need bf16 on a GPU; anywhere else PyTorch chooses
+can_choose_attention = device_type == 'cuda' and dtype == 'bfloat16' and dropout == 0.0
+print(f"attention: {choose_attention(model, attention) if can_choose_attention else 'sdpa'}")
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
