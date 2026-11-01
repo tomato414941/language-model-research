@@ -11,7 +11,7 @@
 - **LayerNorm と RMSNorm：** 品質はほぼ同じ（[RMSNorm の論文](../sources/rmsnorm.md)、[Ceramic](../sources/revisiting-layernorm.md)）。速さは、論文の Transformer で6.9%差があり、Ceramic では素直な PyTorch で最大40%、良いカーネルで0。正規化の計算だけの差か、全体の差かは資料ごとに違う。
 - **重みの有無は割れている：**
   - 普通の設定では重みありが良い。[OLMoE](../sources/olmoe.md) は勾配の跳ねが減り、[Lingle の記事](../sources/parametric-rmsnorm-blog.md)は 2.240 と 2.253（0.6%差）。どちらも AdamW で、OLMoE は勾配をクリップしている。
-  - 出力の初期値を小さくする μP の設定では重みなしが良い（[μ-Transfer](../sources/mu-transfer.md)）。
+  - `lm_head` の初期値を小さくする μP の設定では重みなしが良い（[μ-Transfer](../sources/mu-transfer.md)）。
 - **小さい規模の例：** autoresearch、nanochat、modded-nanogpt はどれも重みなしの RMSNorm。LLaMA、Qwen、DeepSeek は重みあり（Lingle の記事による）。今の規模で、Muon と組み合わせて比べた結果は見つけていない。
 - **FlashNorm（arXiv 2407.09577）：** 要旨によると推論を速くする話で、学習の候補ではない。
 

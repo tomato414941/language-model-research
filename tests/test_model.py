@@ -365,6 +365,50 @@ class ReLUSquaredTest(unittest.TestCase):
         self.assertLess(losses[-1], losses[0] * 0.8)
 
 
+class ZeroOutputTest(unittest.TestCase):
+    def step_with_muon(self, model, optimizer):
+        batch = tokens()
+        _, loss = model(batch[:, :-1], batch[:, 1:].contiguous())
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        return loss.item()
+
+    def test_lets_each_layer_pass_its_input_through_at_the_start(self):
+        block = shaped_model(zero_output=True).transformer.h[0]
+        vectors = torch.randn(2, 5, 32)
+        self.assertTrue(torch.equal(block(vectors), vectors))
+
+    def test_leaves_the_other_weights_as_they_are(self):
+        with_zero, without = shaped_model(zero_output=True).state_dict(), shaped_model().state_dict()
+        for name, weight in without.items():
+            if not name.endswith('c_proj.weight'):
+                self.assertTrue(torch.equal(with_zero[name], weight), name)
+
+    def test_keeps_the_small_random_start_when_off(self):
+        block = shaped_model().transformer.h[0]
+        self.assertGreater(block.attn.c_proj.weight.abs().sum().item(), 0.0)
+        self.assertGreater(block.mlp.c_proj.weight.abs().sum().item(), 0.0)
+
+    def test_moves_the_earlier_weights_from_the_second_muon_update(self):
+        model = shaped_model(zero_output=True, rms_norm=True)
+        optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.004)
+        earlier = model.transformer.h[0].mlp.c_fc.weight
+        before = earlier.detach().clone()
+        self.step_with_muon(model, optimizer)
+        self.assertTrue(torch.equal(earlier, before))
+        self.step_with_muon(model, optimizer)
+        self.assertFalse(torch.equal(earlier, before))
+        self.assertTrue(all(torch.isfinite(p).all() for p in model.parameters()))
+
+    def test_learns_a_fixed_batch_with_muon(self):
+        model = shaped_model(zero_output=True, relu_squared=True, qk_norm=True, rotary=True, rms_norm=True,
+                             value_embeddings=True)
+        optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.004)
+        losses = [self.step_with_muon(model, optimizer) for _ in range(30)]
+        self.assertLess(losses[-1], losses[0] * 0.8)
+
+
 class AttentionCheckTest(unittest.TestCase):
     def outputs(self, logits=0.0, gradient=(1.0, 2.0, 3.0)):
         return torch.full((2, 3), logits), {"weight": torch.tensor(gradient)}

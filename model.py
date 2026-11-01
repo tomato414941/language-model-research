@@ -213,6 +213,7 @@ class GPTConfig:
     rms_norm: bool = False # True: RMSNorm with no weights to learn, not LayerNorm
     qk_norm: bool = False # True: queries and keys are normalized before they meet
     relu_squared: bool = False # True: ReLU squared in the MLP, not GELU
+    zero_output: bool = False # True: the last weights of attention and the MLP start at zero
 
 class GPT(nn.Module):
 
@@ -242,10 +243,13 @@ class GPT(nn.Module):
 
         # init all weights
         self.apply(self._init_weights)
-        # apply special scaled init to the residual projections, per GPT-2 paper
+        # apply special scaled init to the residual projections, per GPT-2 paper, or start them at zero
         for pn, p in self.named_parameters():
             if pn.endswith('c_proj.weight'):
-                torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
+                if config.zero_output:
+                    torch.nn.init.zeros_(p)
+                else:
+                    torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
         # value gates start small and positive, so that each table has a little effect from the start
         for block in self.transformer.h:
             if block.attn.value_gate is not None:

@@ -6,3 +6,4 @@ rotary = True
 rms_norm = True
 qk_norm = True
 relu_squared = True
+zero_output = True
