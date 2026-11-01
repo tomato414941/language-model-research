@@ -5,7 +5,7 @@
 | 部分 | 最初の束 | autoresearch | 効果の報告 |
 |---|---|---|---|
 | 位置 | 学習する表 | RoPE | GPT の形で損失が −1.8%、−3.0%（rope.md） |
-| 正規化 | LayerNorm（学習する重み） | RMSNorm（重みなし） | 単独の数字は見つけていない |
+| 正規化 | LayerNorm（学習する重み） | RMSNorm（重みなし） | 重みの有無は割れていて0付近（normalization.md） |
 | Q と K の正規化 | なし | あり | [IMU-1](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/imu-1.md) で −0.63%、[Marin](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/marin-nano-arch-ablations.md) でほぼ0 |
 | 活性化関数 | GELU | ReLU² | 記録5のコメントで1〜2%、Marin で0 |
 | 出力の初期値 | 小さい値 | 0 | 単独の数字は見つけていない |
