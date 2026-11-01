@@ -55,6 +55,7 @@ n_head = 12
 n_embd = 768
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
+value_embeddings = False # do we add a table per token to the values of some layers?
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -70,7 +71,8 @@ min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchi
 # 'adamw' is the recipe above; 'muon' uses the settings below, and its schedule comes from muon.py
 optimizer_name = 'adamw'
 muon_lr = 0.04 # learning rate of the matrices of the blocks
-muon_other_lr = 0.004 # learning rate of every other weight
+muon_other_lr = 0.004 # learning rate of every other weight, except for the value embeddings
+muon_value_embedding_lr = 0.1
 muon_weight_decay = 0.2 # at the start of training, falling to zero at the end
 muon_polar_express = True
 muon_neuron_normalization = True
@@ -154,8 +156,8 @@ if os.path.exists(meta_path):
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
 # model init
-model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
-                  bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size, bias=bias,
+                  vocab_size=None, dropout=dropout, value_embeddings=value_embeddings) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -175,6 +177,7 @@ elif init_from == 'resume':
     # the rest of the attributes (e.g. dropout) can stay as desired from command line
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = checkpoint_model_args[k]
+    model_args['value_embeddings'] = checkpoint_model_args.get('value_embeddings', False)
     # create the model
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
@@ -207,7 +210,7 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
 if optimizer_name == 'muon':
-    optimizer = configure_muon(model, muon_lr, muon_other_lr, muon_polar_express,
+    optimizer = configure_muon(model, muon_lr, muon_other_lr, muon_value_embedding_lr, muon_polar_express,
                                muon_neuron_normalization, muon_cautious_decay)
 else:
     optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)

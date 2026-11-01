@@ -26,13 +26,23 @@ class LayerNorm(nn.Module):
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
+VALUE_GATE_CHANNELS = 12
+
+def has_value_embedding(layer, n_layer):
+    """Value embeddings sit on every other layer and always on the last, as in karpathy/nanochat."""
+    return layer % 2 == (n_layer - 1) % 2
+
 class CausalSelfAttention(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, layer):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        # a gate per head on the value embedding, read from the first channels of the input
+        self.value_gate = None
+        if config.value_embeddings and has_value_embedding(layer, config.n_layer):
+            self.value_gate = nn.Linear(VALUE_GATE_CHANNELS, config.n_head, bias=False)
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
@@ -49,11 +59,14 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x):
+    def forward(self, x, value_embedding=None):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+        if value_embedding is not None:
+            gate = 3 * torch.sigmoid(self.value_gate(x[..., :VALUE_GATE_CHANNELS])) # (B, T, nh), range (0, 3)
+            v = v + gate.repeat_interleave(C // self.n_head, dim=-1) * value_embedding
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -93,15 +106,15 @@ class MLP(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, layer):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
+        self.attn = CausalSelfAttention(config, layer)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, value_embedding=None):
+        x = x + self.attn(self.ln_1(x), value_embedding)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -114,6 +127,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    value_embeddings: bool = False # True: a table per token that adds to the values of some layers
 
 class GPT(nn.Module):
 
@@ -127,9 +141,13 @@ class GPT(nn.Module):
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            h = nn.ModuleList([Block(config, layer) for layer in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
+        self.value_embeds = nn.ModuleDict({
+            str(layer): nn.Embedding(config.vocab_size, config.n_embd) for layer in range(config.n_layer)
+            if config.value_embeddings and has_value_embedding(layer, config.n_layer)
+        })
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
@@ -143,6 +161,10 @@ class GPT(nn.Module):
         for pn, p in self.named_parameters():
             if pn.endswith('c_proj.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
+        # value gates start small and positive, so that each table has a little effect from the start
+        for block in self.transformer.h:
+            if block.attn.value_gate is not None:
+                torch.nn.init.uniform_(block.attn.value_gate.weight, 0.0, 0.02)
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
@@ -150,13 +172,14 @@ class GPT(nn.Module):
     def get_num_params(self, non_embedding=True):
         """
         Return the number of parameters in the model.
-        For non-embedding count (default), the position embeddings get subtracted.
+        For non-embedding count (default), the position and value embeddings get subtracted.
         The token embeddings would too, except due to the parameter sharing these
         params are actually used as weights in the final layer, so we include them.
         """
         n_params = sum(p.numel() for p in self.parameters())
         if non_embedding:
             n_params -= self.transformer.wpe.weight.numel()
+            n_params -= sum(p.numel() for p in self.value_embeds.parameters())
         return n_params
 
     def _init_weights(self, module):
@@ -177,8 +200,9 @@ class GPT(nn.Module):
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
-        for block in self.transformer.h:
-            x = block(x)
+        for layer, block in enumerate(self.transformer.h):
+            table = self.value_embeds[str(layer)] if str(layer) in self.value_embeds else None
+            x = block(x, table(idx) if table is not None else None)
         x = self.transformer.ln_f(x)
 
         if targets is not None:

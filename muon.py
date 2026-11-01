@@ -104,14 +104,16 @@ class MuonAdamW(torch.optim.Optimizer):
         p.sub_(lr * (update + decay))
 
 
-def configure_muon(model, muon_lr, other_lr, polar_express=True, neuron_normalization=True,
-                   cautious_decay=True, betas=(0.8, 0.95), eps=1e-10, beta2=0.95):
+def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_express=True,
+                   neuron_normalization=True, cautious_decay=True, betas=(0.8, 0.95), eps=1e-10, beta2=0.95):
     """Gives the matrices of the blocks to Muon and every other weight to AdamW."""
-    matrices, query_key_value, others = [], [], []
+    matrices, query_key_value, value_embeddings, others = [], [], [], []
     for name, p in model.named_parameters():
         if not p.requires_grad:
             continue
-        if not name.startswith('transformer.h.') or p.dim() != 2:
+        if name.startswith('value_embeds.'):
+            value_embeddings.append(p)
+        elif not name.startswith('transformer.h.') or p.dim() != 2:
             others.append(p)
         elif name.endswith('c_attn.weight'):
             query_key_value.append(p)
@@ -120,11 +122,14 @@ def configure_muon(model, muon_lr, other_lr, polar_express=True, neuron_normaliz
     muon = dict(kind='muon', lr=muon_lr, momentum=MOMENTUM_START, weight_decay=0.0, beta2=beta2,
                 polar_express=polar_express, normalize_neurons=neuron_normalization,
                 cautious_decay=cautious_decay)
-    return MuonAdamW([
-        dict(kind='adamw', params=others, lr=other_lr, betas=betas, eps=eps, initial_lr=other_lr),
+    adamw = dict(kind='adamw', betas=betas, eps=eps)
+    groups = [
+        dict(adamw, params=others, lr=other_lr, initial_lr=other_lr),
         dict(muon, params=matrices, chunks=1, initial_lr=muon_lr),
         dict(muon, params=query_key_value, chunks=3, initial_lr=muon_lr),
-    ])
+        dict(adamw, params=value_embeddings, lr=value_embedding_lr, initial_lr=value_embedding_lr),
+    ]
+    return MuonAdamW([group for group in groups if group['params']])
 
 
 def set_schedule(optimizer, update, total_updates, weight_decay):

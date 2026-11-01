@@ -17,6 +17,7 @@
 - [climbmix.md](topics/climbmix.md)
 - [retrieval.md](topics/retrieval.md)
 - [optimizer.md](topics/optimizer.md)
+- [bundle.md](topics/bundle.md)
 
 ## 出典
 
@@ -37,6 +38,9 @@
 - [algoperf.md](sources/algoperf.md)
 - [polar-express.md](sources/polar-express.md)
 - [modded-nanogpt-muon-record.md](sources/modded-nanogpt-muon-record.md)
+- [delphi.md](sources/delphi.md)
+- [problems-with-chinchilla-approach-2.md](sources/problems-with-chinchilla-approach-2.md)
+- [chinchilla-check.md](sources/chinchilla-check.md)
 
 ## 実験
 
