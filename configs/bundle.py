@@ -10,5 +10,5 @@ n_embd = 640
 n_head = 5
 value_embeddings = True
 max_iters = 1602
-lr_decay_iters = 1602
-eval_interval = 1602
+lr_decay_iters = max_iters
+eval_interval = max_iters

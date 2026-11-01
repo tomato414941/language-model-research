@@ -1,19 +1,10 @@
 # 最初の束
 
-一度の学習で測る、最初の変更のまとまり。ここの見方は2026-11時点の仮のもので、まだ GPU で測っていない。新しい結果が出たら書き換える。
-
-`configs/bundle.py` が今の束で、次の変更が入っている。それぞれ設定で外せる。
-
-- オプティマイザ（optimizer.md）：Muon と AdamW の併用、学習率、Polar Express、NorMuon、cautious weight decay、学習率の下げ方。
-- Value embeddings。
-- ヘッド128次元（5ヘッド）。
-- 10層、幅640。
-
-FlashAttention-3 と速度の調整は、H100 で確かめる必要があるのでまだ入っていない。
+一度の学習で測る、最初の変更のまとまり。中身と外し方は `configs/bundle.py` にあり、オプティマイザの見方は optimizer.md にある。ここの見方は2026-11時点の仮のもので、測った結果ではない。新しい結果が出たら書き換える。
 
 ## Value embeddings
 
-トークンごとの表を、最後の層から1層おきに置き、注意の value に足す（[`language-model` のメモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/value-embeddings.md)）。形は nanochat の `gpt.py` に合わせた。ゲートは入力の先頭12次元から 3·sigmoid でヘッドごとに作り、重みは小さな正の値から始める。autoresearch は 2·sigmoid、32次元、重みは0から。
+トークンごとの表を、最後の層から1層おきに置き、注意の value に足す（[`language-model` のメモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/value-embeddings.md)）。形は nanochat の `gpt.py` に合わせた。autoresearch とはゲートの形が違う（2·sigmoid、32次元、重みは0から）。
 
 根拠は、[ResFormer](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/value-residual.md)（同じ損失に要るトークンが20.3%、パラメータが16.1%少ない。AdamW、8,200万〜4.7億）、[Marin](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/marin-nano-arch-ablations.md)（ゲートまでで −1.1%）、nanochat の LOG（ステップ、計算量、時間のすべてで勝った）。ResFormer は最初の層の value を再利用する形で、表を持つ形そのものの論文は見つけていない。
 
@@ -38,8 +29,6 @@ FlashAttention-3 と速度の調整は、H100 で確かめる必要があるの�
 nanochat の LOG（2026-01-27）は、Muon と表を使う形で、1e18〜1e19 の最適な比を埋め込みを除いて約10.5とした。今の計算量まで伸ばすと約5,500万パラメータで、この形に近い。幅÷層は基準と同じ64で、nanochat の LOG は64のほうが128より良いとしている。
 
 差は小さく、細かい順位は当てにならない（[Approach 2 の問題](../sources/problems-with-chinchilla-approach-2.md)、[個人の確認](../sources/chinchilla-check.md)）。今の規模で実際に比べた結果はなく、nanochat の最小は 1e18、[Delphi](../sources/delphi.md) は 3e18 から。
-
-更新の回数は計算量からの見積もり（1,602回）で、学習の前に実際の速度から決め直す。
 
 ## 見方が変わりそうな条件
 

@@ -1,6 +1,6 @@
 # MoE
 
-MLP を複数の専門家に分け、トークンごとに一部だけを動かす。`language-model` にも[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/moe.md)がある。2026-11時点の見方では、今の規模では効果がはっきりせず実装も重いので、優先度を下げている。まだ測っていない。
+MLP を複数の専門家に分け、トークンごとに一部だけを動かす。`language-model` にも[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/moe.md)がある。2026-11時点の見方では、今の規模では効果がはっきりせず実装も重いので、優先度を下げている。測った結果ではない。
 
 - **大きな効果の報告：** [Marin](../sources/marin-moe.md) は 1e18〜3e20 で計算量の約4倍分（1e23 では6.7倍、実時間で3.6倍）。[Engram の論文](../sources/engram.md)の比較では、同じ計算量で検証 loss が7.6%低い。[DeepSeekMoE](../sources/deepseekmoe.md) は、動くパラメータが同じ2億のモデルで The Pile の loss が6〜9%低い。
 - **学習量の違い：** DeepSeekMoE の比較は1パラメータ500トークン。今の基準は5〜15トークンで、トークンが足りない側にある。容量を増やす MoE は同じようには効きにくいと見ている（自分たちの解釈）。
