@@ -278,6 +278,59 @@ class RMSNormTest(unittest.TestCase):
         self.assertTrue(torch.allclose(block.ln_1(vectors), block.ln_1(vectors * 3), atol=1e-4))
 
 
+class QKNormTest(unittest.TestCase):
+    def output_with_larger_queries_and_keys(self, attention, vectors):
+        # c_attn's rows give the queries, then the keys, then the values.
+        with torch.no_grad():
+            attention.c_attn.weight[:2 * attention.n_embd] *= 3
+        return attention(vectors)
+
+    def test_ignores_the_size_of_queries_and_keys(self):
+        attention = shaped_model(qk_norm=True).transformer.h[0].attn
+        vectors = torch.randn(2, 5, 32)
+        before = attention(vectors)
+        after = self.output_with_larger_queries_and_keys(attention, vectors)
+        self.assertTrue(torch.allclose(after, before, atol=1e-4))
+
+    def test_leaves_their_size_in_effect_when_off(self):
+        attention = shaped_model().transformer.h[0].attn
+        vectors = torch.randn(2, 5, 32)
+        before = attention(vectors)
+        after = self.output_with_larger_queries_and_keys(attention, vectors)
+        self.assertFalse(torch.allclose(after, before, atol=1e-4))
+
+    def test_learns_no_weights_of_its_own(self):
+        self.assertEqual(set(shaped_model(qk_norm=True).state_dict()), set(shaped_model().state_dict()))
+
+    def test_keeps_earlier_positions_blind_to_later_tokens(self):
+        model = shaped_model(qk_norm=True, rotary=True)
+        inputs = tokens()[:, :-1]
+        changed = inputs.clone()
+        changed[:, -1] = (changed[:, -1] + 1) % 32
+        self.assertTrue(torch.allclose(all_logits(model, inputs)[:, :-1], all_logits(model, changed)[:, :-1]))
+
+    def test_predicts_the_same_through_the_flash_attention_call(self):
+        model = shaped_model(qk_norm=True, rotary=True)
+        with torch.amp.autocast(device_type="cpu", dtype=torch.bfloat16):
+            before = all_logits(model, tokens()[:, :-1]).float()
+            model.use_flash_attention(attention_with_heads_after_time)
+            after = all_logits(model, tokens()[:, :-1]).float()
+        self.assertTrue(torch.allclose(after, before, atol=1e-2))
+
+    def test_learns_a_fixed_batch_with_muon(self):
+        model = shaped_model(qk_norm=True, rotary=True, rms_norm=True, value_embeddings=True)
+        optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.004)
+        batch = tokens()
+        losses = []
+        for _ in range(30):
+            _, loss = model(batch[:, :-1], batch[:, 1:].contiguous())
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            losses.append(loss.item())
+        self.assertLess(losses[-1], losses[0] * 0.8)
+
+
 class AttentionCheckTest(unittest.TestCase):
     def outputs(self, logits=0.0, gradient=(1.0, 2.0, 3.0)):
         return torch.full((2, 3), logits), {"weight": torch.tensor(gradient)}

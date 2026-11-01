@@ -4,3 +4,4 @@ exec(open('configs/bundle.py').read())
 out_dir = 'out/bundle2'
 rotary = True
 rms_norm = True
+qk_norm = True

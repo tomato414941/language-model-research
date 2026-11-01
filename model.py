@@ -113,6 +113,8 @@ class CausalSelfAttention(nn.Module):
             cos, sin = rotary_tables(config.block_size, config.n_embd // config.n_head)
             self.register_buffer("rotary_cos", cos, persistent=False)
             self.register_buffer("rotary_sin", sin, persistent=False)
+        # queries and keys of one size, so that only their directions decide where to attend
+        self.qk_norm = RMSNorm() if config.qk_norm else None
         # set through GPT.use_flash_attention, in place of PyTorch's attention
         self.flash_attention = None
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
@@ -136,6 +138,8 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head) # (B, T, nh, hs)
         if self.rotary:
             q, k = rotate(q, self.rotary_cos, self.rotary_sin), rotate(k, self.rotary_cos, self.rotary_sin)
+        if self.qk_norm is not None:
+            q, k = self.qk_norm(q), self.qk_norm(k)
         if self.flash_attention is not None:
             # All three must be bf16, as autocast makes them for PyTorch's attention.
             y = self.flash_attention(q.bfloat16(), k.bfloat16(), v.bfloat16(), causal=True)
@@ -201,6 +205,7 @@ class GPTConfig:
     value_embeddings: bool = False # True: a table per token that adds to the values of some layers
     rotary: bool = False # True: positions by rotary embeddings, not by a table of position embeddings
     rms_norm: bool = False # True: RMSNorm with no weights to learn, not LayerNorm
+    qk_norm: bool = False # True: queries and keys are normalized before they meet
 
 class GPT(nn.Module):
 
