@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from speed import attention_used, bundle_way, cheapest, cost, seconds_per_update, training_options, updates_for_the_money
+from speed import attention_used, bundle_way, cheapest, cost, seconds_per_update, training_options, updates_for_the_cost
 
 
 def log_of(*milliseconds):
@@ -75,11 +75,11 @@ class SpeedTest(unittest.TestCase):
         self.assertIsNone(cheapest([bundle_way("sdpa")], {"baseline": costing(0.8), "sdpa-64x8": None}, 954))
 
     def test_buys_more_updates_with_a_faster_update(self):
-        self.assertEqual(updates_for_the_money(954, costing(0.8), costing(0.5)), 1526)
-        self.assertEqual(updates_for_the_money(954, costing(0.8), costing(0.8)), 954)
+        self.assertEqual(updates_for_the_cost(954, costing(0.8), costing(0.5)), 1526)
+        self.assertEqual(updates_for_the_cost(954, costing(0.8), costing(0.8)), 954)
 
-    def test_takes_a_longer_startup_out_of_the_money(self):
-        self.assertEqual(updates_for_the_money(954, costing(0.8, 30.0), costing(0.5, 60.0)), 1466)
+    def test_takes_a_longer_startup_out_of_the_budget(self):
+        self.assertEqual(updates_for_the_cost(954, costing(0.8, 30.0), costing(0.5, 60.0)), 1466)
 
     def test_gives_options_that_train_for_those_updates_in_that_way(self):
         options = training_options(bundle_way("fa3", 128, 4), 1700)

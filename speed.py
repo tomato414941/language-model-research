@@ -1,6 +1,6 @@
 """Measures what each way of running the first bundle costs on this machine, and prints the training
 options of the cheapest. Every way reads the same tokens per update, so a cheaper one buys more updates
-for the money of the baseline, which is run here too so that the machine's own speed cancels out.
+for the cost of the baseline, which is run here too so that the machine's own speed cancels out.
 
 It first compares the ways of running attention, then tries the number of sequences per pass with the
 best of them, since trying every pair would cost several times as much. The times go to results/speed.json
@@ -103,10 +103,10 @@ def agrees_with_default(attention):
     return done.returncode == 0
 
 
-def updates_for_the_money(baseline_updates, baseline, way):
+def updates_for_the_cost(baseline_updates, baseline, way):
     """How many updates of the way take the time of the baseline's updates, counting the time around them."""
-    money = baseline_updates * baseline["seconds_per_update"] + baseline["startup_seconds"]
-    return round((money - way["startup_seconds"]) / way["seconds_per_update"])
+    budget = baseline_updates * baseline["seconds_per_update"] + baseline["startup_seconds"]
+    return round((budget - way["startup_seconds"]) / way["seconds_per_update"])
 
 
 def cheapest(ways, costs, baseline_updates):
@@ -114,7 +114,7 @@ def cheapest(ways, costs, baseline_updates):
     usable = [way for way in ways if way["options"]["block_size"] == 1024 and costs.get(way["name"]) is not None]
     if not usable:
         return None
-    return max(usable, key=lambda way: updates_for_the_money(baseline_updates, costs["baseline"], costs[way["name"]]))
+    return max(usable, key=lambda way: updates_for_the_cost(baseline_updates, costs["baseline"], costs[way["name"]]))
 
 
 def training_options(way, updates):
@@ -164,7 +164,7 @@ def main():
     ways += others
 
     chosen = cheapest(ways, costs, baseline_updates)
-    updates = updates_for_the_money(baseline_updates, costs["baseline"], costs[chosen["name"]])
+    updates = updates_for_the_cost(baseline_updates, costs["baseline"], costs[chosen["name"]])
     (RESULTS / "speed.json").write_text(json.dumps(
         {"agrees_with_default": agreeing, "costs": costs, "chosen": chosen["name"], "updates": updates}, indent=1) + "\n")
     print(" ".join(training_options(chosen, updates)))

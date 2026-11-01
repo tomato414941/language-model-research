@@ -1,6 +1,6 @@
 # The first bundle: Muon, its learning rates and schedule, value embeddings, heads of 128 dimensions,
 # and 10 layers of width 640. The passes and updates are the ones speed.py chose for the first run, for
-# the money of the baseline; bundle.sh replaces them with what the speed of its machine buys.
+# the cost of the baseline; bundle.sh replaces them with what the speed of its machine buys.
 # To turn one part off, for example:
 #   --value_embeddings=False, --n_head=10, --n_layer=12 --n_embd=768 --n_head=12,
 #   --muon_polar_express=False, --muon_neuron_normalization=False, --muon_cautious_decay=False
