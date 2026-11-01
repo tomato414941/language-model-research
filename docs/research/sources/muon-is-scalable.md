@@ -2,7 +2,7 @@
 
 Liu ら（Moonshot AI ほか）、Muon is Scalable for LLM Training（arXiv 2502.16982、2025-02）。
 
-- [元の Muon](muon.md) に足したもの：AdamW と同じ方式の weight decay（学習を延ばすと重みが大きくなりすぎるため）、行列の形で変わる更新の大きさの補正、AdamW の更新の大きさ（RMS 0.2〜0.4）に合わせる係数0.2。これで AdamW の学習率と weight decay をそのまま使えるとする。
+- 元の Muon（muon.md）に足したもの：AdamW と同じ方式の weight decay（学習を延ばすと重みが大きくなりすぎるため）、行列の形で変わる更新の大きさの補正、AdamW の更新の大きさ（RMS 0.2〜0.4）に合わせる係数0.2。これで AdamW の学習率と weight decay をそのまま使えるとする。
 - Newton-Schulz は10回にしても5回より良くならない。momentum は調整しても安定した差が出ないので0.95のまま。
 - RMSNorm、出力、埋め込みは AdamW で更新する。全部を Muon で扱うことは今後の課題としている。
 - スケーリング則：Llama 形の3.99億〜15億パラメータ（埋め込みを除く）、文脈8K、最適なトークン量（89.2億〜389億）、AdamW は grid search。loss は Muon が 2.506·C^−0.052、AdamW が 2.608·C^−0.054。同じ性能に必要な計算量は Muon が約52%。

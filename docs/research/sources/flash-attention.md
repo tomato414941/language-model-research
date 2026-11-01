@@ -6,4 +6,4 @@
 - FlashAttention-3：Hopper 向け。「H100 / H800、CUDA 12.3 以上が必要」とある。
 - FlashAttention-4：CuTeDSL で書かれ、Hopper と Blackwell 向け（H100、B200 の例）。RTX 5090 には触れていない。
 
-読んだのは README の対応の部分だけ。速度の数字は読んでいない。
+読んだのは README の対応の部分だけ。速度の数字は論文のメモ（flashattention-3.md）にある。

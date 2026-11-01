@@ -10,7 +10,7 @@ Wen ら、Fantastic Pretraining Optimizers and Where to Find Them（arXiv 2509.0
 - GPT-3 のレシピ（ピーク学習率6e-4）は学習率の調整だけで1億で約2倍速くなるので、基準として弱いとしている。
 - AdamW の調整例（表の見出しは1.3億の1倍、本文は3億としている）：学習率0.008、weight decay 0.1、最小学習率0、warmup 2,000、勾配のクリップ2、バッチ128（文脈4,096で524,288トークン）、β1 0.9、β2 0.98、ε 1e-10。loss は3.298から3.263。
 - 最良の weight decay は手法で違う（AdamW 約0.1、Lion 約0.6、Kron 約0.5）。設定を手法の間で流用すると公平にならない。途中の loss で比べると順位が入れ替わる。Sophia は5億以下で AdamW より大きく速くはならない。
-- [Semenov ら](benchmarking-optimizers.md)と結果が違う点は、バッチの大きさと学習率の調整の差が原因と見ている。
+- Semenov ら（benchmarking-optimizers.md）と結果が違う点は、バッチの大きさと学習率の調整の差が原因としている。
 
 1.3億の図から読んだ、AdamW の何倍速いかの値。
 

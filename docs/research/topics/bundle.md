@@ -4,7 +4,7 @@
 
 `configs/bundle.py` が今の束で、次の変更が入っている。それぞれ設定で外せる。
 
-- [オプティマイザ](optimizer.md)：Muon と AdamW の併用、学習率、Polar Express、NorMuon、cautious weight decay、学習率の下げ方。
+- オプティマイザ（optimizer.md）：Muon と AdamW の併用、学習率、Polar Express、NorMuon、cautious weight decay、学習率の下げ方。
 - Value embeddings。
 - ヘッド128次元（5ヘッド）。
 - 10層、幅640。
