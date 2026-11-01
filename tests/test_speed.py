@@ -53,16 +53,26 @@ class SpeedTest(unittest.TestCase):
 
     def test_chooses_the_cheapest_way_that_worked(self):
         ways = [bundle_way("sdpa"), bundle_way("fa3"), bundle_way("fa4")]
-        costs = {"sdpa-64x8": costing(0.6), "fa3-64x8": None, "fa4-64x8": costing(0.5)}
-        self.assertEqual(cheapest(ways, costs)["name"], "fa4-64x8")
+        costs = {"baseline": costing(0.8), "sdpa-64x8": costing(0.6), "fa3-64x8": None, "fa4-64x8": costing(0.5)}
+        self.assertEqual(cheapest(ways, costs, 954)["name"], "fa4-64x8")
+
+    def test_chooses_the_shorter_startup_between_equal_updates(self):
+        ways = [bundle_way("sdpa"), bundle_way("fa2")]
+        costs = {"baseline": costing(0.8), "sdpa-64x8": costing(0.557, 34.0), "fa2-64x8": costing(0.558, 11.0)}
+        self.assertEqual(cheapest(ways, costs, 954)["name"], "fa2-64x8")
+
+    def test_keeps_the_faster_update_over_a_short_startup_when_the_update_counts_for_more(self):
+        ways = [bundle_way("sdpa"), bundle_way("sdpa", compile_model=False)]
+        costs = {"baseline": costing(0.8), "sdpa-64x8": costing(0.557, 34.0), "sdpa-64x8-uncompiled": costing(0.733, 5.0)}
+        self.assertEqual(cheapest(ways, costs, 954)["name"], "sdpa-64x8")
 
     def test_does_not_choose_a_way_that_changes_the_model(self):
         longer = bundle_way("sdpa", 32, 8, block_size=2048)
-        ways = [bundle_way("sdpa"), longer]
-        self.assertEqual(cheapest(ways, {"sdpa-64x8": costing(0.6), longer["name"]: costing(0.3)})["name"], "sdpa-64x8")
+        costs = {"baseline": costing(0.8), "sdpa-64x8": costing(0.6), longer["name"]: costing(0.3)}
+        self.assertEqual(cheapest([bundle_way("sdpa"), longer], costs, 954)["name"], "sdpa-64x8")
 
     def test_chooses_nothing_when_no_way_worked(self):
-        self.assertIsNone(cheapest([bundle_way("sdpa")], {"sdpa-64x8": None}))
+        self.assertIsNone(cheapest([bundle_way("sdpa")], {"baseline": costing(0.8), "sdpa-64x8": None}, 954))
 
     def test_buys_more_updates_with_a_faster_update(self):
         self.assertEqual(updates_for_the_money(954, costing(0.8), costing(0.5)), 1526)

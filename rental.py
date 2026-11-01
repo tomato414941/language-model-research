@@ -114,7 +114,8 @@ def shell(command, timeout=120):
 
 def start(script, *arguments):
     words = " ".join(shlex.quote(word) for word in [script, *arguments])
-    return shell(f"cd {REMOTE} && nohup bash {words} > run.log 2>&1 < /dev/null & echo started")
+    # The subshell lets go of the connection at once; otherwise ssh waits for the script to end.
+    return shell(f"cd {REMOTE} && (nohup bash {words} > run.log 2>&1 < /dev/null &) ; echo started")
 
 
 def fetch():
