@@ -15,6 +15,7 @@
 - [h100.md](topics/h100.md)
 - [scoring.md](topics/scoring.md)
 - [climbmix.md](topics/climbmix.md)
+- [retrieval.md](topics/retrieval.md)
 
 ## 出典
 
