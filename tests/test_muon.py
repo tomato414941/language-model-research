@@ -88,6 +88,33 @@ class ConfigureTest(unittest.TestCase):
                          {'transformer.h.0.attn.c_attn.weight', 'transformer.h.1.attn.c_attn.weight'})
 
 
+class SeparateEmbeddingsGroupsTest(unittest.TestCase):
+    def setUp(self):
+        torch.manual_seed(0)
+        self.model = GPT(GPTConfig(block_size=16, vocab_size=32, n_layer=2, n_head=2, n_embd=32, bias=False,
+                                   separate_embeddings=True))
+        self.groups = configure(self.model, embedding_lr=0.66).param_groups
+
+    def rate_of(self, weight):
+        return next(group['lr'] for group in self.groups if any(p is weight for p in group['params']))
+
+    def test_gives_the_reading_table_its_own_rate(self):
+        self.assertEqual(self.rate_of(self.model.transformer.wte.weight), 0.66)
+
+    def test_keeps_the_predicting_table_at_the_rate_of_other_weights(self):
+        self.assertEqual(self.rate_of(self.model.lm_head.weight), 0.004)
+
+    def test_gives_every_weight_to_exactly_one_group(self):
+        given = [id(p) for group in self.groups for p in group['params']]
+        self.assertEqual(sorted(given), sorted(id(p) for p in self.model.parameters()))
+
+    def test_keeps_a_shared_table_at_the_rate_of_other_weights(self):
+        model = small_model()
+        groups = configure(model, embedding_lr=0.66).param_groups
+        rate = next(group['lr'] for group in groups if any(p is model.lm_head.weight for p in group['params']))
+        self.assertEqual(rate, 0.004)
+
+
 class StepTest(unittest.TestCase):
     def step_with_random_gradient(self, name, weight_decay=0.0, **settings):
         model = small_model()

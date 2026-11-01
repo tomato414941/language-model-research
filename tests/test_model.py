@@ -1,4 +1,5 @@
 import importlib.util
+import math
 import sys
 import unittest
 import unittest.mock
@@ -406,6 +407,58 @@ class ZeroOutputTest(unittest.TestCase):
                              value_embeddings=True)
         optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.004)
         losses = [self.step_with_muon(model, optimizer) for _ in range(30)]
+        self.assertLess(losses[-1], losses[0] * 0.8)
+
+
+class SeparateEmbeddingsTest(unittest.TestCase):
+    def test_keeps_one_table_for_reading_and_another_for_predicting(self):
+        model = shaped_model(separate_embeddings=True)
+        self.assertIsNot(model.transformer.wte.weight, model.lm_head.weight)
+
+    def test_shares_one_table_when_off(self):
+        model = shaped_model()
+        self.assertIs(model.transformer.wte.weight, model.lm_head.weight)
+
+    def test_starts_reading_large_and_predicting_near_zero(self):
+        model = shaped_model(separate_embeddings=True)
+        self.assertAlmostEqual(model.transformer.wte.weight.std().item(), 1.0, delta=0.15)
+        self.assertAlmostEqual(model.lm_head.weight.std().item(), 0.001, delta=0.00015)
+
+    def test_starts_with_the_loss_of_knowing_nothing(self):
+        batch = tokens()
+        _, loss = shaped_model(separate_embeddings=True, rotary=True)(batch[:, :-1], batch[:, 1:].contiguous())
+        self.assertAlmostEqual(loss.item(), math.log(32), delta=0.05)
+
+    def test_ignores_the_size_of_the_reading_table(self):
+        model = shaped_model(separate_embeddings=True, rotary=True)
+        inputs = tokens()[:, :-1]
+        before = all_logits(model, inputs)
+        with torch.no_grad():
+            model.transformer.wte.weight *= 3
+        self.assertTrue(torch.allclose(all_logits(model, inputs), before, atol=1e-4))
+
+    def test_learns_no_more_weights_than_the_second_table(self):
+        names = set(shaped_model(separate_embeddings=True).state_dict())
+        self.assertEqual(names, set(shaped_model().state_dict()))
+        table = 32 * 32
+        self.assertEqual(shaped_model(separate_embeddings=True).get_num_params(non_embedding=False),
+                         shaped_model().get_num_params(non_embedding=False) + table)
+
+    def test_counts_the_same_parameters_for_computing(self):
+        self.assertEqual(shaped_model(separate_embeddings=True).get_num_params(), shaped_model().get_num_params())
+
+    def test_learns_a_fixed_batch_with_muon(self):
+        model = shaped_model(separate_embeddings=True, zero_output=True, relu_squared=True, qk_norm=True, rotary=True,
+                             rms_norm=True, value_embeddings=True)
+        optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.0044, embedding_lr=0.66)
+        batch = tokens()
+        losses = []
+        for _ in range(30):
+            _, loss = model(batch[:, :-1], batch[:, 1:].contiguous())
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            losses.append(loss.item())
         self.assertLess(losses[-1], losses[0] * 0.8)
 
 

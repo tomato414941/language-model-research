@@ -214,6 +214,7 @@ class GPTConfig:
     qk_norm: bool = False # True: queries and keys are normalized before they meet
     relu_squared: bool = False # True: ReLU squared in the MLP, not GELU
     zero_output: bool = False # True: the last weights of attention and the MLP start at zero
+    separate_embeddings: bool = False # True: one table reads the tokens and another predicts them
 
 class GPT(nn.Module):
 
@@ -235,14 +236,21 @@ class GPT(nn.Module):
             if config.value_embeddings and has_value_embedding(layer, config.n_layer)
         })
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        # only the direction of each token's vector in a separate reading table goes on into the blocks
+        self.input_norm = RMSNorm() if config.separate_embeddings else None
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
         # not 100% sure what this is, so far seems to be harmless. TODO investigate
-        self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
+        if not config.separate_embeddings:
+            self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
 
         # init all weights
         self.apply(self._init_weights)
+        # a separate reading table starts large, in step with its large learning rate, and predictions start near zero
+        if config.separate_embeddings:
+            torch.nn.init.normal_(self.transformer.wte.weight, mean=0.0, std=1.0)
+            torch.nn.init.normal_(self.lm_head.weight, mean=0.0, std=0.001)
         # apply special scaled init to the residual projections, per GPT-2 paper, or start them at zero
         for pn, p in self.named_parameters():
             if pn.endswith('c_proj.weight'):
@@ -267,13 +275,15 @@ class GPT(nn.Module):
         """
         Return the number of parameters in the model.
         For non-embedding count (default), the position and value embeddings get subtracted.
-        The token embeddings would too, except due to the parameter sharing these
-        params are actually used as weights in the final layer, so we include them.
+        The token embeddings do too when they are separate. Otherwise, due to the parameter
+        sharing these params are actually used as weights in the final layer, so we include them.
         """
         n_params = sum(p.numel() for p in self.parameters())
         if non_embedding:
             if not self.config.rotary:
                 n_params -= self.transformer.wpe.weight.numel()
+            if self.config.separate_embeddings:
+                n_params -= self.transformer.wte.weight.numel()
             n_params -= sum(p.numel() for p in self.value_embeds.parameters())
         return n_params
 
@@ -295,6 +305,8 @@ class GPT(nn.Module):
         if not self.config.rotary:
             pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
             x = x + self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
+        if self.input_norm is not None:
+            x = self.input_norm(x)
         x = self.transformer.drop(x)
         for layer, block in enumerate(self.transformer.h):
             table = self.value_embeds[str(layer)] if str(layer) in self.value_embeds else None

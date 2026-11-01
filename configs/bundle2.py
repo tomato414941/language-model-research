@@ -7,3 +7,7 @@ rms_norm = True
 qk_norm = True
 relu_squared = True
 zero_output = True
+separate_embeddings = True
+# autoresearch's rates for separate tables, with its (width/768)^-0.5. For one shared table, --muon_other_lr=0.004.
+muon_embedding_lr = 0.66
+muon_other_lr = 0.0044
