@@ -10,7 +10,7 @@
 | 活性化関数 | GELU | ReLU² | activation.md |
 | 出力の初期値 | 小さい値 | 0 | output-init.md |
 | 埋め込み | 入力と出力で共有 | 分離、大きい学習率 | embeddings.md |
-| x0、resid の重み | なし | あり | nanochat の d8 で −0.95%、d12 で −0.8%。記録9で約 −0.3%。Marin で約 −0.3% |
+| x0、resid の重み | なし | あり | residual-weights.md |
 | logit の softcap | なし | 15 | 記録9で約 −0.2% |
 | 残差の精度 | fp32 | bf16 | 記録10で更新が約7%速い |
 | 読み方 | 途中から切り出す | 文書の頭から詰める | 記録26で約1%速い。損失の下がりの一部は見かけ |
