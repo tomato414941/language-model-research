@@ -63,6 +63,7 @@ relu_squared = False # do we use ReLU squared in the MLP instead of GELU?
 zero_output = False # do the last weights of attention and the MLP start at zero?
 separate_embeddings = False # does one table read the tokens and another predict them?
 residual_weights = False # does each block take the stream and the embedded tokens by weights it learns?
+logit_softcap = 0.0 # above zero, the logits are squashed smoothly into plus or minus this
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -170,7 +171,7 @@ model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=bloc
                   vocab_size=None, dropout=dropout, value_embeddings=value_embeddings, rotary=rotary,
                   rms_norm=rms_norm, qk_norm=qk_norm, relu_squared=relu_squared,
                   zero_output=zero_output, separate_embeddings=separate_embeddings,
-                  residual_weights=residual_weights) # start with model_args from command line
+                  residual_weights=residual_weights, logit_softcap=logit_softcap) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -191,7 +192,7 @@ elif init_from == 'resume':
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = checkpoint_model_args[k]
     for k in ['value_embeddings', 'rotary', 'rms_norm', 'qk_norm', 'relu_squared', 'zero_output', 'separate_embeddings',
-              'residual_weights']:
+              'residual_weights', 'logit_softcap']:
         model_args[k] = checkpoint_model_args.get(k, False)
     # create the model
     gptconf = GPTConfig(**model_args)

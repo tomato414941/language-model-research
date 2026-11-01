@@ -12,3 +12,4 @@ separate_embeddings = True
 muon_embedding_lr = 0.66
 muon_other_lr = 0.0044
 residual_weights = True
+logit_softcap = 15.0

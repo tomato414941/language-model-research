@@ -524,6 +524,57 @@ class ResidualWeightsTest(unittest.TestCase):
         self.assertFalse(torch.equal(model.x0_weights, x0_before))
 
 
+class LogitSoftcapTest(unittest.TestCase):
+    def test_squashes_the_logits_by_tanh(self):
+        inputs = tokens()[:, :-1]
+        plain = all_logits(shaped_model(), inputs)
+        capped = all_logits(shaped_model(logit_softcap=15.0), inputs)
+        self.assertTrue(torch.allclose(capped, 15 * torch.tanh(plain / 15)))
+
+    def test_keeps_large_logits_inside_the_cap(self):
+        model = shaped_model(logit_softcap=15.0)
+        with torch.no_grad():
+            model.lm_head.weight *= 1000
+        logits = all_logits(model, tokens()[:, :-1])
+        self.assertGreater(logits.abs().max().item(), 14.0)
+        self.assertLessEqual(logits.abs().max().item(), 15.0)
+
+    def test_leaves_the_logits_as_they_are_when_off(self):
+        model = shaped_model()
+        inputs = tokens()[:, :-1]
+        with torch.no_grad():
+            model.lm_head.weight *= 1000
+        self.assertGreater(all_logits(model, inputs).abs().max().item(), 15.0)
+
+    def test_caps_the_prediction_of_the_last_position_alike(self):
+        model = shaped_model(logit_softcap=15.0)
+        inputs = tokens()[:, :-1]
+        last, _ = model(inputs)
+        self.assertTrue(torch.allclose(last[:, 0], all_logits(model, inputs)[:, -1]))
+
+    def test_computes_in_float32_under_bfloat16_autocast(self):
+        model = shaped_model(logit_softcap=15.0)
+        with torch.amp.autocast(device_type="cpu", dtype=torch.bfloat16):
+            self.assertEqual(all_logits(model, tokens()[:, :-1]).dtype, torch.float32)
+
+    def test_adds_no_weights(self):
+        self.assertEqual(set(shaped_model(logit_softcap=15.0).state_dict()), set(shaped_model().state_dict()))
+
+    def test_learns_a_fixed_batch_with_muon(self):
+        model = shaped_model(logit_softcap=15.0, residual_weights=True, separate_embeddings=True, zero_output=True,
+                             relu_squared=True, qk_norm=True, rotary=True, rms_norm=True, value_embeddings=True)
+        optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.0044, embedding_lr=0.66)
+        batch = tokens()
+        losses = []
+        for _ in range(30):
+            _, loss = model(batch[:, :-1], batch[:, 1:].contiguous())
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            losses.append(loss.item())
+        self.assertLess(losses[-1], losses[0] * 0.8)
+
+
 class AttentionCheckTest(unittest.TestCase):
     def outputs(self, logits=0.0, gradient=(1.0, 2.0, 3.0)):
         return torch.full((2, 3), logits), {"weight": torch.tensor(gradient)}

@@ -216,6 +216,7 @@ class GPTConfig:
     zero_output: bool = False # True: the last weights of attention and the MLP start at zero
     separate_embeddings: bool = False # True: one table reads the tokens and another predicts them
     residual_weights: bool = False # True: each block takes the stream and the embedded tokens by weights it learns
+    logit_softcap: float = 0.0 # above zero: the logits are squashed smoothly into plus or minus this
 
 class GPT(nn.Module):
 
@@ -300,6 +301,11 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
+    def cap_logits(self, logits):
+        """Squashes the logits as the config asks, in float32, since tanh loses too much in bfloat16."""
+        cap = self.config.logit_softcap
+        return cap * torch.tanh(logits.float() / cap) if cap > 0 else logits
+
     def forward(self, idx, targets=None):
         device = idx.device
         b, t = idx.size()
@@ -323,11 +329,11 @@ class GPT(nn.Module):
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
-            logits = self.lm_head(x)
+            logits = self.cap_logits(self.lm_head(x))
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
-            logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
+            logits = self.cap_logits(self.lm_head(x[:, [-1], :])) # note: using list [-1] to preserve the time dim
             loss = None
 
         return logits, loss
