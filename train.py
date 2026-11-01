@@ -62,6 +62,7 @@ qk_norm = False # do we normalize queries and keys before they meet?
 relu_squared = False # do we use ReLU squared in the MLP instead of GELU?
 zero_output = False # do the last weights of attention and the MLP start at zero?
 separate_embeddings = False # does one table read the tokens and another predict them?
+residual_weights = False # does each block take the stream and the embedded tokens by weights it learns?
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -80,6 +81,7 @@ muon_lr = 0.04 # learning rate of the matrices of the blocks
 muon_other_lr = 0.004 # learning rate of every other weight, except for the value embeddings
 muon_value_embedding_lr = 0.1
 muon_embedding_lr = 0.6 # learning rate of a token table that only reads
+muon_scalar_lr = 0.5 # learning rate of the x0 weights; the resid weights take a hundredth of it
 muon_weight_decay = 0.2 # at the start of training, falling to zero at the end
 muon_polar_express = True
 muon_neuron_normalization = True
@@ -167,7 +169,8 @@ if os.path.exists(meta_path):
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size, bias=bias,
                   vocab_size=None, dropout=dropout, value_embeddings=value_embeddings, rotary=rotary,
                   rms_norm=rms_norm, qk_norm=qk_norm, relu_squared=relu_squared,
-                  zero_output=zero_output, separate_embeddings=separate_embeddings) # start with model_args from command line
+                  zero_output=zero_output, separate_embeddings=separate_embeddings,
+                  residual_weights=residual_weights) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -187,7 +190,8 @@ elif init_from == 'resume':
     # the rest of the attributes (e.g. dropout) can stay as desired from command line
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = checkpoint_model_args[k]
-    for k in ['value_embeddings', 'rotary', 'rms_norm', 'qk_norm', 'relu_squared', 'zero_output', 'separate_embeddings']:
+    for k in ['value_embeddings', 'rotary', 'rms_norm', 'qk_norm', 'relu_squared', 'zero_output', 'separate_embeddings',
+              'residual_weights']:
         model_args[k] = checkpoint_model_args.get(k, False)
     # create the model
     gptconf = GPTConfig(**model_args)
@@ -226,7 +230,8 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 # optimizer
 if optimizer_name == 'muon':
     optimizer = configure_muon(model, muon_lr, muon_other_lr, muon_value_embedding_lr, muon_polar_express,
-                               muon_neuron_normalization, muon_cautious_decay, embedding_lr=muon_embedding_lr)
+                               muon_neuron_normalization, muon_cautious_decay, embedding_lr=muon_embedding_lr,
+                               scalar_lr=muon_scalar_lr)
 else:
     optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 if init_from == 'resume':

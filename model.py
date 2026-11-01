@@ -215,6 +215,7 @@ class GPTConfig:
     relu_squared: bool = False # True: ReLU squared in the MLP, not GELU
     zero_output: bool = False # True: the last weights of attention and the MLP start at zero
     separate_embeddings: bool = False # True: one table reads the tokens and another predicts them
+    residual_weights: bool = False # True: each block takes the stream and the embedded tokens by weights it learns
 
 class GPT(nn.Module):
 
@@ -236,6 +237,10 @@ class GPT(nn.Module):
             if config.value_embeddings and has_value_embedding(layer, config.n_layer)
         })
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        # how much of the stream and of the embedded tokens each block takes, as in karpathy/autoresearch
+        if config.residual_weights:
+            self.resid_weights = nn.Parameter(torch.ones(config.n_layer))
+            self.x0_weights = nn.Parameter(torch.full((config.n_layer,), 0.1))
         # only the direction of each token's vector in a separate reading table goes on into the blocks
         self.input_norm = RMSNorm() if config.separate_embeddings else None
         # with weight tying when using torch.compile() some warnings get generated:
@@ -308,7 +313,10 @@ class GPT(nn.Module):
         if self.input_norm is not None:
             x = self.input_norm(x)
         x = self.transformer.drop(x)
+        x0 = x
         for layer, block in enumerate(self.transformer.h):
+            if self.config.residual_weights:
+                x = self.resid_weights[layer] * x + self.x0_weights[layer] * x0
             table = self.value_embeds[str(layer)] if str(layer) in self.value_embeds else None
             x = block(x, table(idx) if table is not None else None)
         x = self.transformer.ln_f(x)

@@ -106,12 +106,14 @@ class MuonAdamW(torch.optim.Optimizer):
 
 def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_express=True,
                    neuron_normalization=True, cautious_decay=True, betas=(0.8, 0.95), eps=1e-10, beta2=0.95,
-                   embedding_lr=0.6):
+                   embedding_lr=0.6, scalar_lr=0.5):
     """Gives the matrices of the blocks to Muon and every other weight to AdamW.
 
     A token table that only reads gets embedding_lr. A table shared with the predictions gets other_lr.
+    The x0 weights get scalar_lr and the resid weights a hundredth of it, since they multiply through the
+    layers, as in karpathy/nanochat.
     """
-    matrices, query_key_value, value_embeddings, reading_table, others = [], [], [], [], []
+    matrices, query_key_value, value_embeddings, reading_table, resid_weights, x0_weights, others = ([] for _ in range(7))
     for name, p in model.named_parameters():
         if not p.requires_grad:
             continue
@@ -119,6 +121,10 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
             value_embeddings.append(p)
         elif name == 'transformer.wte.weight' and model.config.separate_embeddings:
             reading_table.append(p)
+        elif name == 'resid_weights':
+            resid_weights.append(p)
+        elif name == 'x0_weights':
+            x0_weights.append(p)
         elif not name.startswith('transformer.h.') or p.dim() != 2:
             others.append(p)
         elif name.endswith('c_attn.weight'):
@@ -135,6 +141,8 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
         dict(muon, params=query_key_value, chunks=3, initial_lr=muon_lr),
         dict(adamw, params=value_embeddings, lr=value_embedding_lr, initial_lr=value_embedding_lr),
         dict(adamw, params=reading_table, lr=embedding_lr, initial_lr=embedding_lr),
+        dict(adamw, params=resid_weights, lr=scalar_lr * 0.01, initial_lr=scalar_lr * 0.01),
+        dict(adamw, params=x0_weights, lr=scalar_lr, initial_lr=scalar_lr, betas=(0.96, betas[1])),
     ]
     return MuonAdamW([group for group in groups if group['params']])
 

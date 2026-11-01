@@ -115,6 +115,40 @@ class SeparateEmbeddingsGroupsTest(unittest.TestCase):
         self.assertEqual(rate, 0.004)
 
 
+class ResidualWeightsGroupsTest(unittest.TestCase):
+    def setUp(self):
+        torch.manual_seed(0)
+        self.model = GPT(GPTConfig(block_size=16, vocab_size=32, n_layer=2, n_head=2, n_embd=32, bias=False,
+                                   residual_weights=True))
+        self.groups = configure(self.model, scalar_lr=0.5).param_groups
+
+    def group_of(self, weight):
+        return next(group for group in self.groups if any(p is weight for p in group['params']))
+
+    def test_gives_the_x0_weights_the_full_rate_and_a_slower_momentum(self):
+        group = self.group_of(self.model.x0_weights)
+        self.assertEqual(group['kind'], 'adamw')
+        self.assertEqual(group['lr'], 0.5)
+        self.assertEqual(group['betas'], (0.96, 0.95))
+
+    def test_gives_the_resid_weights_a_hundredth_of_the_rate(self):
+        group = self.group_of(self.model.resid_weights)
+        self.assertEqual(group['kind'], 'adamw')
+        self.assertEqual(group['lr'], 0.005)
+        self.assertEqual(group['betas'], (0.8, 0.95))
+
+    def test_gives_every_weight_to_exactly_one_group(self):
+        given = [id(p) for group in self.groups for p in group['params']]
+        self.assertEqual(sorted(given), sorted(id(p) for p in self.model.parameters()))
+
+    def test_keeps_the_rates_through_the_schedule(self):
+        optimizer = configure(self.model, scalar_lr=0.5)
+        module.set_schedule(optimizer, 75, 100, 0.2)
+        rates = {id(p): group['lr'] for group in optimizer.param_groups for p in group['params']}
+        self.assertAlmostEqual(rates[id(self.model.x0_weights)], 0.25)
+        self.assertAlmostEqual(rates[id(self.model.resid_weights)], 0.0025)
+
+
 class StepTest(unittest.TestCase):
     def step_with_random_gradient(self, name, weight_decay=0.0, **settings):
         model = small_model()

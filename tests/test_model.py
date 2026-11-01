@@ -462,6 +462,68 @@ class SeparateEmbeddingsTest(unittest.TestCase):
         self.assertLess(losses[-1], losses[0] * 0.8)
 
 
+class ResidualWeightsTest(unittest.TestCase):
+    def inputs_of_the_blocks(self, model, inputs):
+        seen = []
+        hooks = [block.register_forward_pre_hook(lambda _, args: seen.append(args[0].detach()))
+                 for block in model.transformer.h]
+        all_logits(model, inputs)
+        for hook in hooks:
+            hook.remove()
+        return seen
+
+    def test_gives_each_block_the_stream_and_a_share_of_the_embedded_tokens(self):
+        # With outputs at zero the blocks add nothing, so only the weights change what the next block gets.
+        model = shaped_model(residual_weights=True, zero_output=True, rotary=True, separate_embeddings=True)
+        first, second, third = self.inputs_of_the_blocks(model, tokens()[:, :-1])
+        embedded = model.input_norm(model.transformer.wte(tokens()[:, :-1]))
+        self.assertTrue(torch.allclose(first, 1.1 * embedded, atol=1e-5))
+        self.assertTrue(torch.allclose(second, 1.2 * embedded, atol=1e-5))
+        self.assertTrue(torch.allclose(third, 1.3 * embedded, atol=1e-5))
+
+    def test_follows_what_the_weights_become(self):
+        model = shaped_model(residual_weights=True, zero_output=True, rotary=True, separate_embeddings=True)
+        with torch.no_grad():
+            model.resid_weights[1] = 0.5
+            model.x0_weights[1] = 0.3
+        first, second, _ = self.inputs_of_the_blocks(model, tokens()[:, :-1])
+        embedded = model.input_norm(model.transformer.wte(tokens()[:, :-1]))
+        self.assertTrue(torch.allclose(second, 0.5 * first + 0.3 * embedded, atol=1e-5))
+
+    def test_passes_the_stream_on_unchanged_when_off(self):
+        model = shaped_model(zero_output=True, rotary=True, separate_embeddings=True)
+        first, second, third = self.inputs_of_the_blocks(model, tokens()[:, :-1])
+        self.assertTrue(torch.equal(first, second))
+        self.assertTrue(torch.equal(second, third))
+
+    def test_adds_two_weights_for_each_layer(self):
+        self.assertEqual(shaped_model(residual_weights=True).get_num_params(non_embedding=False),
+                         shaped_model().get_num_params(non_embedding=False) + 2 * 3)
+
+    def test_keeps_earlier_positions_blind_to_later_tokens(self):
+        model = shaped_model(residual_weights=True, rotary=True, separate_embeddings=True)
+        inputs = tokens()[:, :-1]
+        changed = inputs.clone()
+        changed[:, -1] = (changed[:, -1] + 1) % 32
+        self.assertTrue(torch.allclose(all_logits(model, inputs)[:, :-1], all_logits(model, changed)[:, :-1]))
+
+    def test_learns_a_fixed_batch_with_muon_and_moves_its_weights(self):
+        model = shaped_model(residual_weights=True, separate_embeddings=True, zero_output=True, relu_squared=True,
+                             qk_norm=True, rotary=True, rms_norm=True, value_embeddings=True)
+        optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.0044, embedding_lr=0.66)
+        x0_before = model.x0_weights.detach().clone()
+        batch = tokens()
+        losses = []
+        for _ in range(30):
+            _, loss = model(batch[:, :-1], batch[:, 1:].contiguous())
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            losses.append(loss.item())
+        self.assertLess(losses[-1], losses[0] * 0.8)
+        self.assertFalse(torch.equal(model.x0_weights, x0_before))
+
+
 class AttentionCheckTest(unittest.TestCase):
     def outputs(self, logits=0.0, gradient=(1.0, 2.0, 3.0)):
         return torch.full((2, 3), logits), {"weight": torch.tensor(gradient)}
