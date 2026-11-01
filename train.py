@@ -29,6 +29,7 @@ from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT, choose_attention
 from muon import configure_muon, set_schedule
+from rows import document_heads, whole_row_heads
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -65,6 +66,7 @@ separate_embeddings = False # does one table read the tokens and another predict
 residual_weights = False # does each block take the stream and the embedded tokens by weights it learns?
 logit_softcap = 0.0 # above zero, the logits are squashed smoothly into plus or minus this
 stream_bfloat16 = False # do the values through the layers stay in bfloat16, when training in it on a GPU?
+rows_from_document_heads = False # do training rows begin at the head of a document, and read on from there?
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -137,6 +139,12 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
+row_heads = None
+if rows_from_document_heads:
+    train_tokens = os.path.join(data_dir, 'train.bin')
+    row_heads = document_heads(train_tokens, os.path.join(data_dir, 'tokenizer.json'))
+    row_heads = whole_row_heads(row_heads, os.path.getsize(train_tokens) // 2, block_size)
+
 def get_batch(split):
     # We recreate np.memmap every batch to avoid a memory leak, as per
     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
@@ -144,7 +152,10 @@ def get_batch(split):
         data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
     else:
         data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
-    ix = torch.randint(len(data) - block_size, (batch_size,))
+    if split == 'train' and row_heads is not None:
+        ix = row_heads[torch.randint(len(row_heads), (batch_size,)).numpy()]
+    else:
+        ix = torch.randint(len(data) - block_size, (batch_size,))
     x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
     y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
     if device_type == 'cuda':
