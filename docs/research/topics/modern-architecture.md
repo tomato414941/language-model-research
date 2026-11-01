@@ -4,7 +4,7 @@
 
 | 部分 | 最初の束 | autoresearch | 効果の報告 |
 |---|---|---|---|
-| 位置 | 学習する表 | RoPE | 単独の数字は見つけていない（rope.md） |
+| 位置 | 学習する表 | RoPE | GPT の形で損失が −1.8%、−3.0%（rope.md） |
 | 正規化 | LayerNorm（学習する重み） | RMSNorm（重みなし） | 単独の数字は見つけていない |
 | Q と K の正規化 | なし | あり | [IMU-1](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/imu-1.md) で −0.63%、[Marin](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/marin-nano-arch-ablations.md) でほぼ0 |
 | 活性化関数 | GELU | ReLU² | 記録5のコメントで1〜2%、Marin で0 |
@@ -30,7 +30,7 @@ autoresearch の標準は学習300秒で BPB 0.998 で、最初の束は810秒�
 - RoPE、RMSNorm、ゼロ初期化は大規模でも広く使われていて、ハックではない。
 - autoresearch が、この形と学習率の組で動かしている。
 
-粗い見積もりは、読み方までの10項目で BPB が2〜5%下がる。計算量2倍で −3.9% の換算と、別々の条件の数字からのもので、記録の効果の一部は最初の束に含まれている。足し算にもならない。順番を決めるための目安にすぎない。
+粗い見積もりは、読み方までの10項目で BPB が3〜6%下がる。計算量2倍で −3.9% の換算と、別々の条件の数字からのもので、記録の効果の一部は最初の束に含まれている。足し算にもならない。順番を決めるための目安にすぎない。
 
 窓と文脈は、測り方も変わるので後に回す。
 
