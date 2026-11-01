@@ -16,6 +16,7 @@
 - [scoring.md](topics/scoring.md)
 - [climbmix.md](topics/climbmix.md)
 - [retrieval.md](topics/retrieval.md)
+- [optimizer.md](topics/optimizer.md)
 
 ## 出典
 
@@ -25,6 +26,15 @@
 - [retro.md](sources/retro.md)
 - [flash-attention.md](sources/flash-attention.md)
 - [transformer-engine.md](sources/transformer-engine.md)
+- [adamw.md](sources/adamw.md)
+- [muon.md](sources/muon.md)
+- [muon-is-scalable.md](sources/muon-is-scalable.md)
+- [practical-efficiency-of-muon.md](sources/practical-efficiency-of-muon.md)
+- [fantastic-pretraining-optimizers.md](sources/fantastic-pretraining-optimizers.md)
+- [optimizer-scaling-laws.md](sources/optimizer-scaling-laws.md)
+- [soap-muon-and-beyond.md](sources/soap-muon-and-beyond.md)
+- [benchmarking-optimizers.md](sources/benchmarking-optimizers.md)
+- [algoperf.md](sources/algoperf.md)
 
 ## 実験
 
@@ -33,5 +43,5 @@
 
 ## `language-model` にある関係の記録
 
-- まとめ：[compute-optimal-size](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/compute-optimal-size.md)、[batch-size](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/batch-size.md)、[normuon](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/normuon.md)、[head-dim-128](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/head-dim-128.md)、[qk-norm](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/qk-norm.md)、[swiglu](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/swiglu.md)、[zero-output-init](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/zero-output-init.md)、[vocabulary-size](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/vocabulary-size.md)、[interruptible-gpu](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/interruptible-gpu.md)
-- 出典：[chinchilla](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/chinchilla.md)、[power-lines](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/power-lines.md)、[climb](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/climb.md)、[nanochat-log](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/nanochat-log.md)、[modded-nanogpt-anvil2](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/modded-nanogpt-anvil2.md)、[marin-nano-arch-ablations](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/marin-nano-arch-ablations.md)
+- まとめ：[compute-optimal-size](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/compute-optimal-size.md)、[batch-size](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/batch-size.md)、[normuon](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/normuon.md)、[muon-plus](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/muon-plus.md)、[muoneq](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/muoneq.md)、[soap-muon](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/soap-muon.md)、[head-dim-128](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/head-dim-128.md)、[qk-norm](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/qk-norm.md)、[swiglu](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/swiglu.md)、[zero-output-init](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/zero-output-init.md)、[vocabulary-size](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/vocabulary-size.md)、[interruptible-gpu](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/interruptible-gpu.md)
+- 出典：[chinchilla](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/chinchilla.md)、[power-lines](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/power-lines.md)、[climb](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/climb.md)、[nanochat-log](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/nanochat-log.md)、[modded-nanogpt-anvil2](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/modded-nanogpt-anvil2.md)、[marin-nano-arch-ablations](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/marin-nano-arch-ablations.md)、[modded-nanogpt-optimization-track](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/modded-nanogpt-optimization-track.md)、[imu-1](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/imu-1.md)
