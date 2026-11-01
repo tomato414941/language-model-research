@@ -3,11 +3,10 @@
 export HF_HUB_DISABLE_PROGRESS_BARS=1
 stamp() { date -u +"%H:%M:%S $*"; }
 
-# Usage: prepare [PACKAGE...]
 prepare() {
     stamp packages
     # The image's Python refuses other packages by default; a rented machine is thrown away afterwards.
-    pip install -q --break-system-packages tokenizers pyarrow "$@"
+    pip install -q --break-system-packages tokenizers pyarrow
     nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total,power.limit --format=csv,noheader
     python -c 'import torch; print("torch", torch.__version__, "cudnn", torch.backends.cudnn.version())'
     mkdir -p results models

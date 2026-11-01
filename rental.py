@@ -1,10 +1,10 @@
 """Rents an H100 on Vast.ai, sends it this repository and the data, starts a script, fetches what it
 made and removes the machine.
 
-Commands: offers, rent, send HOST:DIRECTORY, start SCRIPT [ARGUMENT...], shell COMMAND, fetch, destroy,
-guard MINUTES. `send` takes the machine and directory that hold prepare.py's climbmix directory and
-harness.py's questions.jsonl. `guard`, left running in the background, removes the machine after that
-long if nothing else has.
+Commands: offers, rent, send [HOST:DIRECTORY], start SCRIPT [ARGUMENT...], shell COMMAND, fetch, destroy,
+guard MINUTES. `send` sends the committed code, and the data if given the machine and directory that hold
+prepare.py's climbmix directory and harness.py's questions.jsonl. `guard`, left running in the background,
+removes the machine after that long if nothing else has.
 
 It rents through runs/vast_rental.py of the language-model repository, checked out next to this one,
 so that both projects follow one rental policy and share one record of the machines that failed. That
@@ -95,8 +95,10 @@ def stream(source, target_command):
         raise SystemExit("sending failed")
 
 
-def send(data_source):
+def send(data_source=None):
     stream(["git", "-C", str(REPOSITORY), "archive", "HEAD"], f"mkdir -p {REMOTE} && tar -x -C {REMOTE}")
+    if data_source is None:
+        return
     host, directory = data_source.split(":", 1)
     remote_tar = f"tar -C {shlex.quote(directory)} -cf - climbmix questions.jsonl"
     stream(["ssh", "-o", "BatchMode=yes", host, remote_tar], f"mkdir -p {REMOTE}/data && tar -x -C {REMOTE}/data")
