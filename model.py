@@ -27,10 +27,11 @@ class LayerNorm(nn.Module):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 class RMSNorm(nn.Module):
-    """ Divides by the root mean square, with no mean to subtract and no weights to learn """
+    """ Divides by the root mean square, with no mean to subtract and no weights to learn.
+    It gives back the type it was given, which autocast on a GPU would turn into float32. """
 
     def forward(self, input):
-        return F.rms_norm(input, (input.size(-1),))
+        return F.rms_norm(input, (input.size(-1),)).to(input.dtype)
 
 def make_norm(config):
     return RMSNorm() if config.rms_norm else LayerNorm(config.n_embd, bias=config.bias)
@@ -244,6 +245,8 @@ class GPT(nn.Module):
             self.x0_weights = nn.Parameter(torch.full((config.n_layer,), 0.1))
         # only the direction of each token's vector in a separate reading table goes on into the blocks
         self.input_norm = RMSNorm() if config.separate_embeddings else None
+        # set through GPT.keep_stream_in
+        self.stream_dtype = None
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
@@ -276,6 +279,11 @@ class GPT(nn.Module):
         """Sends attention through this function. It is no part of the weights, so it is not saved with them."""
         for block in self.transformer.h:
             block.attn.flash_attention = function
+
+    def keep_stream_in(self, dtype):
+        """Holds the values that pass through the layers in this type. It is no part of the weights, so it is
+        not saved with them. Linear layers take the type only under autocast."""
+        self.stream_dtype = dtype
 
     def get_num_params(self, non_embedding=True):
         """
@@ -318,13 +326,15 @@ class GPT(nn.Module):
             x = x + self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         if self.input_norm is not None:
             x = self.input_norm(x)
+        if self.stream_dtype is not None:
+            x = x.to(self.stream_dtype)
         x = self.transformer.drop(x)
         x0 = x
         for layer, block in enumerate(self.transformer.h):
             if self.config.residual_weights:
                 x = self.resid_weights[layer] * x + self.x0_weights[layer] * x0
             table = self.value_embeds[str(layer)] if str(layer) in self.value_embeds else None
-            x = block(x, table(idx) if table is not None else None)
+            x = block(x, table(idx).to(x.dtype) if table is not None else None)
         x = self.transformer.ln_f(x)
 
         if targets is not None:

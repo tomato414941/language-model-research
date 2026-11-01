@@ -64,6 +64,7 @@ zero_output = False # do the last weights of attention and the MLP start at zero
 separate_embeddings = False # does one table read the tokens and another predict them?
 residual_weights = False # does each block take the stream and the embedded tokens by weights it learns?
 logit_softcap = 0.0 # above zero, the logits are squashed smoothly into plus or minus this
+stream_bfloat16 = False # do the values through the layers stay in bfloat16, when training in it on a GPU?
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -224,6 +225,10 @@ model.to(device)
 # The other ways of running attention have no dropout and need bf16 on a GPU; anywhere else PyTorch chooses
 can_choose_attention = device_type == 'cuda' and dtype == 'bfloat16' and dropout == 0.0
 print(f"attention: {choose_attention(model, attention) if can_choose_attention else 'sdpa'}")
+# Only autocast lets the linear layers, whose weights stay in float32, take values in bfloat16.
+if stream_bfloat16 and device_type == 'cuda' and dtype == 'bfloat16':
+    model.keep_stream_in(torch.bfloat16)
+print(f"stream: {'as computed' if model.stream_dtype is None else model.stream_dtype}")
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))

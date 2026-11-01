@@ -575,6 +575,75 @@ class LogitSoftcapTest(unittest.TestCase):
         self.assertLess(losses[-1], losses[0] * 0.8)
 
 
+class StreamTypeTest(unittest.TestCase):
+    OPTIONS = dict(rms_norm=True, rotary=True, qk_norm=True, relu_squared=True, zero_output=True, value_embeddings=True,
+                   separate_embeddings=True, residual_weights=True, logit_softcap=15.0)
+
+    def types_through_the_blocks(self, model):
+        seen = []
+        hooks = [block.register_forward_hook(lambda _, args, output: seen.extend([args[0].dtype, output.dtype]))
+                 for block in model.transformer.h]
+        with torch.amp.autocast(device_type="cpu", dtype=torch.bfloat16):
+            all_logits(model, tokens()[:, :-1])
+        for hook in hooks:
+            hook.remove()
+        return set(seen)
+
+    def outputs(self, model):
+        batch = tokens()
+        model.zero_grad(set_to_none=True)
+        with torch.amp.autocast(device_type="cpu", dtype=torch.bfloat16):
+            logits, loss = model(batch[:, :-1], batch[:, 1:].contiguous())
+        loss.backward()
+        return logits.float().detach(), {name: p.grad.clone() for name, p in model.named_parameters()}
+
+    def test_keeps_the_values_through_the_layers_in_the_type_asked(self):
+        model = shaped_model(**self.OPTIONS)
+        model.keep_stream_in(torch.bfloat16)
+        self.assertEqual(self.types_through_the_blocks(model), {torch.bfloat16})
+
+    def test_leaves_them_in_float32_when_not_asked(self):
+        self.assertEqual(self.types_through_the_blocks(shaped_model(**self.OPTIONS)), {torch.float32})
+
+    def test_predicts_and_learns_as_with_float32_values(self):
+        # With outputs at zero the first gradients of most weights are zero, which would have nothing to compare.
+        model = shaped_model(**{**self.OPTIONS, "zero_output": False})
+        before = self.outputs(model)
+        model.keep_stream_in(torch.bfloat16)
+        after = self.outputs(model)
+        # The norm takes away the size of the stream, so the gradients of these two are tiny and mostly rounding.
+        for gradients in (before[1], after[1]):
+            del gradients["resid_weights"], gradients["x0_weights"]
+        self.assertTrue(agree(before, after))
+
+    def test_saves_nothing_new(self):
+        model = shaped_model(**self.OPTIONS)
+        names = set(model.state_dict())
+        model.keep_stream_in(torch.bfloat16)
+        self.assertEqual(set(model.state_dict()), names)
+
+    def test_gives_back_from_the_norm_the_type_it_was_given(self):
+        vectors = torch.randn(2, 5, 8)
+        with torch.amp.autocast(device_type="cpu", dtype=torch.bfloat16):
+            self.assertEqual(RMSNorm()(vectors).dtype, torch.float32)
+            self.assertEqual(RMSNorm()(vectors.bfloat16()).dtype, torch.bfloat16)
+
+    def test_learns_a_fixed_batch_with_muon(self):
+        model = shaped_model(**self.OPTIONS)
+        model.keep_stream_in(torch.bfloat16)
+        optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.0044, embedding_lr=0.66)
+        batch = tokens()
+        losses = []
+        for _ in range(30):
+            with torch.amp.autocast(device_type="cpu", dtype=torch.bfloat16):
+                _, loss = model(batch[:, :-1], batch[:, 1:].contiguous())
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            losses.append(loss.item())
+        self.assertLess(losses[-1], losses[0] * 0.8)
+
+
 class AttentionCheckTest(unittest.TestCase):
     def outputs(self, logits=0.0, gradient=(1.0, 2.0, 3.0)):
         return torch.full((2, 3), logits), {"weight": torch.tensor(gradient)}
