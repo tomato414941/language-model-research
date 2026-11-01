@@ -15,6 +15,8 @@ H100 で注意の計算を何で動かすか。2026-11時点の、[最初の束�
 
 PyTorch 2.15 の既定は、[読んだコード](../sources/pytorch-sdpa.md)では H100 で cuDNN を先に試す。この環境の cuDNN は 9.26 で条件に合うが、実際に cuDNN が動いたことは直接は確かめていない。cuDNN を切ると準備の時間が消えるので、cuDNN が形ごとに作るものの時間と見ているが、これも確かめていない。
 
+[2番目の束](../experiments/second-bundle.md)の形でも、既定の方式と FlashAttention-2 の1回の更新は同じ（0.639秒）で、更新の外は44秒と12秒だった。
+
 ## 読んだものとの違い
 
 [FlashAttention-3 の論文](../sources/flashattention-3.md)の注意の計算だけで1.5〜2倍、nanochat の学習で約9%（[LOG](https://github.com/karpathy/nanochat/blob/master/dev/LOG.md)、2026-01-11）という数字は、FlashAttention-2 からの比較。ここでは FlashAttention-2 と同じか少し遅かった。計算の式の上で注意は約19%なので、差が出るとしても全体では小さい。読み込んだビルド、CUDA 13.2、文脈の短さ、compile との相性のどれが効いているかは調べていない。
