@@ -13,7 +13,7 @@
 | x0、resid の重み | なし | あり | residual-weights.md |
 | logit の softcap | なし | 15 | logit-softcap.md |
 | 層を流れる値の精度 | fp32 | 埋め込みの表だけ bf16 | stream-precision.md |
-| 読み方 | 途中から切り出す | 文書の頭から詰める | 記録26で約1%速い。損失の下がりの一部は見かけ |
+| 読み方 | 途中から切り出す | 文書の頭から詰める | document-rows.md |
 | 注意の窓 | 全部 | 4層中3層を半分に | 計算の約7%減の見積もり。attention-kernel.md |
 | 文脈 | 1,024 | 2,048 | 1回の更新が7.5%遅い。検証の BPB は直接比べられない |
 
