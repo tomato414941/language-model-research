@@ -26,6 +26,8 @@
 - **他の手法：** 行列を使う SOAP や Kron は、学習量を増やすと Muon に並ぶか上回る（[Fantastic](../sources/fantastic-pretraining-optimizers.md)、[Volkova ら](../sources/optimizer-scaling-laws.md)、[NVIDIA](../sources/soap-muon-and-beyond.md)）。[Semenov ら](../sources/benchmarking-optimizers.md)は、長い学習で AdEMAMix と MARS を一番良いとしていて、Fantastic と食い違う。原因は決着していない。[AlgoPerf](../sources/algoperf.md) の調整ありの部門は、行列を使う Distributed Shampoo が優勝した。[modded-nanogpt の最適化の部門](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/modded-nanogpt-optimization-track.md)は、ステップ数で SOAP-Muon が Muon より少ない。ただし時間は問わない比較。
 - **学習率：** Fantastic は、ピーク学習率6e-4の AdamW を基準として弱いとする。nanoGPT も同じ6e-4。同じ更新サイズの1.3億の調整例では0.008だった。モデルの形が違うので、そのまま当てはまるとは限らない。
 - **費用：** 幅768、更新1回524,288トークンなら、Muon の計算の増分は上限0.7%（元の記事の計算）。メモリは AdamW より少ない。
+- **Weight decay の大きさ：** [nanochat](../sources/nanochat-log.md) の一番良い値は幅512で約0.40、幅768で約0.22で、幅の2乗に反比例するとしている。幅640なら約0.3で、今の0.2は小さい側。ただし nanochat は学習が今より長く、autoresearch は幅512で0.2を使っている。
+- **細かい調整の限界：** nanochat は、ある規模で調整した値が別の規模で悪くなるとしている。測るのも1回 $0.55 かかるので、読むだけでは決められない。
 
 ## 今の見方
 

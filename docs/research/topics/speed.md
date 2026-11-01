@@ -14,11 +14,11 @@
 
 | 候補 | 効果の見込み | 注意 |
 |---|---|---|
-| 料金（[Vast の料金](../experiments/gpu-prices.md)） | 借りた $2.41/時が最安の $1.74 になれば約1.8%、半額なら3.9% | 最安の機械はドライバが古い。モデルは変わらない |
-| 中断ありの貸出 | 約65%安いので最大5.9% | `language-model` の [メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/interruptible-gpu.md)では、H100 は1分で止まって戻らなかった |
+| 料金（[10-31](../experiments/gpu-prices.md)と[11-01](../experiments/h100-prices-2026-11-01.md)の一覧） | 借りた $2.41/時が $1.95 になれば約1.2%、半額なら3.9% | 安い機械はドライバが古い。モデルは変わらない |
+| 中断ありの貸出 | $0.71 なら約6.9% | `language-model` の [メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/interruptible-gpu.md)では、H100 は1分で止まって戻らなかった。モデルは変わらない |
 | 準備の時間 | 100秒まで縮めば約1.6% | 連続で回せば小さくなる。大規模には関係しない |
 | 注意の計算の方式（attention-kernel.md） | 約0.2% | 測った。1回の更新の差は1.6%以内で、差は形が新しいときの準備だけ |
-| 効率全体 | 46%まで上がれば約0.8% | 差の原因は未調査。束でも約39%で、注意の方式を替えても変わらなかった |
+| 効率全体 | 46%まで上がれば約0.8% | 差の原因は未調査。束でも約39%で、注意の方式を替えても変わらなかった。[記録10](../sources/modded-nanogpt-records.md)は残差を bf16 にして1回の更新が約7%速くなった |
 | 1回に流す本数 | 128本で約0.1% | 測った。幅640で、64本より128本が2.4%速く、32本は6.6%遅い。256本はメモリに入らない |
 | FP8 | 今の規模では0か損 | `language-model` の [メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/fp8.md)では、26層で1.17倍速いが同じ損失では約5%、12層ではかえって遅い |
 
