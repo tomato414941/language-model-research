@@ -12,14 +12,14 @@
 - **重みの有無は割れている：**
   - 普通の設定では重みありが良い。[OLMoE](../sources/olmoe.md) は勾配の跳ねが減り、[Lingle の記事](../sources/parametric-rmsnorm-blog.md)は 2.240 と 2.253（0.6%差）。どちらも AdamW で、OLMoE は勾配をクリップしている。
   - `lm_head` の初期値を小さくする μP の設定では重みなしが良い（[μ-Transfer](../sources/mu-transfer.md)）。
-- **小さい規模の例：** autoresearch、nanochat、modded-nanogpt はどれも重みなしの RMSNorm。LLaMA、Qwen、DeepSeek は重みあり（Lingle の記事による）。今の規模で、Muon と組み合わせて比べた結果は見つけていない。
+- **小さい規模の例：** autoresearch、nanochat、modded-nanogpt（同じ流れのコード）はどれも重みなしの RMSNorm。LLaMA、Qwen、DeepSeek は重みあり（Lingle の記事による）。今の規模で、Muon と組み合わせて比べた結果は見つけていない。
 - **FlashNorm（arXiv 2407.09577）：** 要旨によると推論を速くする話で、学習の候補ではない。
 
 ## 今の見方
 
 2026-11時点の見方では、重みなしの RMSNorm にする。理由は次の通り。
 
-- 次の束は出力のゼロ初期化と Muon を使うので、μP に近い。
+- μP の設定で重みなしが良いという結果は、`lm_head` を小さく始める形のもの。2番目の束で埋め込みを分離するなら、この形に近くなる（embeddings.md）。
 - 勾配の跳ねを問題にした報告は勾配のクリップの話で、Muon の束はクリップを使わない。
 - autoresearch の学習率の組は、この形で動いている。
 
