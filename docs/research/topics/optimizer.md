@@ -17,6 +17,10 @@
 | 同上 | FineWeb、同じ範囲 | トークンへの効きが1.41倍 |
 | [Kimi](../sources/muon-is-scalable.md) | 3.99億〜15億、最適なトークン量 | 計算量52%（約2倍） |
 | [Essential AI](../sources/practical-efficiency-of-muon.md) | 1億〜40億 | トークンが10〜15%少ない |
+| [Polar Express の論文](../sources/polar-express.md) | 1.24億、10億トークン、更新1回32,768トークン、weight decay なし | loss が AdamW 4.197、Muon 3.639（−13%） |
+
+- **Muon の改良：** [Polar Express](../sources/polar-express.md) は費用を変えずに、10億トークンで loss が1.4〜1.7%、100億トークンで0.3%下がった。NorMuon（[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/normuon.md)）は、同じ損失に要る更新が Muon より1.24億で6%、3.5億で15%少ない。11億では AdamW より21.74%少なく、Muon は10.43%。メモリは Adam の約半分で、更新の時間は AdamW より2.9%長い（54億の場合、arXiv 2510.05491）。
+- **Q、K、V を分けるか：** [元の記事](../sources/muon.md)は分けるほうが良いとし、NorMuon の著者は分けても改善がなかったとしていて、報告が割れている。
 
 - **他の手法：** 行列を使う SOAP や Kron は、学習量を増やすと Muon に並ぶか上回る（[Fantastic](../sources/fantastic-pretraining-optimizers.md)、[Volkova ら](../sources/optimizer-scaling-laws.md)、[NVIDIA](../sources/soap-muon-and-beyond.md)）。[Semenov ら](../sources/benchmarking-optimizers.md)は、長い学習で AdEMAMix と MARS を一番良いとしていて、Fantastic と食い違う。原因は決着していない。[AlgoPerf](../sources/algoperf.md) の調整ありの部門は、行列を使う Distributed Shampoo が優勝した。[modded-nanogpt の最適化の部門](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/modded-nanogpt-optimization-track.md)は、ステップ数で SOAP-Muon が Muon より少ない。ただし時間は問わない比較。
 - **学習率：** Fantastic は、ピーク学習率6e-4の AdamW を基準として弱いとする。nanoGPT も同じ6e-4。同じ更新サイズの1.3億の調整例では0.008だった。モデルの形が違うので、そのまま当てはまるとは限らない。
@@ -24,7 +28,14 @@
 
 ## 今の見方
 
-今の基準（9,100万パラメータ、5億トークン、更新1回524,288トークン、学習量は約0.27倍）で最初に試す候補は、Muon と AdamW の併用にしている。設定は autoresearch の値から始める。この実装には NorMuon と Polar Express が入っている。
+今の基準（9,100万パラメータ、5億トークン、更新1回524,288トークン、学習量は約0.27倍）で最初に試す候補は、Muon と AdamW の併用にしている。`muon.py` に実装し、`configs/muon.py` で選べるようにした。既定の `train.py` は AdamW のまま。GPU ではまだ動かしていない。
+
+設定は autoresearch の値から始める。ただし次の点で同じではない。
+
+- 埋め込みと出力の学習率：[autoresearch](../sources/autoresearch.md) は別々の表に0.6と0.004を使う。基準は1つの表を共有するので、そのままは使えない。出力の0.004を使い、位置符号と正規化の重みにも同じ値を使う。[最初の Muon の記録](../sources/modded-nanogpt-muon-record.md)の0.0036に近い。
+- 行列の学習率0.04：autoresearch と更新の回数とサイズは同じだが、幅が違い（512と768）、調整もしていない。最初の Muon の記録は、同じ形で学習が6.5倍長く、更新の大きさは今の値の約4分の1。
+- Polar Express、NorMuon、cautious weight decay：autoresearch の値はこれらを含むので、最初はすべて使う。設定でそれぞれ外せるので、結果が悪いときは順に確かめられる。
+- Q、K、V：モデルは1つの行列のまま変えず、オプティマイザの中で3つに分けて直交化する。基準の重みはそのまま読める。
 
 そう見ている理由は次の通り。
 
@@ -32,7 +43,7 @@
 - 計算とメモリの費用が小さい。
 - autoresearch が同じ953回の更新で動かしている。他の変更も入っているので、Muon だけの効果は分からない。
 
-効果の粗い見積もりは、学習率の調整で最大2倍、Muon でさらに1.4倍、合わせて最大2.8倍分。計算量2倍で loss が約3.9%下がるという換算（[Open Athena の記事](https://www.openathena.ai/blog/pretraining-speedup/)にある Delphi の式 `loss = 1.65 + 117.8·C^−0.0966`）で、約6%になる。別々の条件の数字を掛けたもので、順番を決めるための目安にすぎない。
+効果の粗い見積もりは、学習率の調整で最大2倍、Muon でさらに1.4倍、合わせて最大2.8倍分。計算量2倍で loss が約3.9%下がるという換算（[Open Athena の記事](https://www.openathena.ai/blog/pretraining-speedup/)にある Delphi の式 `loss = 1.65 + 117.8·C^−0.0966`）で、約6%になる。別々の条件の数字を掛けたもので、順番を決めるための目安にすぎない。Polar Express の論文の比較では13〜15%下がっていて、学習量が少ないと見積もりより大きい可能性がある。ただし更新のサイズが今の約16分の1で、weight decay もない。
 
 ## 見方が変わりそうな条件
 
@@ -45,4 +56,3 @@
 ## 関係するもの
 
 - `language-model` のメモ：[NorMuon](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/normuon.md)、[Muon+](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/muon-plus.md)、[MuonEq](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/muoneq.md)、[SOAP-Muon](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/soap-muon.md)、[IMU-1](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/imu-1.md)。
-- 読んでいないもの：Polar Express（Amsel ら）。autoresearch の実装が使っている。

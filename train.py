@@ -28,6 +28,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
+from muon import configure_muon, set_schedule
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -66,6 +67,14 @@ decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
 lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+# 'adamw' is the recipe above; 'muon' uses the settings below, and its schedule comes from muon.py
+optimizer_name = 'adamw'
+muon_lr = 0.04 # learning rate of the matrices of the blocks
+muon_other_lr = 0.004 # learning rate of every other weight
+muon_weight_decay = 0.2 # at the start of training, falling to zero at the end
+muon_polar_express = True
+muon_neuron_normalization = True
+muon_cautious_decay = True
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 seed = 1337
@@ -197,7 +206,11 @@ model.to(device)
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+if optimizer_name == 'muon':
+    optimizer = configure_muon(model, muon_lr, muon_other_lr, muon_polar_express,
+                               muon_neuron_normalization, muon_cautious_decay)
+else:
+    optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
@@ -256,9 +269,12 @@ running_mfu = -1.0
 while True:
 
     # determine and set the learning rate for this iteration
-    lr = get_lr(iter_num) if decay_lr else learning_rate
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+    if optimizer_name == 'muon':
+        lr = muon_lr * set_schedule(optimizer, iter_num, max_iters, muon_weight_decay)
+    else:
+        lr = get_lr(iter_num) if decay_lr else learning_rate
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:

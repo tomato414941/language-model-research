@@ -35,6 +35,8 @@
 - [soap-muon-and-beyond.md](sources/soap-muon-and-beyond.md)
 - [benchmarking-optimizers.md](sources/benchmarking-optimizers.md)
 - [algoperf.md](sources/algoperf.md)
+- [polar-express.md](sources/polar-express.md)
+- [modded-nanogpt-muon-record.md](sources/modded-nanogpt-muon-record.md)
 
 ## 実験
 
