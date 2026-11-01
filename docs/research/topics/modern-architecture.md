@@ -11,7 +11,7 @@
 | 出力の初期値 | 小さい値 | 0 | output-init.md |
 | 埋め込み | 入力と出力で共有 | 分離、大きい学習率 | embeddings.md |
 | x0、resid の重み | なし | あり | residual-weights.md |
-| logit の softcap | なし | 15 | 記録9で約 −0.2% |
+| logit の softcap | なし | 15 | logit-softcap.md |
 | 残差の精度 | fp32 | bf16 | 記録10で更新が約7%速い |
 | 読み方 | 途中から切り出す | 文書の頭から詰める | 記録26で約1%速い。損失の下がりの一部は見かけ |
 | 注意の窓 | 全部 | 4層中3層を半分に | 計算の約7%減の見積もり。attention-kernel.md |
