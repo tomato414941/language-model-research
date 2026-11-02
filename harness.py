@@ -2,7 +2,8 @@
 
 Every benchmark here asks a model to choose among continuations, so a model only has to give the
 probability of a continuation after a context. Beside scoring.py's bits per byte of the correct
-answers, a full score here reports each benchmark's accuracy over all its questions.
+answers, a full score here reports each benchmark's accuracy over all its questions, and keeps each
+question's result for comparing models question by question.
 """
 
 import argparse
@@ -182,6 +183,13 @@ def score_in_full(model, names, limit=None):
             }
         )
     return {
+        "questions": {
+            name: {
+                "correct": [item["accuracy"] for item in row],
+                "bits": [round(item["bits"], 6) for item in row],
+            }
+            for name, row in rows.items()
+        },
         "benchmarks": {
             name: {
                 "language": BENCHMARKS[name][0],

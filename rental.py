@@ -1,10 +1,10 @@
-"""Rents an H100 on Vast.ai, sends it this repository and the data, starts a script, fetches what it
-made and removes the machine.
+"""Rents a GPU on Vast.ai, an H100 unless another is named, sends it this repository and the data, starts
+a script, fetches what it made and removes the machine.
 
-Commands: offers, rent, send [HOST:DIRECTORY], start SCRIPT [ARGUMENT...], shell COMMAND, fetch, destroy,
-guard MINUTES. `send` sends the committed code, and the data if given the machine and directory that hold
-prepare.py's climbmix directory and harness.py's questions.jsonl. `guard`, left running in the background,
-removes the machine after that long if nothing else has.
+Commands: offers [GPU], rent [GPU], send [HOST:DIRECTORY [PATH...]], start SCRIPT [ARGUMENT...], shell COMMAND,
+fetch, destroy, guard MINUTES. `send` sends the committed code, and the data if given the machine and directory
+that hold it: prepare.py's climbmix directory and harness.py's questions.jsonl, unless other paths are named.
+`guard`, left running in the background, removes the machine after that long if nothing else has.
 
 It rents through runs/vast_rental.py of the language-model repository, checked out next to this one,
 so that both projects follow one rental policy and share one record of the machines that failed. That
@@ -32,8 +32,10 @@ DISK_GB = 60
 MAX_DOLLARS_PER_HOUR = 2.80
 TRIES = 2
 LABEL = "language-model-research"
+# What a comparison's costs are measured on. Work outside one, like scoring saved weights, can name a cheaper GPU.
+GPU = "H100 SXM"
+DATA = ("climbmix", "questions.jsonl")
 QUERY = {
-    "gpu_name": {"eq": "H100 SXM"},
     "num_gpus": {"eq": 1},
     "cuda_max_good": {"gte": 13.2},
     "reliability2": {"gte": 0.97},
@@ -49,17 +51,18 @@ def instance():
     return json.loads(STATE.read_text())["instance"]
 
 
-def find_offers():
-    offers = [offer for offer in rental.search(QUERY, DISK_GB) if offer["dph_total"] <= MAX_DOLLARS_PER_HOUR]
+def find_offers(gpu=GPU):
+    query = {**QUERY, "gpu_name": {"eq": gpu}}
+    offers = [offer for offer in rental.search(query, DISK_GB) if offer["dph_total"] <= MAX_DOLLARS_PER_HOUR]
     return sorted(offers, key=lambda offer: (offer["dph_total"], -offer.get("inet_up", 0)))
 
 
-def show_offers():
-    print(json.dumps([{key: offer.get(key) for key in OFFER_FIELDS} for offer in find_offers()][:5]))
+def show_offers(gpu=GPU):
+    print(json.dumps([{key: offer.get(key) for key in OFFER_FIELDS} for offer in find_offers(gpu)][:5]))
 
 
-def rent():
-    offers = find_offers()
+def rent(gpu=GPU):
+    offers = find_offers(gpu)
     if not offers:
         raise SystemExit("no offer within the price")
     began = time.time()
@@ -95,12 +98,13 @@ def stream(source, target_command):
         raise SystemExit("sending failed")
 
 
-def send(data_source=None):
+def send(data_source=None, *paths):
     stream(["git", "-C", str(REPOSITORY), "archive", "HEAD"], f"mkdir -p {REMOTE} && tar -x -C {REMOTE}")
     if data_source is None:
         return
     host, directory = data_source.split(":", 1)
-    remote_tar = f"tar -C {shlex.quote(directory)} -cf - climbmix questions.jsonl"
+    names = " ".join(shlex.quote(path) for path in paths or DATA)
+    remote_tar = f"tar -C {shlex.quote(directory)} -cf - {names}"
     stream(["ssh", "-o", "BatchMode=yes", host, remote_tar], f"mkdir -p {REMOTE}/data && tar -x -C {REMOTE}/data")
 
 
