@@ -33,7 +33,7 @@
 | Partial Key Offset | 約1% | 弱（MoE 上の結果、Partial RoPE が前提） | 小 |
 | 線形注意との混成（Gated DeltaNet、Kimi Delta Attention） | 1〜2% | 中 | 大 |
 | mHC | 1.3%まで | 弱〜中 | 中 |
-| データの選び方（DCLM-Edu、PreSelect など。ClimbMix は nanochat が試した中で一番良く、今は400B のうち0.2%しか読まない） | 不明、大きい可能性 | 割れている | 中 |
+| データの選び方（DCLM-Edu、PreSelect など。ClimbMix は nanochat が試した中で一番良く、今は400B のうち0.2%しか読まない。v6 の英語に替えると6課題の平均が .025 下がったが、原因は分けていない。v6-english-data.md） | 不明、大きい可能性 | 割れている | 中 |
 | データの繰り返し | 不明 | 中 | 小 |
 | 語彙の大きさ | 不明、大きい可能性 | 大規模のみ | 中 |
 | SOAP-Muon | 約0.9%（ステップのみ） | 中 | 中 |
