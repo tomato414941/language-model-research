@@ -77,12 +77,20 @@ def rent(gpu=GPU):
 
 
 def ssh_to_instance():
-    """The ssh command for the instance, without its last argument, the command to run there."""
+    """The ssh command for the instance, without its last argument, the command to run there. Like rental.login,
+    it tries the host's own port and then Vast.ai's proxy, since some hosts' own port cannot be reached."""
     row = rental.vast().show_instance(instance())
     mapped = (row.get("ports") or {}).get("22/tcp") or []
-    host, port = (row["public_ipaddr"], mapped[0]["HostPort"]) if mapped else (row["ssh_host"], row["ssh_port"])
-    return ["ssh", "-i", str(rental.SSH_KEY), "-p", str(port), "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
-            "-o", f"UserKnownHostsFile={rental.KNOWN_HOSTS / str(instance())}", "-o", "LogLevel=ERROR", f"root@{host}"]
+    routes = [(row["public_ipaddr"], mapped[0]["HostPort"])] if mapped else []
+    routes.append((row["ssh_host"], row["ssh_port"]))
+    for host, port in routes:
+        command = ["ssh", "-i", str(rental.SSH_KEY), "-p", str(port), "-o", "BatchMode=yes", "-o", "ConnectTimeout=20",
+                   "-o", "StrictHostKeyChecking=accept-new", "-o", f"UserKnownHostsFile={rental.KNOWN_HOSTS / str(instance())}",
+                   "-o", "LogLevel=ERROR", f"root@{host}"]
+        # 255 is ssh's own failure; anything else means the connection was made.
+        if subprocess.run([*command, "true"], capture_output=True).returncode != 255:
+            break
+    return command
 
 
 def stream(source, target_command):
