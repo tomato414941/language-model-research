@@ -47,6 +47,7 @@ wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'openwebtext'
+decay_dataset = '' # with Muon's schedule, the dataset that training reads once the learning rate begins to fall
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
@@ -139,17 +140,23 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
-row_heads = None
-if rows_from_document_heads:
-    train_tokens = os.path.join(data_dir, 'train.bin')
-    row_heads = document_heads(train_tokens, os.path.join(data_dir, 'tokenizer.json'))
-    row_heads = whole_row_heads(row_heads, os.path.getsize(train_tokens) // 2, block_size)
+
+def row_starts(directory):
+    """Where a dataset's training rows may begin, or None if they may begin anywhere."""
+    if not rows_from_document_heads:
+        return None
+    train_tokens = os.path.join(directory, 'train.bin')
+    heads = document_heads(train_tokens, os.path.join(directory, 'tokenizer.json'))
+    return whole_row_heads(heads, os.path.getsize(train_tokens) // 2, block_size)
+
+train_dir = data_dir
+row_heads = row_starts(train_dir)
 
 def get_batch(split):
     # We recreate np.memmap every batch to avoid a memory leak, as per
     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
     if split == 'train':
-        data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
+        data = np.memmap(os.path.join(train_dir, 'train.bin'), dtype=np.uint16, mode='r')
     else:
         data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
     if split == 'train' and row_heads is not None:
@@ -311,6 +318,10 @@ while True:
     # determine and set the learning rate for this iteration
     if optimizer_name == 'muon':
         lr = muon_lr * set_schedule(optimizer, iter_num, max_iters, muon_weight_decay)
+        if decay_dataset and lr < muon_lr and train_dir == data_dir:
+            train_dir = os.path.join('data', decay_dataset)
+            row_heads = row_starts(train_dir)
+            print(f"iter {iter_num}: reading {decay_dataset}")
     else:
         lr = get_lr(iter_num) if decay_lr else learning_rate
         for param_group in optimizer.param_groups:
