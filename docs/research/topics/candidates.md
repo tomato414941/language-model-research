@@ -21,7 +21,7 @@
 | 埋め込みの向きを広げる損失を足す（[Dispersion Loss](../sources/dispersion-loss.md)） | 点の平均 +0.7〜1.5 | 1研究。小さいモデルで起きる問題で、途中学習は読む量が少ない。時間は3〜5%増 | 小 |
 | 最後の重みを混ぜる（途中の重みを残すので、1回の学習で何通りも測れる） | 0.1〜0.6%。IMU-1 では点の平均 +.014 | 記録 #92、Terminal Shrinkage。nanochat では効かなかった。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/checkpoint-averaging.md) | 小 |
 | 注意の層を減らす（Composer は注意と MLP が1対2、記録 #92 は10層のうち7つ） | 点の平均 +1.1〜3.1%（3.5億〜30億）。同じ時間で読む量も増える | 探索2つと speedrun が同じ向き。[調査](../experiments/broad-research-survey.md) | 小 |
-| MLP の一部をトークンで引く表にする（[STEM](../sources/stem.md)、[L³](../sources/l3.md)。engram.md） | 点の平均 +1〜2 | 2研究、8億や3.5億で読む量は今の20倍以上。ゲート付きの MLP やメモリが要る | 中 |
+| MLP の一部をトークンで引く表にする（[STEM](../sources/stem.md)、[L³](../sources/l3.md)。engram.md） | 点の平均 +1〜2 | 2研究、3.5億と8億の結果で、STEM の読む量は今の20倍以上。ゲート付きの MLP やメモリが要る | 中 |
 | 浅く始めて後で深くする（[Deep Progressive Training](../sources/deep-progressive-training.md)） | 計算3〜5倍分なら約6〜9%だが、当てはまるかは不明 | 1研究。1.24億は1パラメータ約2,500トークンで今の約200倍。点の報告なし。1回で試せる | 小 |
 | 学習率を下げる期間と下限（今は後半で0まで。Recursive は95%で5%まで、記録 #92 は80%で20%まで） | 不明 | 割れている。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md) | 小 |
 | 1回の更新のトークンを小さく始める（今は524,288で一定。記録 #92 は約5.7万から59万、Recursive は147,456で一定） | 不明 | [Fast Catch-up](../sources/fast-catch-up.md)。nanochat は効果が小さいとして入れず、[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/batch-size-schedule.md) | 小 |
