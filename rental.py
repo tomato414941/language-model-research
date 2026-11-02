@@ -3,8 +3,9 @@ a script, fetches what it made and removes the machine.
 
 Commands: offers [GPU], rent [GPU], send [HOST:DIRECTORY [PATH...]], start SCRIPT [ARGUMENT...], shell COMMAND,
 fetch, destroy, guard MINUTES. `send` sends the committed code, and the data if given the machine and directory
-that hold it: prepare.py's climbmix directory and harness.py's questions.jsonl, unless other paths are named.
-`guard`, left running in the background, removes the machine after that long if nothing else has.
+that hold it: prepare.py's climbmix directory, harness.py's questions.jsonl, the harness's datasets cache and
+constraints.txt, the versions that a try without a GPU ran with, unless other paths are named. `guard`, left
+running in the background, removes the machine after that long if nothing else has.
 
 It rents through runs/vast_rental.py of the language-model repository, checked out next to this one,
 so that both projects follow one rental policy and share one record of the machines that failed. That
@@ -34,7 +35,7 @@ TRIES = 2
 LABEL = "language-model-research"
 # What a comparison's costs are measured on. Work outside one, like scoring saved weights, can name a cheaper GPU.
 GPU = "H100 SXM"
-DATA = ("climbmix", "questions.jsonl")
+DATA = ("climbmix", "questions.jsonl", "datasets", "constraints.txt")
 QUERY = {
     "num_gpus": {"eq": 1},
     "cuda_max_good": {"gte": 13.2},

@@ -1,4 +1,4 @@
-"""Run the LM Evaluation Harness: to write benchmarks' questions out, and to score at milestones.
+"""Run the LM Evaluation Harness: to write benchmarks' questions out, and to score a trained model in full.
 
 Every benchmark here asks a model to choose among continuations, so a model only has to give the
 probability of a continuation after a context. Beside scoring.py's bits per byte of the correct

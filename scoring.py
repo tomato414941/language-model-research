@@ -3,7 +3,7 @@
 A model's probability of the correct answer moves with every gain, so small models show progress
 before their answers change; see DataDecide (arXiv:2504.11393) and Signal and Noise
 (arXiv:2508.13144). That needs neither the wrong choices nor the harness, which harness.py runs only
-to write these questions out and to score a model in full at a milestone. Each question's result is
+to write these questions out and to score a trained model in full. Each question's result is
 kept for comparing models question by question. The validation text's bits per byte is reported
 beside them as a monitor; it comes from the training data's own distribution.
 """
