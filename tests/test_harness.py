@@ -38,7 +38,7 @@ class ScoreInFullTest(unittest.TestCase):
         samples = [sample(0, (4 * bit, 9 * bit), 1.0), sample(1, (bit, 6 * bit), 0.0)]
         asked = [("sciq", "sciq", ChoosingTask(), row) for row in samples]
         with patch("harness.ask", return_value=asked):
-            return score_in_full(SimpleNamespace(device="cpu"), ["sciq"])
+            return score_in_full(SimpleNamespace(device="cpu"), {"sciq": ("en", "acc")})
 
     def test_keeps_whether_each_question_was_answered_correctly(self):
         self.assertEqual(self.score()["questions"]["sciq"]["correct"], [1.0, 0.0])

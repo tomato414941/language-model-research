@@ -35,6 +35,12 @@ BENCHMARKS = {
     "ja_leaderboard_jcommonsenseqa": ("ja", "acc"),
     "ja_leaderboard_jnli": ("ja", "acc"),
 }
+# MMLU in the form its authors asked it (arXiv:2009.03300): five examples from the subject's development
+# set before each question, answered by letter. The harness asks with no examples unless told to. It is
+# scored only when asked for and kept apart from the benchmarks above, among which mmlu_continuation
+# already asks the same questions.
+AUTHORS_MMLU = {"mmlu": ("en", "acc")}
+AUTHORS_MMLU_EXAMPLES = 5
 JGLUE_URL = (
     "https://raw.githubusercontent.com/yahoojapan/JGLUE/refs/tags/v1.2.0/"
     "datasets/{name}-v1.2/{split}-v1.2.json"
@@ -134,13 +140,13 @@ def correct_choice(task, sample):
     return gold
 
 
-def ask(model, names, limit=None):
+def ask(model, names, limit=None, examples=None):
     """Ask the benchmarks and yield each question with the task that asked it."""
     manager = TaskManager()
     loaded = manager.load([jglue_task(manager, name) if name in JGLUE_TASKS else name for name in names])
     chosen = [loaded["groups"][name] if name in loaded["groups"] else loaded["tasks"][name] for name in names]
     result = evaluator.simple_evaluate(
-        model=model, tasks=chosen, task_manager=manager, limit=limit, log_samples=True
+        model=model, tasks=chosen, task_manager=manager, limit=limit, num_fewshot=examples, log_samples=True
     )
     for name in names:
         members = (
@@ -170,15 +176,15 @@ def write_questions(path, names):
             output.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def score_in_full(model, names, limit=None):
+def score_in_full(model, benchmarks, limit=None, examples=None):
     """Each benchmark's accuracy and correct answers' bits per byte, as the harness scores them."""
-    rows = {name: [] for name in names}
-    for name, _, task, sample in ask(HarnessModel(model), names, limit):
+    rows = {name: [] for name in benchmarks}
+    for name, _, task, sample in ask(HarnessModel(model), list(benchmarks), limit, examples):
         gold = correct_choice(task, sample)
         context, answer = sample["arguments"][gold]
         rows[name].append(
             {
-                "accuracy": sample[BENCHMARKS[name][1]],
+                "accuracy": sample[benchmarks[name][1]],
                 "bits": bits_per_byte(context, answer, sample["filtered_resps"][gold][0]),
             }
         )
@@ -192,8 +198,8 @@ def score_in_full(model, names, limit=None):
         },
         "benchmarks": {
             name: {
-                "language": BENCHMARKS[name][0],
-                "metric": BENCHMARKS[name][1],
+                "language": benchmarks[name][0],
+                "metric": benchmarks[name][1],
                 "questions": len(row),
                 "accuracy": statistics.fmean(item["accuracy"] for item in row),
                 "gold_bits_per_byte": statistics.fmean(item["bits"] for item in row),
@@ -215,10 +221,11 @@ def main():
     parser.add_argument("--precision", default="bfloat16")
     parser.add_argument("--batch-tokens", type=int, default=262144)
     parser.add_argument("--limit", type=int, help="ask only this many questions of each task, to try it")
+    parser.add_argument("--authors-mmlu", action="store_true", help="score MMLU in its authors' form instead")
     arguments = parser.parse_args()
-    names = [name for name, (language, _) in BENCHMARKS.items() if language == arguments.language]
+    benchmarks = {name: row for name, row in BENCHMARKS.items() if row[0] == arguments.language}
     if not arguments.model:
-        write_questions(arguments.output, names)
+        write_questions(arguments.output, list(benchmarks))
         return
     load = [arguments.device, arguments.precision, arguments.batch_tokens]
     model = (
@@ -226,9 +233,12 @@ def main():
         if arguments.tokenizer
         else huggingface_model(arguments.model, *load)
     )
-    Path(arguments.output).write_text(
-        json.dumps(score_in_full(model, names, arguments.limit), indent=2) + "\n", encoding="utf-8"
+    score = (
+        score_in_full(model, AUTHORS_MMLU, arguments.limit, AUTHORS_MMLU_EXAMPLES)
+        if arguments.authors_mmlu
+        else score_in_full(model, benchmarks, arguments.limit)
     )
+    Path(arguments.output).write_text(json.dumps(score, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
