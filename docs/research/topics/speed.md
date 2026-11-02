@@ -20,7 +20,8 @@
 | 注意の計算の方式（attention-kernel.md） | 約0.2% | 測った。1回の更新の差は1.6%以内で、差は形が新しいときの準備だけ |
 | 効率全体 | 46%まで上がれば約0.8% | 差の原因は未調査。最初の束は約39%で、注意の方式を替えても変わらなかった。[2番目の束](../experiments/second-bundle.md)は約35%（式に入らない計算が増えた）。層を流れる値の精度は stream-precision.md |
 | 1回に流す本数 | 128本で約0.1% | 測った。幅640で、64本より128本が1.6〜2.4%速く、32本は6.6%遅い。256本は流れる値を bf16 にしてもメモリに入らない |
-| FP8 | 今の規模では0か損 | `language-model` の [メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/fp8.md)では、26層で1.17倍速いが同じ損失では約5%、12層ではかえって遅い |
+| FP8 | 今の規模では0か損 | `language-model` の [メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/fp8.md)では、26層で1.17倍速いが同じ損失では約5%、12層ではかえって遅い。[記録 #92](../sources/modded-nanogpt-anvil2.md) は専用のカーネルを自作して時間 −7% |
+| CUDA グラフ | 小さいはず（未測定） | 記録 #92 で時間 −4%。向こうの1回の更新は約30ミリ秒で Python の時間の割合が大きい。今は約600ミリ秒 |
 
 [Auto Research](../sources/auto-research.md) では、nanochat の品質スコアが38.7%上がり、最も大きく伸びたのは、速度の無駄を見つけて浮いた時間をトークンに回した変更だった。速度は学習を最後まで回さなくても測れるので、モデルの比較より安く確かめられる。
 
