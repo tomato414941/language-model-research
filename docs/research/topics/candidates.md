@@ -17,7 +17,7 @@
 
 | 候補 | 効果の見込み | 根拠 | 手間 |
 |---|---|---|---|
-| n-gram の計数を入力に足す（COUNT。engram.md） | 全体で検証の損失が約2〜3.6%、課題の損失が約0.3〜2.5%。今の計算量に近い点では正解の BPB −6.6%、正解率 +1.6（図の読み取り） | 1研究のみ（2026-10）、基準は AdamW。表は上位8候補で約5.4GB、学習が読まない部分で作る（[数えた](../experiments/count-table-check.md)） | 中 |
+| n-gram の計数を入力に足す（COUNT。engram.md） | 全体で検証の損失が約2〜3.6%、課題の損失が約0.3〜2.5%。今の計算量に近い点では正解の BPB −6.6%、正解率 +1.6（図の読み取り） | 1研究のみ（2026-10）、基準は AdamW。表は上位8候補で約5.4GB、FineWeb で作る（[数えた](../experiments/count-table-check.md)） | 中 |
 | 埋め込みの向きを広げる損失を足す（[Dispersion Loss](../sources/dispersion-loss.md)） | 点の平均 +0.7〜1.5 | 1研究。小さいモデルで起きる問題で、途中学習は読む量が少ない。時間は3〜5%増 | 小 |
 | 最後の重みを混ぜる（途中の重みを残すので、1回の学習で何通りも測れる） | 0.1〜0.6%。IMU-1 では点の平均 +.014 | 記録 #92、Terminal Shrinkage。nanochat では効かなかった。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/checkpoint-averaging.md) | 小 |
 | 注意の層を減らす（Composer は注意と MLP が1対2、記録 #92 は10層のうち7つ） | 点の平均 +1.1〜3.1%（3.5億〜30億）。同じ時間で読む量も増える | 探索2つと speedrun が同じ向き。[調査](../experiments/broad-research-survey.md) | 小 |
