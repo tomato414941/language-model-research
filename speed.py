@@ -101,8 +101,10 @@ def cost(log, total_seconds, updates, attention, stream=False):
 
 def measure(way, extra):
     """What the way costs, or None if it failed or fell back to another way of running attention."""
+    # A run this short reaches none of the updates whose weights the bundle averages at the end of its training.
     command = [sys.executable, "-u", "train.py", way["config"], *as_options(way["options"]), f"--out_dir=out/speed/{way['name']}",
-               f"--max_iters={MEASURED_UPDATES}", "--eval_interval=1000000", "--eval_iters=1", "--log_interval=1", *extra]
+               f"--max_iters={MEASURED_UPDATES}", "--eval_interval=1000000", "--eval_iters=1", "--log_interval=1",
+               "--average_last=0", *extra]
     began = time.monotonic()
     try:
         done = subprocess.run(command, capture_output=True, text=True, timeout=RUN_SECONDS_LIMIT)

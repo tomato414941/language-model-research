@@ -27,32 +27,43 @@ score_in_full() {
         --batch-tokens 65536 ${HARNESS_OPTIONS:-} > "results/$1-full.log" 2>&1
 }
 
-# Trains a model, scores it, keeps only its weights, in 16 bits, and scores those in full. SCORING_OPTIONS
-# go to the first scoring, so that a small model can try this without a GPU.
+# Scores a model that train.py saved in DIRECTORY, keeps only its weights, in 16 bits, as models/NAME, and
+# scores those in full. SCORING_OPTIONS go to the first scoring, so that a small model can try this without a GPU.
+# Usage: score_keep NAME DIRECTORY
+score_keep() {
+    local name=$1 directory=$2
+    stamp "score $name"
+    python scoring.py "$directory" --tokenizer data/climbmix/tokenizer.json --validation data/climbmix/val.bin \
+        --questions data/questions.jsonl --output "results/$name.json" ${SCORING_OPTIONS:-} > "results/score-$name.log" 2>&1
+    stamp "keep $name"
+    python - "$directory" "models/$name" <<'PY'
+import os
+import sys
+
+import torch
+
+source, destination = sys.argv[1:]
+checkpoint = torch.load(f"{source}/ckpt.pt", map_location="cpu")
+weights = {key.removeprefix("_orig_mod."): value.to(torch.bfloat16) for key, value in checkpoint["model"].items()}
+os.makedirs(destination, exist_ok=True)
+# A COUNT model needs to know where its table is.
+config = {"count_table": checkpoint["config"].get("count_table", "")}
+torch.save({"model_args": checkpoint["model_args"], "model": weights, "config": config}, f"{destination}/ckpt.pt")
+os.remove(f"{source}/ckpt.pt")
+PY
+    score_in_full "$name" "models/$name"
+}
+
+# Trains a model, then scores and keeps its last weights as NAME and, when the configuration asks train.py to
+# mix them with the average of the last few, the mixed weights as NAME-mixed.
 # Usage: train_score_keep NAME CONFIG [TRAIN_OPTION...]
 train_score_keep() {
     local name=$1 config=$2
     shift 2
     stamp "train $name"
     python -u train.py "$config" --out_dir="out/$name" "$@" > "results/train-$name.log" 2>&1
-    stamp "score $name"
-    python scoring.py "out/$name" --tokenizer data/climbmix/tokenizer.json --validation data/climbmix/val.bin \
-        --questions data/questions.jsonl --output "results/$name.json" ${SCORING_OPTIONS:-} > "results/score-$name.log" 2>&1
-    stamp "keep $name"
-    python - "$name" <<'PY'
-import os
-import sys
-
-import torch
-
-name = sys.argv[1]
-checkpoint = torch.load(f"out/{name}/ckpt.pt", map_location="cpu")
-weights = {key.removeprefix("_orig_mod."): value.to(torch.bfloat16) for key, value in checkpoint["model"].items()}
-os.makedirs(f"models/{name}", exist_ok=True)
-# A COUNT model needs to know where its table is.
-config = {"count_table": checkpoint["config"].get("count_table", "")}
-torch.save({"model_args": checkpoint["model_args"], "model": weights, "config": config}, f"models/{name}/ckpt.pt")
-os.remove(f"out/{name}/ckpt.pt")
-PY
-    score_in_full "$name" "models/$name"
+    score_keep "$name" "out/$name"
+    if [ -f "out/$name/mixed/ckpt.pt" ]; then
+        score_keep "$name-mixed" "out/$name/mixed"
+    fi
 }

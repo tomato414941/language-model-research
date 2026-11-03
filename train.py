@@ -27,6 +27,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
+from averaging import WeightAverage, averaged_updates
 from count_table import CountTable
 from model import GPTConfig, GPT, choose_attention
 from muon import configure_muon, set_schedule
@@ -42,6 +43,9 @@ eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+average_last = 0 # above zero, how many of the last weights, average_every updates apart, to average for out_dir/mixed
+average_every = 32
+average_share = 0.55 # the average's share of the mixed weights; the very last weights take the rest
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = 'owt'
@@ -107,6 +111,8 @@ config_keys = [k for k,v in globals().items() if not k.startswith('_') and isins
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
+# the updates after which training keeps the weights that the mixed weights average, checked before any work
+averaged = averaged_updates(max_iters, average_last, average_every) if average_last else set()
 
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
@@ -319,6 +325,8 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+# all the names of the parameters, as the state dictionary holds them, tied ones too
+average = WeightAverage(name for name, _ in raw_model.named_parameters(remove_duplicate=False))
 while True:
 
     # determine and set the learning rate for this iteration
@@ -358,6 +366,20 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+
+    # keep the weights to average, and once the last are in, write them out mixed with the average
+    if iter_num in averaged and master_process:
+        average.add(raw_model.state_dict())
+        if iter_num == max_iters and average.count < len(averaged):
+            print(f"not mixing: this run kept {average.count} of the {len(averaged)} weights to average")
+        elif iter_num == max_iters:
+            mixed_dir = os.path.join(out_dir, 'mixed')
+            os.makedirs(mixed_dir, exist_ok=True)
+            mixed = {'model': average.mixed(raw_model.state_dict(), average_share), 'model_args': model_args,
+                     'iter_num': iter_num, 'config': config}
+            print(f"saving the last weights mixed with the average of {average.count} to {mixed_dir}")
+            torch.save(mixed, os.path.join(mixed_dir, 'ckpt.pt'))
+            mixed = None
     if iter_num == 0 and eval_only:
         break
 

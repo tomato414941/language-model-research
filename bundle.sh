@@ -1,6 +1,6 @@
 #!/bin/bash
 # Measures on a rented machine what each way of running the third bundle costs, then trains the bundle
-# in the cheapest way for the cost of the baseline, scores it and keeps its weights.
+# in the cheapest way for the cost of the baseline, and scores and keeps its last weights and its mixed ones.
 # Usage: bundle.sh
 set -euo pipefail
 cd "$(dirname "$0")"
