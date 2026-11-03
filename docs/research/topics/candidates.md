@@ -18,7 +18,7 @@
 | 候補 | 効果の見込み | 根拠 | 手間 |
 |---|---|---|---|
 | 注意の層を減らす（[Composer](../sources/composer.md) は注意と MLP が1対2、記録 #92 は10層のうち7つ） | 点の平均 +0.6〜2.8（3.5億〜30億、小さいほど小さい）。今の大きさで1対2にすると計算が約4%減る | Composer は1億〜2億で探すと1対1が一番良かった。記録 #92 はこれだけを外した数字がない。AIRA-Compose は要旨のみ。[調査](../experiments/broad-research-survey.md) | 中（value embeddings などの置き場所を決め直す） |
-| MLP の一部をトークンで引く表にする（[STEM](../sources/stem.md)、[L³](../sources/l3.md)。engram.md） | 点の平均 +1〜2 | 2研究、3.5億と8億の結果で、STEM の読む量は今の20倍以上。ゲート付きの MLP やメモリが要る | 中 |
+| トークンで引く表を MLP の一部か層の間に入れる（[STEM](../sources/stem.md)、[L³](../sources/l3.md)。engram.md） | 点の平均 +0.8〜2 | 2研究。STEM は3.5億と10億で、読む量は今の20倍以上、ゲート付きの MLP が前提。L³ は8億級で読む量は今と同じくらい（1パラメータ約12トークン）だが、表は1層あたり71万個の埋め込み、速さは約87%で、速く動かすには専用の計算が要る | 大 |
 | 浅く始めて後で深くする（[Deep Progressive Training](../sources/deep-progressive-training.md)） | 計算3〜5倍分なら約6〜9%だが、当てはまるかは不明 | 1研究。1.24億は1パラメータ約2,500トークンで今の約200倍。点の報告なし。1回で試せる | 小 |
 | 学習率を下げる期間と下限（今は後半で0まで。Recursive は95%で5%まで、記録 #92 は80%で20%まで） | 不明 | 割れている。下限を上げると、最後の重みを混ぜる効果が大きくなるという報告がある（weight-averaging.md）。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md) | 小 |
 | 1回の更新のトークンを小さく始める（今は524,288で一定。記録 #92 は約5.7万から59万、Recursive は147,456で一定） | 不明 | [Fast Catch-up](../sources/fast-catch-up.md)。nanochat は効果が小さいとして入れず、[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/batch-size-schedule.md) | 小 |
