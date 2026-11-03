@@ -110,8 +110,8 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
     """Gives the matrices of the blocks to Muon and every other weight to AdamW.
 
     A token table that only reads gets embedding_lr. A table shared with the predictions gets other_lr.
-    The x0 weights get scalar_lr and the resid weights a hundredth of it, since they multiply through the
-    layers, as in karpathy/nanochat.
+    The x0 weights and the COUNT gate get scalar_lr and the resid weights a hundredth of it, since they
+    multiply through the layers, as in karpathy/nanochat.
     """
     matrices, query_key_value, value_embeddings, reading_table, resid_weights, x0_weights, others = ([] for _ in range(7))
     for name, p in model.named_parameters():
@@ -123,7 +123,7 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
             reading_table.append(p)
         elif name == 'resid_weights':
             resid_weights.append(p)
-        elif name == 'x0_weights':
+        elif name in ('x0_weights', 'count_gate'):
             x0_weights.append(p)
         elif not name.startswith('transformer.h.') or p.dim() != 2:
             others.append(p)

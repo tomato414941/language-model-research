@@ -70,15 +70,13 @@ class SpeedTest(unittest.TestCase):
         self.assertEqual(cheapest(ways, costs, 954)["name"], "fa2-128x4")
 
     def test_does_not_choose_the_bundle_without_one_of_its_parts(self):
-        part = bundle_way("fa2", part="without-qk-norm")
+        part = bundle_way("fa2", part="without-count")
         costs = {"baseline": costing(0.8), "fa2-128x4": costing(0.6), part["name"]: costing(0.5)}
         self.assertEqual(cheapest([bundle_way("fa2"), part], costs, 954)["name"], "fa2-128x4")
 
     def test_turns_each_part_off_in_its_run(self):
-        self.assertFalse(bundle_way("fa2", part="without-qk-norm")["options"]["qk_norm"])
-        self.assertFalse(bundle_way("fa2", part="without-residual-weights")["options"]["residual_weights"])
-        self.assertEqual(bundle_way("fa2", part="without-softcap")["options"]["logit_softcap"], 0.0)
-        self.assertFalse(bundle_way("fa2", part="with-gelu")["options"]["relu_squared"])
+        self.assertEqual(bundle_way("fa2", part="without-count")["options"]["count_table"], "")
+        self.assertEqual(bundle_way("fa2", part="without-dispersion")["options"]["dispersion"], 0.0)
 
     def test_reads_whether_the_stream_ran_in_bfloat16(self):
         self.assertTrue(stream_in_bfloat16("attention: fa2\nstream: torch.bfloat16\n"))

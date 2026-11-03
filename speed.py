@@ -1,4 +1,4 @@
-"""Measures what each way of running the second bundle costs on this machine, and prints the training
+"""Measures what each way of running the bundle costs on this machine, and prints the training
 options of the cheapest. Every way reads the same tokens per update, so a cheaper one buys more updates
 for the cost of the baseline, which is run here too so that the machine's own speed cancels out.
 
@@ -30,11 +30,10 @@ SLOW_BASELINE_SECONDS = 0.83 * 1.5
 ATTENTIONS = ("sdpa", "fa2")
 USUAL_PASS = (128, 4)
 OTHER_PASSES = ((64, 8), (256, 2))
+BUNDLE_CONFIG = "configs/bundle3.py"
 PARTS_IN_DOUBT = {
-    "without-qk-norm": {"qk_norm": False},
-    "without-residual-weights": {"residual_weights": False},
-    "without-softcap": {"logit_softcap": 0.0},
-    "with-gelu": {"relu_squared": False},
+    "without-count": {"count_table": ""},
+    "without-dispersion": {"dispersion": 0.0},
 }
 
 
@@ -61,7 +60,7 @@ def bundle_way(attention, batch_size=USUAL_PASS[0], accumulation=USUAL_PASS[1], 
         options.update(PARTS_IN_DOUBT[part])
     return {
         "name": name,
-        "config": "configs/bundle2.py",
+        "config": BUNDLE_CONFIG,
         "attention": attention,
         "keeps_model": block_size == 1024 and part is None,
         "options": options,

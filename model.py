@@ -50,6 +50,8 @@ def rotate(x, cos, sin):
     return torch.cat([first * cos + second * sin, second * cos - first * sin], dim=-1)
 
 VALUE_GATE_CHANNELS = 12
+DISPERSION_STRIDE = 8 # Dispersion Loss reads every eighth position, as its paper allows sampling the tokens
+DISPERSION_TEMPERATURE = 1.0
 
 def has_value_embedding(layer, n_layer):
     """Value embeddings sit on every other layer and always on the last, as in karpathy/nanochat."""
@@ -164,6 +166,22 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
+@torch.compiler.disable
+def count_candidates(table, idx):
+    """The COUNT table's candidates and weights for each position, looked up outside the compiled graph."""
+    return table.candidates(idx)
+
+def dispersion_loss(vectors, temperature=DISPERSION_TEMPERATURE):
+    """Dispersion Loss (arXiv 2602.00217) over the last two axes: low when a row's vectors point in different
+    directions. It is the log of the mean of exp(-angle / (pi * temperature)) over the pairs of different vectors,
+    the paper's log of the sum less a constant, so that it lies between -1/temperature and 0."""
+    unit = F.normalize(vectors.float(), dim=-1)
+    cosines = (unit @ unit.transpose(-1, -2)).clamp(-1 + 1e-4, 1 - 1e-4)
+    angles = torch.arccos(cosines) / math.pi
+    count = cosines.size(-1)
+    others = ~torch.eye(count, dtype=torch.bool, device=vectors.device)
+    return (torch.logsumexp(-angles[..., others] / temperature, dim=-1) - math.log(count * (count - 1))).mean()
+
 class ReLUSquared(nn.Module):
     """ Squares the positive values and zeroes the others, with no weights to learn """
 
@@ -218,6 +236,8 @@ class GPTConfig:
     separate_embeddings: bool = False # True: one table reads the tokens and another predicts them
     residual_weights: bool = False # True: each block takes the stream and the embedded tokens by weights it learns
     logit_softcap: float = 0.0 # above zero: the logits are squashed smoothly into plus or minus this
+    count: bool = False # True: the input also takes the output table's rows of the tokens a COUNT table expects next
+    dispersion: float = 0.0 # above zero: the weight of a loss that spreads the directions of each row's token vectors
 
 class GPT(nn.Module):
 
@@ -243,6 +263,11 @@ class GPT(nn.Module):
         if config.residual_weights:
             self.resid_weights = nn.Parameter(torch.ones(config.n_layer))
             self.x0_weights = nn.Parameter(torch.full((config.n_layer,), 0.1))
+        # how much the COUNT table's view of what comes next adds to the input, as a weight it learns
+        if config.count:
+            self.count_gate = nn.Parameter(torch.full((1,), 0.1))
+        # set through GPT.use_count_table
+        self.count_table = None
         # only the direction of each token's vector in a separate reading table goes on into the blocks
         self.input_norm = RMSNorm() if config.separate_embeddings else None
         # set through GPT.keep_stream_in
@@ -279,6 +304,22 @@ class GPT(nn.Module):
         """Sends attention through this function. It is no part of the weights, so it is not saved with them."""
         for block in self.transformer.h:
             block.attn.flash_attention = function
+
+    def use_count_table(self, table):
+        """Looks up this COUNT table (count_table.py) at every position. It is no part of the weights, so it is not
+        saved with them."""
+        self.count_table = table
+
+    def count_input(self, idx):
+        """The output table's rows of the tokens that the COUNT table expects after each position's histories,
+        weighted by their scores and averaged over the history lengths, brought to one size."""
+        assert self.count_table is not None, "a COUNT model looks up its table; see GPT.use_count_table"
+        tokens, weights = count_candidates(self.count_table, idx)
+        b, t, k = tokens.shape
+        weight = self.lm_head.weight
+        rows = F.embedding_bag(tokens.view(-1, k), weight, per_sample_weights=weights.view(-1, k).to(weight.dtype),
+                               mode='sum')
+        return F.rms_norm(rows, (rows.size(-1),)).view(b, t, -1)
 
     def keep_stream_in(self, dtype):
         """Holds the values that pass through the layers in this type. It is no part of the weights, so it is
@@ -326,21 +367,29 @@ class GPT(nn.Module):
             x = x + self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         if self.input_norm is not None:
             x = self.input_norm(x)
+        if self.config.count:
+            x = x + self.count_gate * self.count_input(idx).to(x.dtype)
         if self.stream_dtype is not None:
             x = x.to(self.stream_dtype)
         x = self.transformer.drop(x)
         x0 = x
+        dispersing = self.training and targets is not None and self.config.dispersion > 0
+        sampled = []
         for layer, block in enumerate(self.transformer.h):
             if self.config.residual_weights:
                 x = self.resid_weights[layer] * x + self.x0_weights[layer] * x0
             table = self.value_embeds[str(layer)] if str(layer) in self.value_embeds else None
             x = block(x, table(idx).to(x.dtype) if table is not None else None)
+            if dispersing:
+                sampled.append(x[:, DISPERSION_STRIDE - 1::DISPERSION_STRIDE])
         x = self.transformer.ln_f(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.cap_logits(self.lm_head(x))
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+            if dispersing:
+                loss = loss + self.config.dispersion * dispersion_loss(torch.stack(sampled))
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.cap_logits(self.lm_head(x[:, [-1], :])) # note: using list [-1] to preserve the time dim

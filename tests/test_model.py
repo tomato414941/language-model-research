@@ -13,8 +13,8 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from attention_check import agree
-from model import (GPT, GPTConfig, ReLUSquared, RMSNorm, choose_attention, has_value_embedding, load_flash_attention,
-                   rotary_tables, rotate)
+from model import (GPT, GPTConfig, ReLUSquared, RMSNorm, choose_attention, dispersion_loss, has_value_embedding,
+                   load_flash_attention, rotary_tables, rotate)
 from muon import configure_muon
 
 
@@ -642,6 +642,159 @@ class StreamTypeTest(unittest.TestCase):
             optimizer.zero_grad(set_to_none=True)
             losses.append(loss.item())
         self.assertLess(losses[-1], losses[0] * 0.8)
+
+
+def count_model(**options):
+    torch.manual_seed(0)
+    return GPT(GPTConfig(block_size=16, vocab_size=32, n_layer=2, n_head=2, n_embd=32, bias=False,
+                         separate_embeddings=True, rms_norm=True, count=True, **options))
+
+
+def count_rows():
+    """Rows in which the toy table's histories occur, with BOS as token 0."""
+    return torch.tensor([[0, 5, 6, 7, 8, 9, 10, 12, 0, 5, 6, 7, 8, 9, 11, 13, 0],
+                         [0, 5, 6, 7, 8, 9, 11, 13, 0, 5, 6, 7, 8, 9, 10, 12, 0]])
+
+
+class CountTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import shutil
+        import tempfile
+
+        import numpy as np
+
+        import count_table
+        import prepare
+
+        directory = Path(tempfile.mkdtemp())
+        cls.addClassCleanup(shutil.rmtree, directory)
+        tokenizer = prepare.train_tokenizer(iter(["a few words to train on"] * 20), 300)
+        tokenizer.save(str(directory / "tokenizer.json"))
+        documents = [[0, 5, 6, 7, 8, 9, 10, 12]] * 10 + [[0, 5, 6, 7, 8, 9, 11, 13]] * 5
+        (directory / "text").mkdir()
+        np.array([token for document in documents for token in document], dtype=np.uint16).tofile(
+            directory / "text" / "train.bin")
+        count_table.build(directory / "text", directory / "table", directory / "tokenizer.json", parts=2)
+        cls.table = count_table.CountTable(directory / "table")
+
+    def model(self, **options):
+        model = count_model(**options)
+        model.use_count_table(self.table)
+        return model
+
+    def test_asks_for_its_table(self):
+        with self.assertRaises(AssertionError):
+            all_logits(count_model(), count_rows()[:, :-1])
+
+    def test_changes_the_predictions(self):
+        model = self.model()
+        with_table = all_logits(model, count_rows()[:, :-1])
+        torch.nn.init.zeros_(model.count_gate)
+        self.assertFalse(torch.allclose(with_table, all_logits(model, count_rows()[:, :-1])))
+
+    def test_predicts_as_a_model_without_it_when_its_weight_is_zero(self):
+        model = self.model()
+        torch.nn.init.zeros_(model.count_gate)
+        torch.manual_seed(0)
+        without = GPT(GPTConfig(block_size=16, vocab_size=32, n_layer=2, n_head=2, n_embd=32, bias=False,
+                                separate_embeddings=True, rms_norm=True))
+        without.load_state_dict({k: v for k, v in model.state_dict().items() if k != 'count_gate'})
+        inputs = count_rows()[:, :-1]
+        self.assertTrue(torch.allclose(all_logits(model, inputs), all_logits(without, inputs), atol=1e-6))
+
+    def test_teaches_the_output_table_through_the_lookup(self):
+        def output_gradient(gate):
+            model = self.model()
+            torch.nn.init.constant_(model.count_gate, gate)
+            _, loss = model(count_rows()[:, :-1], count_rows()[:, 1:].contiguous())
+            loss.backward()
+            return model.lm_head.weight.grad
+        self.assertFalse(torch.allclose(output_gradient(0.5), output_gradient(0.0)))
+
+    def test_learns_its_weight(self):
+        model = self.model()
+        _, loss = model(count_rows()[:, :-1], count_rows()[:, 1:].contiguous())
+        loss.backward()
+        self.assertNotEqual(model.count_gate.grad.item(), 0.0)
+
+    def test_keeps_earlier_positions_blind_to_later_tokens(self):
+        model = self.model()
+        inputs = count_rows()[:, :-1]
+        changed = inputs.clone()
+        changed[:, 10:] = 3
+        self.assertTrue(torch.allclose(all_logits(model, inputs)[:, :10], all_logits(model, changed)[:, :10]))
+
+    def test_keeps_the_table_out_of_the_saved_weights(self):
+        names = list(self.model().state_dict())
+        self.assertIn('count_gate', names)
+        self.assertFalse([name for name in names if 'table' in name])
+
+    def test_gives_its_weight_the_rate_of_the_x0_weights(self):
+        model = self.model(residual_weights=True)
+        groups = configure_muon(model, muon_lr=0.04, other_lr=0.0044, scalar_lr=0.5).param_groups
+        group = next(group for group in groups if any(p is model.count_gate for p in group['params']))
+        self.assertTrue(any(p is model.x0_weights for p in group['params']))
+
+    def test_learns_a_fixed_batch_with_muon(self):
+        model = self.model()
+        optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.0044, embedding_lr=0.66)
+        losses = []
+        for _ in range(30):
+            _, loss = model(count_rows()[:, :-1], count_rows()[:, 1:].contiguous())
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            losses.append(loss.item())
+        self.assertLess(losses[-1], losses[0] * 0.8)
+
+
+class DispersionTest(unittest.TestCase):
+    def test_is_higher_when_the_vectors_point_the_same_way(self):
+        generator = torch.Generator().manual_seed(0)
+        alike = torch.ones(2, 8, 16) + 0.01 * torch.randn(2, 8, 16, generator=generator)
+        spread = torch.randn(2, 8, 16, generator=generator)
+        self.assertGreater(dispersion_loss(alike).item(), dispersion_loss(spread).item())
+
+    def test_lies_between_minus_one_and_zero(self):
+        vectors = torch.randn(3, 8, 16, generator=torch.Generator().manual_seed(0))
+        value = dispersion_loss(vectors).item()
+        self.assertLessEqual(value, 0.0)
+        self.assertGreaterEqual(value, -1.0)
+
+    def test_ignores_the_size_of_each_vector(self):
+        vectors = torch.randn(1, 8, 16, generator=torch.Generator().manual_seed(0))
+        sizes = torch.rand(1, 8, 1, generator=torch.Generator().manual_seed(1)) + 0.5
+        self.assertAlmostEqual(dispersion_loss(vectors).item(), dispersion_loss(vectors * sizes).item(), places=5)
+
+    def test_gives_finite_gradients_to_vectors_that_coincide(self):
+        vectors = torch.ones(1, 4, 8, requires_grad=True)
+        dispersion_loss(vectors).backward()
+        self.assertTrue(torch.isfinite(vectors.grad).all())
+
+    def models(self):
+        torch.manual_seed(0)
+        options = dict(block_size=16, vocab_size=32, n_layer=2, n_head=2, n_embd=32, bias=False)
+        spreading = GPT(GPTConfig(dispersion=0.1, **options))
+        plain = GPT(GPTConfig(**options))
+        plain.load_state_dict(spreading.state_dict())
+        return spreading, plain
+
+    def test_adds_to_the_loss_while_training(self):
+        spreading, plain = self.models()
+        batch = tokens()
+        _, with_term = spreading(batch[:, :-1], batch[:, 1:].contiguous())
+        _, without = plain(batch[:, :-1], batch[:, 1:].contiguous())
+        self.assertNotAlmostEqual(with_term.item(), without.item(), places=4)
+
+    def test_leaves_the_loss_alone_when_evaluating(self):
+        spreading, plain = self.models()
+        spreading.eval()
+        plain.eval()
+        batch = tokens()
+        _, with_term = spreading(batch[:, :-1], batch[:, 1:].contiguous())
+        _, without = plain(batch[:, :-1], batch[:, 1:].contiguous())
+        self.assertAlmostEqual(with_term.item(), without.item(), places=6)
 
 
 class AttentionCheckTest(unittest.TestCase):

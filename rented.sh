@@ -49,7 +49,9 @@ name = sys.argv[1]
 checkpoint = torch.load(f"out/{name}/ckpt.pt", map_location="cpu")
 weights = {key.removeprefix("_orig_mod."): value.to(torch.bfloat16) for key, value in checkpoint["model"].items()}
 os.makedirs(f"models/{name}", exist_ok=True)
-torch.save({"model_args": checkpoint["model_args"], "model": weights}, f"models/{name}/ckpt.pt")
+# A COUNT model needs to know where its table is.
+config = {"count_table": checkpoint["config"].get("count_table", "")}
+torch.save({"model_args": checkpoint["model_args"], "model": weights, "config": config}, f"models/{name}/ckpt.pt")
 os.remove(f"out/{name}/ckpt.pt")
 PY
     score_in_full "$name" "models/$name"

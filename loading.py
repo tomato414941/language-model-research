@@ -97,6 +97,12 @@ def nanogpt_model(directory, tokenizer_path, device, precision, batch_tokens):
     network = GPT(GPTConfig(**checkpoint["model_args"]))
     network.load_state_dict({key.removeprefix("_orig_mod."): value for key, value in checkpoint["model"].items()})
     network.to(device, dtype=getattr(torch, precision))
+    if network.config.count:
+        from count_table import CountTable
+
+        if not checkpoint.get("config", {}).get("count_table"):
+            raise ValueError("a COUNT model's checkpoint names its table under config")
+        network.use_count_table(CountTable(checkpoint["config"]["count_table"], device))
     network.eval()
     tokenizer = Tokenizer.from_file(str(tokenizer_path))
     return LanguageModel(

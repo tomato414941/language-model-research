@@ -27,6 +27,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
+from count_table import CountTable
 from model import GPTConfig, GPT, choose_attention
 from muon import configure_muon, set_schedule
 from rows import document_heads, whole_row_heads
@@ -68,6 +69,8 @@ residual_weights = False # does each block take the stream and the embedded toke
 logit_softcap = 0.0 # above zero, the logits are squashed smoothly into plus or minus this
 stream_bfloat16 = False # do the values through the layers stay in bfloat16, when training in it on a GPU?
 rows_from_document_heads = False # do training rows begin at the head of a document, and read on from there?
+count_table = '' # the directory of a COUNT table that count_table.py built, which the input then takes; '' for none
+dispersion = 0.0 # above zero, the weight of Dispersion Loss on the directions of each row's token vectors
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -190,7 +193,8 @@ model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=bloc
                   vocab_size=None, dropout=dropout, value_embeddings=value_embeddings, rotary=rotary,
                   rms_norm=rms_norm, qk_norm=qk_norm, relu_squared=relu_squared,
                   zero_output=zero_output, separate_embeddings=separate_embeddings,
-                  residual_weights=residual_weights, logit_softcap=logit_softcap) # start with model_args from command line
+                  residual_weights=residual_weights, logit_softcap=logit_softcap, count=bool(count_table),
+                  dispersion=dispersion) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -211,7 +215,7 @@ elif init_from == 'resume':
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = checkpoint_model_args[k]
     for k in ['value_embeddings', 'rotary', 'rms_norm', 'qk_norm', 'relu_squared', 'zero_output', 'separate_embeddings',
-              'residual_weights', 'logit_softcap']:
+              'residual_weights', 'logit_softcap', 'count', 'dispersion']:
         model_args[k] = checkpoint_model_args.get(k, False)
     # create the model
     gptconf = GPTConfig(**model_args)
@@ -239,6 +243,8 @@ if block_size < model.config.block_size:
     model.crop_block_size(block_size)
     model_args['block_size'] = block_size # so that the checkpoint will have the right value
 model.to(device)
+if model.config.count:
+    model.use_count_table(CountTable(count_table, device))
 
 # The other ways of running attention have no dropout and need bf16 on a GPU; anywhere else PyTorch chooses
 can_choose_attention = device_type == 'cuda' and dtype == 'bfloat16' and dropout == 0.0
