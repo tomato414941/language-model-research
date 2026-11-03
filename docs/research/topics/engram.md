@@ -21,7 +21,7 @@
 - **speedrun：** [記録 #92](../sources/modded-nanogpt-anvil2.md) は、行数を377,280から8,460万にすると検証損失が約3.315から3.279になる（約1.1%）。時間はほぼ同じで、4分の1の行でも大半が残る。
 - **自動の探索：** [Recursive](../sources/recursive-first-steps.md) の一番良い解は、2トークンと3トークンの表に約28億パラメータを使う。表だけの効果は分けられていない。
 - **メモリを減らす：** [Low-Bit N-Gram](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/low-bit-ngram.md) は、4ビットにしてメモリが約75%減り、効果の99%以上が残るとする。
-- **小さい規模の古い結果：** nanochat の LOG（2026-01-27、28）では、完全な形の改善はわずかで、ゲートも3トークンも効かず、前半の層だけに入れると悪化した。一番良かったのは2トークンの表を全層に足す形で、12層では勝ったが、25層では時間で比べると効果が消えて取り除かれた。Marin では約0.2%（[bigram hash のメモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/bigram-hash-embedding.md)）。記録 #92 より表がずっと小さい。
+- **小さい規模の古い結果：** nanochat の LOG（2026-01-27、28）では、完全な形の改善はわずかで、ゲートも3トークンも効かず、前半の層だけに入れると悪化した。一番良かったのは2トークンの表を全層に足す形で、12層では勝ったが、25層では時間で比べると効果が消えて取り除かれた。この形の表は語彙の5倍の行で、0から始め、層ごとの重み（初期値0.1）を掛けて各層の入力に足す。12層では更新の数、計算量、時間のどれで比べても基準に勝ったが、差の数字は書かれていない。今の語彙なら約4.1万行、約2,600万パラメータ（自分たちの計算）。Marin では約0.2%（[bigram hash のメモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/bigram-hash-embedding.md)）。記録 #92 より表がずっと小さい。
 - **COUNT との比較：** COUNT の著者は、GPU のメモリが限られるなら、学習する表より本体にメモリを使うほうが良いとしている。
 
 ## 大規模

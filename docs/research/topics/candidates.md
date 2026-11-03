@@ -20,7 +20,7 @@
 | 注意の層を減らす（[Composer](../sources/composer.md) は注意と MLP が1対2、記録 #92 は10層のうち7つ） | 点の平均 +0.6〜2.8（3.5億〜30億、小さいほど小さい）。今の大きさで1対2にすると計算が約4%減る | Composer は1億〜2億で探すと1対1が一番良かった。記録 #92 はこれだけを外した数字がない。AIRA-Compose は要旨のみ。[調査](../experiments/broad-research-survey.md) | 中（value embeddings などの置き場所を決め直す） |
 | トークンで引く表を MLP の一部か層の間に入れる（[STEM](../sources/stem.md)、[L³](../sources/l3.md)。engram.md） | 点の平均 +0.8〜2 | 2研究。STEM は3.5億と10億で、読む量は今の20倍以上、ゲート付きの MLP が前提。L³ は8億級で読む量は今と同じくらい（1パラメータ約12トークン）だが、表は1層あたり71万個の埋め込み、速さは約87%で、速く動かすには専用の計算が要る | 大 |
 | 学習率を下げる期間と下限（今は後半で0まで。Recursive は95%で5%まで、記録 #92 は80%で20%まで） | 不明 | 割れている。下限を上げると、最後の重みを混ぜる効果が大きくなるという報告がある（weight-averaging.md）。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md) | 小 |
-| 学習する n-gram の表（engram.md） | 約1.1%（記録 #92 の表を大きくした分）。COUNT と重なる | 記録 #92、Recursive。GPU のメモリが要る | 中 |
+| 学習する n-gram の表（2トークンの組で引く表を各層に足す。engram.md） | 約0.2%（Marin）。記録 #92 の約1.1%は表を大きくした分で、語彙は5万 | nanochat の12層では更新の数、計算量、時間のどれでも勝ったが、25層では時間で比べると消えて外した。COUNT と役割が重なるので、COUNT が効かなかったときに試す。今の語彙なら表は約2,600万パラメータ | 小 |
 | 文書の前のトークンをコピーするポインタを出力に混ぜる（CPLM） | 約0.7%（時間 −11%） | speedrun の PR #379 のみ、未採用。損失だけの報告 | 中 |
 | 勾配を1.2乗する（[GradPower](../sources/gradpower.md)） | 約1%（20億の AdamW） | 1研究、Muon の数字は未確認 | 小 |
 | ヘッドごとに直交化する（[T-Muon](../sources/t-muon.md)） | 0.6〜1.1% | 1研究、NorMuon との比較なし | 小 |
