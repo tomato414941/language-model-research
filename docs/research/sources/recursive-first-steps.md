@@ -24,6 +24,8 @@ Recursive の公開物（GitHub の `recursive-org/first-steps-toward-automated-
 - **学習率：** 上げる期間はなく、最初の5%のあと最後まで直線で5%に下げる。Adam の下げ始めは残り65%から。行列0.04、読む表0.6、出力の表0.004。
 - **そのほか：** Muon のモメンタムを0.95から0.79へ下げる。Adam の β1 を0.8から0.55へ下げる。weight decay を一時的に3〜5倍にする時期が3回ある。
 
+素の Transformer から探した解（`optimized_from_vanilla.py`）は7層で、1回の更新を131,072トークン（64本×2,048）で始め、学習の50%で262,144に上げて学習率を1.2倍にする。
+
 どの変更がどれだけ効いたかの表はない。
 
 ## speedrun
@@ -32,4 +34,4 @@ Recursive の公開物（GitHub の `recursive-org/first-steps-toward-automated-
 
 ## 読んだ範囲
 
-リポジトリの README、NanoChat と speedrun の README、`val_bpb.csv`、`lib.py`、`optimized_from_karpathy.py` の設定とモデルの部分を読んだ。元の記事は取得できず（404）読んでいない。
+リポジトリの README、NanoChat と speedrun の README、`val_bpb.csv`、`lib.py`、`optimized_from_karpathy.py` の設定とモデルの部分、`optimized_from_vanilla.py` のバッチと形の設定を読んだ。元の記事は取得できず（404）読んでいない。

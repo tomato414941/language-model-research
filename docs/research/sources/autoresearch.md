@@ -10,5 +10,6 @@ Karpathy の `karpathy/autoresearch`（2026-03）。AI エージェントが1枚
 - モデル（`train.py`）：RoPE、Q と K の RMSNorm、学習する重みのない RMSNorm、ReLU²、注意と MLP の出力のゼロ初期化、入力と出力の埋め込みの分離（入力の標準偏差1.0のあと RMSNorm、出力は0.001）、x0 と resid の重み、logit の softcap 15、埋め込みは bf16、窓は4層中3層を半分に。
 - 測り方（`prepare.py`）：BPB は最後のファイルの約2,100万トークン、文脈2,048で、行は BOS から始まり文書を詰める。学習も同じ読み方で、`prepare.py` の既定は10ファイル。
 - `program.md` の実行例：val_bpb 0.9979、学習300秒、全体326秒、メモリ45GB、mfu 39.80%、4億9,960万トークン、953回の更新、5,030万パラメータ。README は H100 で確かめたとしている。
+- Karpathy が直した版（コミット 438a26e。Recursive が Karpathy の最良として測った版）は、1回の更新が2^18（262,144トークン）、9層、`ASPECT_RATIO` 57、学習率の warmup なし、下げる期間75%。
 
-読んだのは README、`program.md`、`prepare.py` と `train.py` の定数とモデルの定義。実験の成果（約700回で約20個の改善、という話）は二次情報でしか見ていない。
+読んだのは README、`program.md`、`prepare.py` と `train.py` の定数とモデルの定義、438a26e の `train.py` の定数。実験の成果（約700回で約20個の改善、という話）は二次情報でしか見ていない。

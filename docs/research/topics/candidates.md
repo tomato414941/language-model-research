@@ -20,7 +20,6 @@
 | 注意の層を減らす（[Composer](../sources/composer.md) は注意と MLP が1対2、記録 #92 は10層のうち7つ） | 点の平均 +0.6〜2.8（3.5億〜30億、小さいほど小さい）。今の大きさで1対2にすると計算が約4%減る | Composer は1億〜2億で探すと1対1が一番良かった。記録 #92 はこれだけを外した数字がない。AIRA-Compose は要旨のみ。[調査](../experiments/broad-research-survey.md) | 中（value embeddings などの置き場所を決め直す） |
 | トークンで引く表を MLP の一部か層の間に入れる（[STEM](../sources/stem.md)、[L³](../sources/l3.md)。engram.md） | 点の平均 +0.8〜2 | 2研究。STEM は3.5億と10億で、読む量は今の20倍以上、ゲート付きの MLP が前提。L³ は8億級で読む量は今と同じくらい（1パラメータ約12トークン）だが、表は1層あたり71万個の埋め込み、速さは約87%で、速く動かすには専用の計算が要る | 大 |
 | 学習率を下げる期間と下限（今は後半で0まで。Recursive は95%で5%まで、記録 #92 は80%で20%まで） | 不明 | 割れている。下限を上げると、最後の重みを混ぜる効果が大きくなるという報告がある（weight-averaging.md）。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md) | 小 |
-| 1回の更新のトークンを小さく始める（今は524,288で一定。記録 #92 は約5.7万から59万、Recursive は147,456で一定） | 不明 | [Fast Catch-up](../sources/fast-catch-up.md)。nanochat は効果が小さいとして入れず、[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/batch-size-schedule.md) | 小 |
 | 文書の頭にメタ情報を付けて学習し、最後に外す（MeCo、KoCo） | 要るデータが33%減（16億） | ClimbMix は `text` だけなので、話題などを作る必要がある。[調査](../experiments/broad-research-survey.md) | 中 |
 | 学習する n-gram の表（engram.md） | 約1.1%（記録 #92 の表を大きくした分）。COUNT と重なる | 記録 #92、Recursive。GPU のメモリが要る | 中 |
 | 文書の前のトークンをコピーするポインタを出力に混ぜる（CPLM） | 約0.7%（時間 −11%） | speedrun の PR #379 のみ、未採用。損失だけの報告 | 中 |
@@ -28,7 +27,7 @@
 | ヘッドごとに直交化する（[T-Muon](../sources/t-muon.md)） | 0.6〜1.1% | 1研究、NorMuon との比較なし | 小 |
 | [Muown](../sources/muown.md) | 約1%（10億以上） | 1研究、NorMuon との比較なし、1.24億は図のみ | 小 |
 | 文書の途中から始まる行を少し混ぜる | 不明 | 2番目の束で弱さが分かった。document-rows.md | 小 |
-| 束の学習率と weight decay の調整（良い値は形で変わるので、束の形を決めたあと） | 不明 | 実測できる | 小 |
+| 束の学習率と weight decay、1回の更新の大きさの調整（良い値は形で変わるので、束の形を決めたあと。大きさを変えると学習率も変わる） | 不明 | 実測できる。1回の更新は、autoresearch の探索で良かった設定がどれも今の524,288より小さい（Karpathy の最良は262,144、[Recursive](../sources/recursive-first-steps.md) は147,456と、131,072から262,144に上げる形）。ただ、どれもほかの変更と一緒で、大きさだけの効果は分けていない。nanochat の法則（最適な大きさは読む量の0.383乗に比例）では、今の読む量に合うのは約43万（自分たちの計算） | 小 |
 | 埋め込みを共有したまま入力の学習率を上げる、学習の途中で分離する | 不明 | 記録の一部のみ | 中 |
 | TIDE（トークンごとの表を複数持ち、各層で混ぜて足す） | 不明 | 7.5億以上、Adam のみ。residual-weights.md | 中 |
 | 似た文書を同じ行に詰める（BM25） | 不明、大きい可能性 | 1研究のみ、13億で −3.2〜−4.1%。document-rows.md | 中 |
@@ -80,6 +79,7 @@
 | 数字を1桁ずつに分ける、区切りの正規表現 | 不明 | 弱 |
 | Narrow QK（速度と引き換えに損失が悪化。記録 #92 は7つの注意の層のうち5つで QK を64次元にし、直した FlashAttention-3 を使う） | 記録 #92 では時間 −11%、損失 +0.2%（ほかの注意の変更を含む）。同じコストに直すと約0.4% | 弱（今の規模の数字は記録 #92 のみ） |
 | Liger、compile の時間の短縮 | 小さい | 弱 |
+| 1回の更新を小さく始めて大きくする（記録 #92 は約5.7万から59万） | 小さい。nanochat は小さな得しかなく入れなかった（試した形の大きさは書かれていない）。speedrun の記録 #46 は、同じ損失に届く時間が −1.4%（今の規模に粗く直すと約0.1%） | nanochat の LOG、記録 #46、[Fast Catch-up](../sources/fast-catch-up.md)（AdamW で1回3.3万〜6.6万トークン、数字は図のみ）。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/batch-size-schedule.md) |
 
 ## 今の規模では効きにくそうな候補
 
