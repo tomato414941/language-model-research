@@ -20,7 +20,6 @@
 | 注意の層を減らす（[Composer](../sources/composer.md) は注意と MLP が1対2、記録 #92 は10層のうち7つ） | 点の平均 +0.6〜2.8（3.5億〜30億、小さいほど小さい）。今の大きさで1対2にすると計算が約4%減る | Composer は1億〜2億で探すと1対1が一番良かった。記録 #92 はこれだけを外した数字がない。AIRA-Compose は要旨のみ。[調査](../experiments/broad-research-survey.md) | 中（value embeddings などの置き場所を決め直す） |
 | トークンで引く表を MLP の一部か層の間に入れる（[STEM](../sources/stem.md)、[L³](../sources/l3.md)。engram.md） | 点の平均 +0.8〜2 | 2研究。STEM は3.5億と10億で、読む量は今の20倍以上、ゲート付きの MLP が前提。L³ は8億級で読む量は今と同じくらい（1パラメータ約12トークン）だが、表は1層あたり71万個の埋め込み、速さは約87%で、速く動かすには専用の計算が要る | 大 |
 | 学習率を下げる期間と下限（今は後半で0まで。Recursive は95%で5%まで、記録 #92 は80%で20%まで） | 不明 | 割れている。下限を上げると、最後の重みを混ぜる効果が大きくなるという報告がある（weight-averaging.md）。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md) | 小 |
-| 文書の頭にメタ情報を付けて学習し、最後に外す（MeCo、KoCo） | 要るデータが33%減（16億） | ClimbMix は `text` だけなので、話題などを作る必要がある。[調査](../experiments/broad-research-survey.md) | 中 |
 | 学習する n-gram の表（engram.md） | 約1.1%（記録 #92 の表を大きくした分）。COUNT と重なる | 記録 #92、Recursive。GPU のメモリが要る | 中 |
 | 文書の前のトークンをコピーするポインタを出力に混ぜる（CPLM） | 約0.7%（時間 −11%） | speedrun の PR #379 のみ、未採用。損失だけの報告 | 中 |
 | 勾配を1.2乗する（[GradPower](../sources/gradpower.md)） | 約1%（20億の AdamW） | 1研究、Muon の数字は未確認 | 小 |
@@ -97,6 +96,7 @@
 | GQA | 主に推論のための手法 |
 | RETRO 型の検索 | 2〜6%悪化の見積もり（DB を巨大にしない限り） |
 | 合成データの事前学習 | 同じ計算で、自然な文章だけの学習に勝たなかった（[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/pre-pretraining.md)） |
+| 文書の頭にメタ情報を付けて学習し、最後に外す（[MeCo](../sources/meco.md)、KoCo） | MeCo は一番小さい6億で点が +0.2 とほぼ差がなく、perplexity は16億でも13.2から13.3とわずかに悪い。ClimbMix には URL がなく、話題を作るには計算が要る（論文では約1,500 GPU 時間）。KoCo、Beyond URLs は読んでいない。[調査](../experiments/broad-research-survey.md) |
 | 浅く始めて後で深くする（[Deep Progressive Training](../sources/deep-progressive-training.md)） | 広げたあと、初めから深いモデルに追いつくまで約160億トークンかかり（モデルの大きさによらないとする）、今の学習全体（約6.7億）の約24倍。結果はどれも1パラメータ50トークン以上で、点の報告はない。ほかの層を増やす研究は読んでいない。学習をずっと長くするときに見直す |
 
 ## BPB では測れない候補
