@@ -17,7 +17,7 @@
 
 | 候補 | 効果の見込み | 根拠 | 手間 |
 |---|---|---|---|
-| 注意の層を減らす（Composer は注意と MLP が1対2、記録 #92 は10層のうち7つ） | 点の平均 +1.1〜3.1%（3.5億〜30億）。同じ時間で読む量も増える | 探索2つと speedrun が同じ向き。[調査](../experiments/broad-research-survey.md) | 小 |
+| 注意の層を減らす（[Composer](../sources/composer.md) は注意と MLP が1対2、記録 #92 は10層のうち7つ） | 点の平均 +0.6〜2.8（3.5億〜30億、小さいほど小さい）。今の大きさで1対2にすると計算が約5%減る | Composer は1億〜2億で探すと1対1が一番良かった。記録 #92 はこれだけを外した数字がない。AIRA-Compose は要旨のみ。[調査](../experiments/broad-research-survey.md) | 中（value embeddings などの置き場所を決め直す） |
 | MLP の一部をトークンで引く表にする（[STEM](../sources/stem.md)、[L³](../sources/l3.md)。engram.md） | 点の平均 +1〜2 | 2研究、3.5億と8億の結果で、STEM の読む量は今の20倍以上。ゲート付きの MLP やメモリが要る | 中 |
 | 浅く始めて後で深くする（[Deep Progressive Training](../sources/deep-progressive-training.md)） | 計算3〜5倍分なら約6〜9%だが、当てはまるかは不明 | 1研究。1.24億は1パラメータ約2,500トークンで今の約200倍。点の報告なし。1回で試せる | 小 |
 | 学習率を下げる期間と下限（今は後半で0まで。Recursive は95%で5%まで、記録 #92 は80%で20%まで） | 不明 | 割れている。下限を上げると、最後の重みを混ぜる効果が大きくなるという報告がある（weight-averaging.md）。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md) | 小 |
