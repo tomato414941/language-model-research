@@ -43,6 +43,7 @@
 | パッチ単位の学習 | 最大約4% | 1研究のみ、1パラメータ970トークン以上の結果 | 中 |
 | Partial Key Offset | 約1% | 弱（MoE 上の結果、Partial RoPE が前提） | 小 |
 | 線形注意との混成（Gated DeltaNet、Kimi Delta Attention、[Mamba-3](../sources/mamba-3.md)） | 1〜2%。Mamba-3 は1.8億で点 +0.7、8.8億で +2.5 | 中 | 大 |
+| 中の状態で引く大きな表（memory layers。[product keys](https://arxiv.org/abs/1907.05242)、[Memory Layers at Scale](https://arxiv.org/abs/2412.09764)） | 不明。12層に入れて24層に勝つ（2019）。計算が2倍以上の普通のモデルと、計算とパラメータを揃えた MoE に勝つ（2024、80億まで、1兆トークン） | 2研究、要旨のみ。今の規模の数字は未確認。事実を問う課題で特に効く | 大 |
 | 重要でないトークンを逆伝播から外す（CENTRIFUGE） | 時間 −34.7%（11億以上） | 1研究、専用の実装が要る | 大 |
 | MLP を疎か低ランクにする（Mixed Sparsity Training、CR-Net、Bi-Phase） | FLOPs 4分の1という報告。実時間は未確認 | 弱〜中 | 大 |
 | 正規化を定数で近似する（anGPT） | 収束が最大40%速い（QK-norm の GPT と比べて）。時間3%増 | 1研究 | 中 |
