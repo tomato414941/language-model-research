@@ -17,7 +17,7 @@
 
 | 候補 | 効果の見込み | 根拠 | 手間 |
 |---|---|---|---|
-| 最後の重みを混ぜる（途中の重みを残すので、1回の学習で何通りも測れる） | 0.1〜0.6%。IMU-1 では点の平均 +.014 | 記録 #92、Terminal Shrinkage。nanochat では効かなかった。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/checkpoint-averaging.md) | 小 |
+| 最後の重みを混ぜる（途中の重みを残すので、1回の学習で何通りも測れる） | 約0.1%（nanochat の12層と22層、学習率の下限5〜15%）。0まで下げる今の形では小さいかもしれない。IMU-1 では点の平均 +.014 | [Terminal Shrinkage](../sources/terminal-shrinkage-averaging.md)、記録 #92。平均だけでは悪くなり、下限を上げるほど効く。nanochat では効かなかった。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/checkpoint-averaging.md) | 小 |
 | 注意の層を減らす（Composer は注意と MLP が1対2、記録 #92 は10層のうち7つ） | 点の平均 +1.1〜3.1%（3.5億〜30億）。同じ時間で読む量も増える | 探索2つと speedrun が同じ向き。[調査](../experiments/broad-research-survey.md) | 小 |
 | MLP の一部をトークンで引く表にする（[STEM](../sources/stem.md)、[L³](../sources/l3.md)。engram.md） | 点の平均 +1〜2 | 2研究、3.5億と8億の結果で、STEM の読む量は今の20倍以上。ゲート付きの MLP やメモリが要る | 中 |
 | 浅く始めて後で深くする（[Deep Progressive Training](../sources/deep-progressive-training.md)） | 計算3〜5倍分なら約6〜9%だが、当てはまるかは不明 | 1研究。1.24億は1パラメータ約2,500トークンで今の約200倍。点の報告なし。1回で試せる | 小 |
