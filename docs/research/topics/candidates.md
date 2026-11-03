@@ -19,7 +19,6 @@
 |---|---|---|---|
 | 注意の層を減らす（[Composer](../sources/composer.md) は注意と MLP が1対2、記録 #92 は10層のうち7つ） | 点の平均 +0.6〜2.8（3.5億〜30億、小さいほど小さい）。今の大きさで1対2にすると計算が約4%減る | Composer は1億〜2億で探すと1対1が一番良かった。記録 #92 はこれだけを外した数字がない。AIRA-Compose は要旨のみ。[調査](../experiments/broad-research-survey.md) | 中（value embeddings などの置き場所を決め直す） |
 | トークンで引く表を MLP の一部か層の間に入れる（[STEM](../sources/stem.md)、[L³](../sources/l3.md)。engram.md） | 点の平均 +0.8〜2 | 2研究。STEM は3.5億と10億で、読む量は今の20倍以上、ゲート付きの MLP が前提。L³ は8億級で読む量は今と同じくらい（1パラメータ約12トークン）だが、表は1層あたり71万個の埋め込み、速さは約87%で、速く動かすには専用の計算が要る | 大 |
-| 浅く始めて後で深くする（[Deep Progressive Training](../sources/deep-progressive-training.md)） | 計算3〜5倍分なら約6〜9%だが、当てはまるかは不明 | 1研究。1.24億は1パラメータ約2,500トークンで今の約200倍。点の報告なし。1回で試せる | 小 |
 | 学習率を下げる期間と下限（今は後半で0まで。Recursive は95%で5%まで、記録 #92 は80%で20%まで） | 不明 | 割れている。下限を上げると、最後の重みを混ぜる効果が大きくなるという報告がある（weight-averaging.md）。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md) | 小 |
 | 1回の更新のトークンを小さく始める（今は524,288で一定。記録 #92 は約5.7万から59万、Recursive は147,456で一定） | 不明 | [Fast Catch-up](../sources/fast-catch-up.md)。nanochat は効果が小さいとして入れず、[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/batch-size-schedule.md) | 小 |
 | 文書の頭にメタ情報を付けて学習し、最後に外す（MeCo、KoCo） | 要るデータが33%減（16億） | ClimbMix は `text` だけなので、話題などを作る必要がある。[調査](../experiments/broad-research-survey.md) | 中 |
@@ -98,6 +97,7 @@
 | GQA | 主に推論のための手法 |
 | RETRO 型の検索 | 2〜6%悪化の見積もり（DB を巨大にしない限り） |
 | 合成データの事前学習 | 同じ計算で、自然な文章だけの学習に勝たなかった（[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/pre-pretraining.md)） |
+| 浅く始めて後で深くする（[Deep Progressive Training](../sources/deep-progressive-training.md)） | 広げたあと、初めから深いモデルに追いつくまで約160億トークンかかり（モデルの大きさによらないとする）、今の学習全体（約6.7億）の約24倍。結果はどれも1パラメータ50トークン以上で、点の報告はない。ほかの層を増やす研究は読んでいない。学習をずっと長くするときに見直す |
 
 ## BPB では測れない候補
 
