@@ -1,5 +1,5 @@
-# H-Net on the bytes of language-model's v6 corpora that prepare_bytes.py writes, around the second bundle's main
-# network. A row holds the text of 1,024 of the BPE model's tokens. The files beside this one name the encoder and
+# H-Net around the second bundle's main network, on research's datasets of the two phases as bytes_from_tokens.py
+# writes them. A row holds the text of 1,024 of the BPE model's tokens. The files beside this one name the encoder and
 # decoder layers and then read it; calibrate.py sets the updates that the baseline's cost buys.
 import json
 import sys

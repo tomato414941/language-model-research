@@ -1,11 +1,12 @@
-"""Measures on this machine what an update of each model in the H-Net comparison costs, and how many updates the
-baseline's cost buys each, as speed.py does for the bundles. The baseline is timed here too, so that the machine's
-own speed cancels out.
+"""Measures on this machine what an update of each H-Net costs, and how many updates the baseline's cost buys each, as
+speed.py does for the bundles. The baseline is timed here too, on the BPE dataset that it would read, so that the
+machine's own speed cancels out.
 
 H-Net is timed with a chunk at every 6 bytes, the ratio loss's target: early in training its routing begins a chunk at
 about every other byte, which a short timing would take for the cost of the whole run.
 
-Writes results/hnet-speed.json with each model's costs and updates. Usage: python h-net/calibrate.py [NAME...]
+Writes results/hnet-speed.json with each model's costs and updates.
+Usage: python h-net/calibrate.py BPE_DATASET [NAME...]
 """
 
 import json
@@ -14,10 +15,8 @@ import sys
 sys.path.insert(0, ".")
 from speed import RESULTS, SLOW_BASELINE_SECONDS, config_value, measure, updates_for_the_cost  # noqa: E402
 
-COST = {"name": "hnet-cost", "config": "h-net/configs/cost.py", "attention": "sdpa", "options": {}}
 TARGET_BYTES_PER_CHUNK = 6
 MODELS = {
-    "hnet-bpe": "h-net/configs/bpe.py",
     "hnet-mamba2": "h-net/configs/hnet_mamba2.py",
     "hnet-mamba3": "h-net/configs/hnet_mamba3.py",
     "hnet-gated-deltanet": "h-net/configs/hnet_gated_deltanet.py",
@@ -25,16 +24,18 @@ MODELS = {
 
 
 def way(name):
-    options = {"stream_bfloat16": True}
-    if name != "hnet-bpe":
-        options["fixed_chunks"] = TARGET_BYTES_PER_CHUNK
-    return {"name": name, "config": MODELS[name], "attention": "fa2", "options": options}
+    return {"name": name, "config": MODELS[name], "attention": "fa2",
+            "options": {"stream_bfloat16": True, "fixed_chunks": TARGET_BYTES_PER_CHUNK}}
 
 
 def main():
-    names = sys.argv[1:] or list(MODELS)
+    if len(sys.argv) < 2:
+        raise SystemExit(__doc__)
+    dataset, names = sys.argv[1], sys.argv[2:] or list(MODELS)
     RESULTS.mkdir(exist_ok=True)
-    costs = {"baseline": measure(COST, [])}
+    baseline = {"name": "hnet-baseline", "config": "configs/baseline.py", "attention": "sdpa",
+                "options": {"dataset": dataset}}
+    costs = {"baseline": measure(baseline, [])}
     print(f"baseline: {costs['baseline']}", file=sys.stderr, flush=True)
     if costs["baseline"] is None:
         raise SystemExit("The baseline did not run, so nothing can be compared.")
