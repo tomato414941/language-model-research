@@ -2,10 +2,9 @@
 that it never touches a bundle's rental.
 
 Commands are rental.py's: offers [GPU], rent [GPU], send [HOST:DIRECTORY [PATH...]], start SCRIPT [ARGUMENT...],
-shell COMMAND, fetch, destroy, guard MINUTES; and send-head HOST:DIRECTORY BYTES DATASET..., which sends each
-dataset's meta.pkl, tokenizer.json and val.bin and only the first BYTES of its train.bin, whose documents are already
-in a random order, so that a run that reads less than a dataset waits less for it. The record and the fetched files
-go to out/h-net-rental.
+shell COMMAND, fetch, destroy, guard MINUTES; and send-data HOST:DIRECTORY DATASET..., which sends each dataset's
+meta.pkl, tokenizer.json and val.bin and then its train.bin, which takes its name only once all of it has come, so
+that run.sh, started while it is sent, can wait for it. The record and the fetched files go to out/h-net-rental.
 """
 
 import os
@@ -21,15 +20,16 @@ research.STATE = research.HERE / "state.json"
 research.LABEL = "language-model-research-h-net"
 
 
-def send_head(source, size, *datasets):
+def send_data(source, *datasets):
     host, directory = source.split(":", 1)
     for dataset in datasets:
         here = f"{shlex.quote(directory)}/{shlex.quote(dataset)}"
         there = f"{research.REMOTE}/data/{shlex.quote(dataset)}"
         small = f"tar -C {here} -cf - meta.pkl tokenizer.json val.bin"
         research.stream(["ssh", "-o", "BatchMode=yes", host, small], f"mkdir -p {there} && tar -x -C {there}")
-        head = f"head -c {int(size)} {here}/train.bin"
-        research.stream(["ssh", "-o", "BatchMode=yes", host, head], f"cat > {there}/train.bin")
+        research.stream(["ssh", "-o", "BatchMode=yes", host, f"cat {here}/train.bin"], f"cat > {there}/train.bin.part")
+        if research.shell(f"mv {there}/train.bin.part {there}/train.bin"):
+            raise SystemExit("naming train.bin failed")
 
 
 def main():
@@ -45,7 +45,7 @@ def main():
         return done.returncode
     actions = {"offers": research.show_offers, "rent": research.rent, "send": research.send, "start": research.start,
                "shell": research.shell, "fetch": research.fetch, "destroy": research.destroy,
-               "guard": lambda minutes: research.guard(int(minutes)), "send-head": send_head}
+               "guard": lambda minutes: research.guard(int(minutes)), "send-data": send_data}
     return actions[command](*arguments) or 0
 
 

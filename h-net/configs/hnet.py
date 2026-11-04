@@ -1,6 +1,6 @@
-# H-Net around the second bundle's main network, on research's datasets of the two phases as bytes_from_tokens.py
-# writes them. A row holds the text of 1,024 of the BPE model's tokens. The files beside this one name the encoder and
-# decoder layers and then read it; calibrate.py sets the updates that the baseline's cost buys.
+# H-Net around the second bundle's main network, on research's dataset as bytes_from_tokens.py writes it. A row holds
+# the text of 1,024 of the BPE model's tokens. The files beside this one name the encoder and decoder layers and then
+# read it; calibrate.py sets the updates that the baseline's cost buys.
 import json
 import sys
 
@@ -9,9 +9,8 @@ sys.path[:0] = ['.', 'h-net']
 from hnet_model import HNet, HNetConfig  # noqa: E402
 
 out_dir = 'out/hnet'
-dataset = 'hnet-bytes-stable'
-decay_dataset = 'hnet-bytes-decay'
-block_size = json.load(open('data/hnet-bytes-stable/rows.json'))['block_size']
+dataset = 'hnet-bytes'
+block_size = json.load(open('data/hnet-bytes/rows.json'))['block_size']
 value_embeddings = False  # its tables are by token, and the main network reads chunks
 attention = 'fa2'
 stream_bfloat16 = True

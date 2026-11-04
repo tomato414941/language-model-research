@@ -1,28 +1,40 @@
 # Trains one H-Net on a rented H100 for the baseline's cost, in as little of the machine's time as it can, from the
-# repository's root after rent.py send-head has put research's BPE datasets of the two phases there: write them as
-# bytes, time the baseline and the H-Net, train it, and keep its weights in 16 bits as models/NAME. Scoring is left to
-# score.sh on a cheaper GPU. Usage: bash h-net/run.sh STABLE_DATASET DECAY_DATASET NAME
+# repository's root after rent.py send has put the code there: install what H-Net needs and check the GPU while
+# rent.py send-data sends research's BPE dataset, then write the dataset as bytes, time the baseline and the H-Net,
+# train it, and keep its weights in 16 bits as models/NAME. Scoring is left to score.sh on a cheaper GPU.
+# Usage: bash h-net/run.sh DATASET NAME
 set -uo pipefail
 export PYTHONUNBUFFERED=1
 stamp() { date -u +"%H:%M:%S $*"; }
-stable=$1
-decay=$2
-name=$3
+dataset=$1
+name=$2
+kind=${name#hnet-}
 mkdir -p results models
 
 stamp packages
 nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total --format=csv,noheader
+used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -n 1)
+[ "${used:-0}" -lt 2000 ] || { echo "the GPU already holds ${used} MiB"; exit 1; }
 # Mamba's own requirements would replace the image's PyTorch, so it comes without them; its Mamba-2 and Mamba-3 need
 # only Triton.
 pip install -q --break-system-packages tokenizers einops "flash-linear-attention==0.6.0" || exit 1
 pip install -q --break-system-packages --no-deps --no-build-isolation "mamba-ssm==2.3.2.post1" || exit 1
 
+stamp check
+python h-net/check_gpu.py "${kind//-/_}" || exit 1
+
+stamp "wait for data"
+for _ in $(seq 180); do
+    [ -f "data/$dataset/train.bin" ] && break
+    sleep 5
+done
+[ -f "data/$dataset/train.bin" ] || { echo "data/$dataset/train.bin never came"; exit 1; }
+
 stamp bytes
-python h-net/bytes_from_tokens.py "data/$stable" data/hnet-bytes-stable || exit 1
-python h-net/bytes_from_tokens.py "data/$decay" data/hnet-bytes-decay || exit 1
+python h-net/bytes_from_tokens.py "data/$dataset" data/hnet-bytes || exit 1
 
 stamp calibrate
-python h-net/calibrate.py "$stable" "$name" > results/hnet-calibrate.log 2>&1 || exit 1
+python h-net/calibrate.py "$dataset" "$name" > results/hnet-calibrate.log 2>&1 || exit 1
 read -r config updates < <(python - "$name" <<'PY'
 import json, sys
 sys.path.insert(0, "h-net")

@@ -2,6 +2,8 @@
 bfloat16 with finite values and reads only the bytes before each position, and that packed attention gives what
 PyTorch's attention gives row by row. Prints a line for each, and fails only if packed attention does, which every
 H-Net model needs; an outer layer that fails here fails its timing too, and its model is skipped.
+
+Usage: python h-net/check_gpu.py [KIND...], with KIND among mamba2, mamba3 and gated_deltanet, all of them if none
 """
 
 import json
@@ -53,7 +55,7 @@ def check_attention():
 def main():
     attention = check_attention()
     print(json.dumps(attention), flush=True)
-    for kind in KINDS:
+    for kind in sys.argv[1:] or KINDS:
         try:
             print(json.dumps(check_outer(kind)), flush=True)
         except Exception as error:  # reported, and its model is then skipped at the timing
