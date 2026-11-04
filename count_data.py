@@ -1,11 +1,12 @@
 """Prepare the text that a COUNT table counts: FineWeb's sample as 16-bit tokens of prepare.py's tokenizer.
 
-The documents come from a pinned commit of FineWeb's uniform 10B-token sample, which training never reads. A
+The documents come from a pinned commit of FineWeb's uniform 10B-token sample, read from its first file, while
+prepare.py reads training's from the last but one backwards, so that the two do not meet. A
 document that holds an evaluation question, found as language-model's v6 rule finds them, is left out, so that
 the table cannot hand the model a question's continuation. Each document begins with a BOS token. Finding the
 questions needs pyahocorasick.
 
-Usage: python count_data.py data/count-text --tokenizer data/climbmix/tokenizer.json \
+Usage: python count_data.py data/count-text --tokenizer data/fineweb/tokenizer.json \
            --questions data/questions.jsonl --tokens 2000000000
 """
 

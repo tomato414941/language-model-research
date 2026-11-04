@@ -23,7 +23,7 @@ prepare() {
 score_in_full() {
     stamp "harness $1"
     # A smaller batch than the harness's default, whose logits alone would nearly fill 24 GB.
-    python harness.py "results/$1-full.json" --model "$2" --tokenizer data/jaen/stable/tokenizer.json \
+    python harness.py "results/$1-full.json" --model "$2" --tokenizer data/fineweb/tokenizer.json \
         --batch-tokens 65536 ${HARNESS_OPTIONS:-} > "results/$1-full.log" 2>&1
 }
 
@@ -33,7 +33,7 @@ score_in_full() {
 score_keep() {
     local name=$1 directory=$2
     stamp "score $name"
-    python scoring.py "$directory" --tokenizer data/jaen/stable/tokenizer.json --validation data/jaen/stable/val.bin \
+    python scoring.py "$directory" --tokenizer data/fineweb/tokenizer.json --validation data/fineweb/val.bin \
         --questions data/questions.jsonl --output "results/$name.json" ${SCORING_OPTIONS:-} > "results/score-$name.log" 2>&1
     stamp "keep $name"
     python - "$directory" "models/$name" <<'PY'

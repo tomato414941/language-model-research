@@ -1,9 +1,10 @@
-"""Prepare what training reads: ClimbMix as nanoGPT's token files, with a tokenizer trained on it.
+"""Prepare what training reads: FineWeb as nanoGPT's token files, with a tokenizer trained on it.
 
-The shards come from a pinned commit of the shuffled copy that nanochat and autoresearch read, and
-as they do, the last shard is held out for validation. Each document begins with a BOS token.
+The files come from a pinned commit of FineWeb's uniform 10B-token sample, which modded-nanogpt reads. The last
+file is held out for validation, and training reads the others from the last backwards, so that count_data.py,
+which reads them from the first, counts other documents. Each document begins with a BOS token.
 
-Usage: python prepare.py data/climbmix --train-tokens 2000000000
+Usage: python prepare.py data/fineweb --train-tokens 2000000000
 """
 
 import argparse
@@ -21,10 +22,14 @@ import numpy as np
 import pyarrow.parquet as parquet
 from tokenizers import Regex, Tokenizer, decoders, models, pre_tokenizers, trainers
 
-REPOSITORY = "karpathy/climbmix-400b-shuffle"
-REVISION = "915333b4f8b8684f39aeaafea600fea6f43fb703"
-SHARD_URL = "https://huggingface.co/datasets/{repository}/resolve/{revision}/shard_{index:05d}.parquet"
-LAST_SHARD = 6542
+REPOSITORY = "HuggingFaceFW/fineweb"
+REVISION = "9bb295ddab0e05d785b879661af7260fed5140fc"
+SHARD_URL = "https://huggingface.co/datasets/{repository}/resolve/{revision}/sample/10BT/{index:03d}_00000.parquet"
+LAST_SHARD = 14
+# The training files, from the one before the validation file backwards.
+TRAIN_SHARDS = range(LAST_SHARD - 1, -1, -1)
+# One file holds far more than validation needs.
+VALIDATION_TOKENS = 20_000_000
 VOCABULARY = 8192
 BOS = "<|bos|>"
 # GPT-4's split with groups of up to two digits, as autoresearch splits its text.
@@ -37,7 +42,7 @@ TOKENIZER_DOCUMENT_CHARACTERS = 10_000
 
 
 def download_shard(index, directory):
-    path = Path(directory) / f"shard_{index:05d}.parquet"
+    path = Path(directory) / f"{index:03d}_00000.parquet"
     url = SHARD_URL.format(repository=REPOSITORY, revision=REVISION, index=index)
     with urllib.request.urlopen(url, timeout=120) as source, path.open("wb") as destination:
         shutil.copyfileobj(source, destination)
@@ -122,16 +127,17 @@ def prepare(output, train_tokens, vocabulary=VOCABULARY, download=download_shard
     try:
         shards = staging / "shards"
         shards.mkdir()
-        tokenizer = train_tokenizer(shard_texts(range(LAST_SHARD), shards, download), vocabulary)
+        tokenizer = train_tokenizer(shard_texts(TRAIN_SHARDS, shards, download), vocabulary)
         tokenizer.save(str(staging / "tokenizer.json"))
         counts = {
             "train": write_tokens(
-                shard_texts(range(LAST_SHARD), shards, download),
+                shard_texts(TRAIN_SHARDS, shards, download),
                 tokenizer,
                 staging / "train.bin",
                 train_tokens,
             ),
-            "val": write_tokens(shard_texts([LAST_SHARD], shards, download), tokenizer, staging / "val.bin"),
+            "val": write_tokens(shard_texts([LAST_SHARD], shards, download), tokenizer, staging / "val.bin",
+                                VALIDATION_TOKENS),
         }
         shutil.rmtree(shards)
         if counts["train"] < train_tokens:

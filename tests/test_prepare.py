@@ -40,7 +40,7 @@ class PrepareTest(unittest.TestCase):
         return path
 
     def prepared(self, train_tokens=2000, vocabulary=300):
-        output = self.directory / "data" / "climbmix"
+        output = self.directory / "data" / "fineweb"
         manifest = module.prepare(output, train_tokens, vocabulary, self.download)
         return output, manifest
 

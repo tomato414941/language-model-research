@@ -3,7 +3,7 @@ a script, fetches what it made and removes the machine.
 
 Commands: offers [GPU], rent [GPU], send [HOST:DIRECTORY [PATH...]], start SCRIPT [ARGUMENT...], shell COMMAND,
 fetch, destroy, guard MINUTES. `send` sends the committed code, and the data if given the machine and directory
-that hold it: prepare_bilingual.py's stable phase, count_table.py's count-jaen directory, harness.py's questions.jsonl,
+that hold it: prepare.py's fineweb directory, count_table.py's count-fineweb directory, harness.py's questions.jsonl,
 the harness's datasets cache and constraints.txt, the versions that a try without a GPU ran with, unless other
 paths are named. `guard`, left
 running in the background, removes the machine after that long if nothing else has.
@@ -36,7 +36,7 @@ TRIES = 2
 LABEL = "language-model-research"
 # What a comparison's costs are measured on. Work outside one, like scoring saved weights, can name a cheaper GPU.
 GPU = "H100 SXM"
-DATA = ("jaen/stable", "count-jaen", "questions.jsonl", "datasets", "constraints.txt")
+DATA = ("fineweb", "count-fineweb", "questions.jsonl", "datasets", "constraints.txt")
 QUERY = {
     "num_gpus": {"eq": 1},
     "cuda_max_good": {"gte": 13.2},
