@@ -96,6 +96,27 @@ class HNetTest(unittest.TestCase):
             losses.append(loss.item())
         self.assertLess(losses[-1], losses[0] / 2)
 
+    def test_imports_a_package_s_module_without_the_package_s_own_imports(self):
+        import importlib
+        import sys
+        import tempfile
+        from pathlib import Path
+
+        from hnet_model import without_package_imports
+
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory) / "brokenpackage"
+            package.mkdir()
+            (package / "__init__.py").write_text("raise ImportError('a kernel this machine lacks')\n")
+            (package / "part.py").write_text("VALUE = 7\n")
+            sys.path.insert(0, directory)
+            try:
+                without_package_imports("brokenpackage")
+                self.assertEqual(importlib.import_module("brokenpackage.part").VALUE, 7)
+            finally:
+                sys.path.remove(directory)
+                for name in [name for name in sys.modules if name.startswith("brokenpackage")]:
+                    del sys.modules[name]
 
 if __name__ == "__main__":
     unittest.main()

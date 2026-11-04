@@ -7,7 +7,7 @@ dataset=$1
 shift
 prepare
 pip install -q --break-system-packages "flash-linear-attention==0.6.0" || exit 1
-pip install -q --break-system-packages --no-deps --no-build-isolation "mamba-ssm==2.3.2.post1" || exit 1
+MAMBA_SKIP_CUDA_BUILD=TRUE pip install -q --break-system-packages --no-deps --no-build-isolation "mamba-ssm==2.3.2.post1" || exit 1
 for name in "$@"; do
     stamp "score $name"
     python h-net/score_hnet.py "results/$name.json" "models/$name" --tokens "data/$dataset" ${SCORE_OPTIONS:-} \

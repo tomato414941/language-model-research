@@ -17,8 +17,11 @@ train.py trains it when a config names HNet as GPT and HNetConfig, with these fi
 h-net/configs.
 """
 
+import importlib.util
 import inspect
 import math
+import sys
+import types
 from dataclasses import dataclass, replace
 
 import torch
@@ -74,10 +77,21 @@ class CausalConvolution(nn.Module):
         return self.out_proj(value * F.silu(gate))
 
 
+def without_package_imports(package):
+    """Let `package`'s modules be imported without running its __init__.py. mamba_ssm's loads Mamba-1's CUDA
+    extension and Mamba-3's TileLang and CuTe kernels, none of which Mamba-2's Triton kernels need."""
+    if package not in sys.modules:
+        spec = importlib.util.find_spec(package)
+        module = types.ModuleType(package)
+        module.__path__ = list(spec.submodule_search_locations)
+        sys.modules[package] = module
+
+
 def outer_mixer(kind, width, index):
     """A layer that mixes the bytes along a row and has no MLP; the three real ones hold about 6 width² weights."""
     if kind == "mamba2":
-        from mamba_ssm import Mamba2
+        without_package_imports("mamba_ssm")
+        from mamba_ssm.modules.mamba2 import Mamba2
 
         # The paper's encoder and decoder layers, as in its configs/hnet_1stage_L.json. The fused path calls
         # causal-conv1d's CUDA functions, which have no build for this PyTorch, so the convolution is PyTorch's.

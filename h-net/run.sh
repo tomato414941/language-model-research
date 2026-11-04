@@ -15,10 +15,10 @@ stamp packages
 nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total --format=csv,noheader
 used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -n 1)
 [ "${used:-0}" -lt 2000 ] || { echo "the GPU already holds ${used} MiB"; exit 1; }
-# Mamba's own requirements would replace the image's PyTorch, so it comes without them; its Mamba-2 and Mamba-3 need
-# only Triton.
+# Mamba's own requirements would replace the image's PyTorch, so it comes without them, and without its CUDA build,
+# which needs a compiler the image lacks; its Mamba-2 needs only Triton.
 pip install -q --break-system-packages tokenizers einops "flash-linear-attention==0.6.0" || exit 1
-pip install -q --break-system-packages --no-deps --no-build-isolation "mamba-ssm==2.3.2.post1" || exit 1
+MAMBA_SKIP_CUDA_BUILD=TRUE pip install -q --break-system-packages --no-deps --no-build-isolation "mamba-ssm==2.3.2.post1" || exit 1
 
 stamp check
 python h-net/check_gpu.py "${kind//-/_}" || exit 1
