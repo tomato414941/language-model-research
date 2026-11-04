@@ -6,6 +6,8 @@
 #   --muon_polar_express=False, --muon_neuron_normalization=False, --muon_cautious_decay=False
 exec(open('configs/muon.py').read())
 out_dir = 'out/bundle'
+# v6's mix of its decay phase once the learning rate begins to fall, where that recipe changes mix.
+decay_dataset = 'jaen/decay'
 n_layer = 10
 n_embd = 640
 n_head = 5

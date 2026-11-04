@@ -3,7 +3,7 @@ a script, fetches what it made and removes the machine.
 
 Commands: offers [GPU], rent [GPU], send [HOST:DIRECTORY [PATH...]], start SCRIPT [ARGUMENT...], shell COMMAND,
 fetch, destroy, guard MINUTES. `send` sends the committed code, and the data if given the machine and directory
-that hold it: prepare.py's climbmix directory, count_table.py's count directory, harness.py's questions.jsonl,
+that hold it: prepare_bilingual.py's two phases, count_table.py's count-jaen directory, harness.py's questions.jsonl,
 the harness's datasets cache and constraints.txt, the versions that a try without a GPU ran with, unless other
 paths are named. `guard`, left
 running in the background, removes the machine after that long if nothing else has.
@@ -36,7 +36,7 @@ TRIES = 2
 LABEL = "language-model-research"
 # What a comparison's costs are measured on. Work outside one, like scoring saved weights, can name a cheaper GPU.
 GPU = "H100 SXM"
-DATA = ("climbmix", "count", "questions.jsonl", "datasets", "constraints.txt")
+DATA = ("jaen/stable", "jaen/decay", "count-jaen", "questions.jsonl", "datasets", "constraints.txt")
 QUERY = {
     "num_gpus": {"eq": 1},
     "cuda_max_good": {"gte": 13.2},
@@ -46,16 +46,26 @@ QUERY = {
     "cpu_ram": {"gte": 32000},
     "cpu_cores_effective": {"gte": 4},
 }
-OFFER_FIELDS = ("id", "machine_id", "dph_total", "inet_up", "inet_down", "reliability2", "gpu_mem_bw", "cuda_max_good")
+OFFER_FIELDS = ("id", "machine_id", "dph_total", "inet_up", "inet_down", "reliability2", "gpu_mem_bw", "cuda_max_good",
+                "geolocation")
 
 
 def instance():
     return json.loads(STATE.read_text())["instance"]
 
 
+def in_countries(offer, countries):
+    """Whether the offer's machine is in one of the countries, by the code that ends its location."""
+    return not countries or (offer.get("geolocation") or "").rsplit(", ", 1)[-1] in countries
+
+
 def find_offers(gpu=GPU):
+    # RENTAL_COUNTRIES, a comma-separated list of country codes, keeps the machine near the data it is sent:
+    # the data passes through this machine from the processing one, and a far machine took four times as long.
+    countries = [code for code in os.environ.get("RENTAL_COUNTRIES", "").split(",") if code]
     query = {**QUERY, "gpu_name": {"eq": gpu}}
-    offers = [offer for offer in rental.search(query, DISK_GB) if offer["dph_total"] <= MAX_DOLLARS_PER_HOUR]
+    offers = [offer for offer in rental.search(query, DISK_GB)
+              if offer["dph_total"] <= MAX_DOLLARS_PER_HOUR and in_countries(offer, countries)]
     return sorted(offers, key=lambda offer: (offer["dph_total"], -offer.get("inet_up", 0)))
 
 

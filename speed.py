@@ -7,8 +7,11 @@ the number of sequences per pass with the best so far, since trying every combin
 times as much. It also times the bundle without each part whose cost is in doubt. Those runs change the model,
 so they are only recorded and never chosen. The times go to results/speed.json and the runs' logs beside it.
 
-Usage: speed.py [TRAIN_OPTION...]. The options go to every run, so that a small model can try this
-script without a GPU.
+With --also=CONFIG, it then times that configuration in the way it chose, and prints a second line of options,
+the updates that buy that configuration the same cost.
+
+Usage: speed.py [--also=CONFIG] [TRAIN_OPTION...]. The options go to every run, so that a small model can try
+this script without a GPU.
 """
 
 import json
@@ -141,6 +144,11 @@ def cheapest(ways, costs, baseline_updates):
     return max(usable, key=lambda way: updates_for_the_cost(baseline_updates, costs["baseline"], costs[way["name"]]))
 
 
+def same_way(way, config):
+    """The way of running, for another configuration."""
+    return {**way, "name": f"{way['name']}-{Path(config).stem}", "config": config}
+
+
 def training_options(way, updates):
     options = {key: value for key, value in way["options"].items() if key != "block_size"}
     return as_options({**options, "max_iters": updates, "lr_decay_iters": updates, "eval_interval": updates})
@@ -153,7 +161,8 @@ def config_value(path, name):
 
 
 def main():
-    extra = sys.argv[1:]
+    also = [argument.split("=", 1)[1] for argument in sys.argv[1:] if argument.startswith("--also=")]
+    extra = [argument for argument in sys.argv[1:] if not argument.startswith("--also=")]
     RESULTS.mkdir(exist_ok=True)
     baseline_updates = config_value("configs/baseline.py", "max_iters")
     costs = {}
@@ -193,9 +202,19 @@ def main():
         run(bundle_way(chosen["attention"], options["batch_size"], options["gradient_accumulation_steps"],
                        stream="stream_bfloat16" in options, part=part))
     updates = updates_for_the_cost(baseline_updates, costs["baseline"], costs[chosen["name"]])
+    lines = [" ".join(training_options(chosen, updates))]
+    also_updates = {}
+    for config in also:
+        way = same_way(chosen, config)
+        run(way)
+        if costs[way["name"]] is None:
+            raise SystemExit(f"{config} did not run in the chosen way.")
+        also_updates[config] = updates_for_the_cost(baseline_updates, costs["baseline"], costs[way["name"]])
+        lines.append(" ".join(training_options(way, also_updates[config])))
     (RESULTS / "speed.json").write_text(json.dumps(
-        {"agrees_with_default": agreeing, "costs": costs, "chosen": chosen["name"], "updates": updates}, indent=1) + "\n")
-    print(" ".join(training_options(chosen, updates)))
+        {"agrees_with_default": agreeing, "costs": costs, "chosen": chosen["name"], "updates": updates,
+         "also_updates": also_updates}, indent=1) + "\n")
+    print("\n".join(lines))
 
 
 if __name__ == "__main__":

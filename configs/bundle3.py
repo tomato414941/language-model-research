@@ -7,7 +7,7 @@
 # or --backout=False
 exec(open('configs/bundle2.py').read())
 out_dir = 'out/bundle3'
-count_table = 'data/count'
+count_table = 'data/count-jaen'
 dispersion = 0.1
 # Terminal Shrinkage Averaging's values, which its authors chose before their runs: 8 weights 32 updates apart,
 # the last weights among them, and the average taking 55% of the mix.

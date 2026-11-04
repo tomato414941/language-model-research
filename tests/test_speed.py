@@ -4,8 +4,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from speed import (PARTS_IN_DOUBT, attention_used, bundle_way, cheapest, cost, seconds_per_update, stream_in_bfloat16,
-                   training_options, updates_for_the_cost)
+from speed import (PARTS_IN_DOUBT, attention_used, bundle_way, cheapest, cost, same_way, seconds_per_update,
+                   stream_in_bfloat16, training_options, updates_for_the_cost)
 
 
 def log_of(*milliseconds):
@@ -112,6 +112,12 @@ class SpeedTest(unittest.TestCase):
 
     def test_takes_a_longer_startup_out_of_the_budget(self):
         self.assertEqual(updates_for_the_cost(954, costing(0.8, 30.0), costing(0.5, 60.0)), 1466)
+
+    def test_runs_another_configuration_in_the_chosen_way_under_its_own_name(self):
+        chosen = bundle_way("fa2", 128, 4, stream=True)
+        other = same_way(chosen, "configs/bundle2.py")
+        self.assertEqual((other["config"], other["options"]), ("configs/bundle2.py", chosen["options"]))
+        self.assertNotEqual(other["name"], chosen["name"])
 
     def test_gives_options_that_train_for_those_updates_in_that_way(self):
         options = training_options(bundle_way("fa3", 128, 4), 1700)

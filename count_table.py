@@ -8,7 +8,7 @@ change while the model learns; the rows it points to are the model's own and do.
 A history's key is the same arithmetic in NumPy, where the table is built, and in PyTorch, where the model looks
 it up: products wrap around in 64 bits in both, and shifts are masked to act as unsigned ones.
 
-Usage: python count_table.py data/count --text data/count-text --tokenizer data/climbmix/tokenizer.json
+Usage: python count_table.py data/count-jaen --text data/jaen/table --tokenizer data/jaen/table/tokenizer.json
 """
 
 import argparse
