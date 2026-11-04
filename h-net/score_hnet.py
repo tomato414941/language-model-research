@@ -6,7 +6,9 @@ Each row's bytes are read after the bytes of the token before it, and a row long
 each after as much of the row before it as fits. The bits are divided by the bytes that scoring.py counts for the row,
 so that the two models' bits per byte share a denominator.
 
-Usage: python h-net/score_hnet.py OUTPUT MODEL_DIRECTORY --tokens DATASET_DIRECTORY [--limit N]
+With --validation-only it reads the validation rows alone, and needs no lm-eval.
+
+Usage: python h-net/score_hnet.py OUTPUT MODEL_DIRECTORY --tokens DATASET_DIRECTORY [--limit N] [--validation-only]
 """
 
 import argparse
@@ -20,7 +22,6 @@ from tokenizers import Tokenizer
 
 sys.path[:0] = [".", "h-net"]
 from bytes_from_tokens import TokenBytes  # noqa: E402
-from harness import BENCHMARKS, score_in_full  # noqa: E402
 from hnet_model import byte_language_model, load  # noqa: E402
 from loading import loglikelihoods  # noqa: E402
 
@@ -51,14 +52,21 @@ def main():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--batch-tokens", type=int, default=65536)
     parser.add_argument("--limit", type=int, help="ask only this many questions of each task, to try it")
+    parser.add_argument("--validation-only", action="store_true", help="read the validation rows alone")
     arguments = parser.parse_args()
     model = byte_language_model(load(arguments.model, arguments.device), arguments.device, arguments.batch_tokens)
     result = {"validation": validation_bits(model, arguments.tokens)}
+    summary = {"validation_bits_per_byte": round(result["validation"]["bits_per_byte"], 4)}
+    if arguments.validation_only:
+        Path(arguments.output).write_text(json.dumps(result) + "\n", encoding="utf-8")
+        print(json.dumps(summary, indent=1))
+        return
+    from harness import BENCHMARKS, score_in_full
+
     for language in ("en", "ja"):
         benchmarks = {name: row for name, row in BENCHMARKS.items() if row[0] == language}
         result[language] = score_in_full(model, benchmarks, arguments.limit)
     Path(arguments.output).write_text(json.dumps(result, ensure_ascii=False) + "\n", encoding="utf-8")
-    summary = {"validation_bits_per_byte": round(result["validation"]["bits_per_byte"], 4)}
     for language in ("en", "ja"):
         for name, row in result[language]["benchmarks"].items():
             summary[name] = {"accuracy": round(row["accuracy"], 4), "gold_bpb": round(row["gold_bits_per_byte"], 4)}
