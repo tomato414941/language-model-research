@@ -75,6 +75,11 @@ stream_bfloat16 = False # do the values through the layers stay in bfloat16, whe
 rows_from_document_heads = False # do training rows begin at the head of a document, and read on from there?
 count_table = '' # the directory of a COUNT table that count_table.py built, which the input then takes; '' for none
 dispersion = 0.0 # above zero, the weight of Dispersion Loss on the directions of each row's token vectors
+bigram_table = False # does a table looked up by each token and the one before it add to every block's input?
+attention_gate = False # is each head's output scaled by a gate read from the first channels of the input?
+key_offset = False # do half of each head's channel pairs stay unturned, the keys taking them from the token before?
+dense_connections = False # do the last two blocks add mixtures of earlier outputs, weighted per position (MUDD)?
+backout = False # is a share of the stream after two thirds of the layers taken out before the prediction?
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -200,7 +205,9 @@ model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=bloc
                   rms_norm=rms_norm, qk_norm=qk_norm, relu_squared=relu_squared,
                   zero_output=zero_output, separate_embeddings=separate_embeddings,
                   residual_weights=residual_weights, logit_softcap=logit_softcap, count=bool(count_table),
-                  dispersion=dispersion) # start with model_args from command line
+                  dispersion=dispersion, bigram_table=bigram_table, attention_gate=attention_gate,
+                  key_offset=key_offset, dense_connections=dense_connections,
+                  backout=backout) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -221,7 +228,8 @@ elif init_from == 'resume':
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = checkpoint_model_args[k]
     for k in ['value_embeddings', 'rotary', 'rms_norm', 'qk_norm', 'relu_squared', 'zero_output', 'separate_embeddings',
-              'residual_weights', 'logit_softcap', 'count', 'dispersion']:
+              'residual_weights', 'logit_softcap', 'count', 'dispersion', 'bigram_table', 'attention_gate',
+              'key_offset', 'dense_connections', 'backout']:
         model_args[k] = checkpoint_model_args.get(k, False)
     # create the model
     gptconf = GPTConfig(**model_args)

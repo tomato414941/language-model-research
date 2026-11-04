@@ -36,11 +36,48 @@ class RMSNorm(nn.Module):
 def make_norm(config):
     return RMSNorm() if config.rms_norm else LayerNorm(config.n_embd, bias=config.bias)
 
-def rotary_tables(length, head_dim, base=10000):
-    """The cosine and sine that turn each pair of a head's channels at each position, as in karpathy/nanochat."""
-    rates = 1.0 / (base ** (torch.arange(0, head_dim, 2).float() / head_dim))
+def rotary_tables(length, head_dim, base=10000, still_pairs=0):
+    """The cosine and sine that turn each pair of a head's channels at each position, as in karpathy/nanochat.
+    The last `still_pairs` pairs do not turn, and the others spread over the whole range of rates."""
+    turning = head_dim // 2 - still_pairs
+    rates = torch.cat([1.0 / (base ** (torch.arange(turning).float() / turning)), torch.zeros(still_pairs)])
     angles = torch.outer(torch.arange(length).float(), rates)
     return angles.cos()[None, :, None, :], angles.sin()[None, :, None, :]
+
+def still_channels(head_dim):
+    """The channels of a head that the key offset moves: the second half of each half, which rotate() turns by the
+    last half of the rates, the ones that are zero with the key offset."""
+    channel = torch.arange(head_dim) % (head_dim // 2)
+    return channel >= head_dim // 4
+
+def offset_keys(k, still):
+    """Gives each position the still channels of the key before it, so that one layer can find what followed an
+    earlier copy of a token, as in modded-nanogpt's record 49. The first position keeps its own. k is (B, T, nh, hs)."""
+    return torch.where(still, torch.cat([k[:, :1], k[:, :-1]], dim=1), k)
+
+BIGRAM_ROWS_PER_TOKEN = 5 # as in karpathy/nanochat and modded-nanogpt's record 62
+
+def bigram_rows(idx, rows):
+    """Each position's row in a table of `rows`: a hash of its token and the one before it, as in modded-nanogpt's
+    record 62. The first position of a row has no token before it and takes the last row."""
+    idx = idx.long()
+    hashed = torch.bitwise_xor(36313 * idx[:, 1:], 27191 * idx[:, :-1]) % (rows - 1)
+    return torch.cat([torch.full_like(idx[:, :1], rows - 1), hashed], dim=1)
+
+DENSE_INNER = 64 # the width of the small MLP that weighs the earlier outputs, as in modded-nanogpt's record 81
+DENSE_VALUE_SCALE = 1.15 # the record's scale on the mixture added to the values
+
+def dense_sources(n_layer):
+    """The earlier outputs that each of the last two blocks mixes after it runs, by layer; -1 is the blocks' input.
+    modded-nanogpt's record 81 takes these for its 11 layers: the input and the outputs of layers 7 and 9 after
+    layer 9, and the input and layer 9 after layer 10."""
+    last = n_layer - 1
+    return {last - 1: tuple(dict.fromkeys(s for s in (-1, last - 3, last - 1) if s >= -1)), last: (-1, last - 1)}
+
+def backout_layer(n_layer):
+    """The layer after which the stream is kept, to take a share of it out before the prediction: after 8 of
+    11 layers in modded-nanogpt's records 40 to 81, and after 7 of 10."""
+    return round(8 * n_layer / 11) - 1
 
 def rotate(x, cos, sin):
     """Turns x of shape (B, T, nh, hs) by its position, so that a query and a key meet by their distance alone."""
@@ -50,6 +87,7 @@ def rotate(x, cos, sin):
     return torch.cat([first * cos + second * sin, second * cos - first * sin], dim=-1)
 
 VALUE_GATE_CHANNELS = 12
+ATTENTION_GATE_CHANNELS = 12 # as in modded-nanogpt's record 28
 DISPERSION_STRIDE = 8 # Dispersion Loss reads every eighth position, as its paper allows sampling the tokens
 DISPERSION_TEMPERATURE = 1.0
 
@@ -101,6 +139,10 @@ class CausalSelfAttention(nn.Module):
         self.value_gate = None
         if config.value_embeddings and has_value_embedding(layer, config.n_layer):
             self.value_gate = nn.Linear(VALUE_GATE_CHANNELS, config.n_head, bias=False)
+        # a gate per head on its output, read from the first channels of the input, so that a head can do nothing
+        self.attention_gate = None
+        if config.attention_gate:
+            self.attention_gate = nn.Linear(ATTENTION_GATE_CHANNELS, config.n_head, bias=False)
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
@@ -111,11 +153,18 @@ class CausalSelfAttention(nn.Module):
         self.dropout = config.dropout
         # positions by turning the queries and keys, in place of the table of position embeddings
         self.rotary = config.rotary
+        head_dim = config.n_embd // config.n_head
         if self.rotary:
-            assert (config.n_embd // config.n_head) % 2 == 0
-            cos, sin = rotary_tables(config.block_size, config.n_embd // config.n_head)
+            assert head_dim % 2 == 0
+            # the key offset needs channels that position does not turn, so that a key moved one place still meets
+            still_pairs = head_dim // 4 if config.key_offset else 0
+            cos, sin = rotary_tables(config.block_size, head_dim, still_pairs=still_pairs)
             self.register_buffer("rotary_cos", cos, persistent=False)
             self.register_buffer("rotary_sin", sin, persistent=False)
+        self.key_offset = config.key_offset
+        if self.key_offset:
+            assert config.rotary and head_dim % 4 == 0, "the key offset moves the channels that rotation leaves still"
+            self.register_buffer("still", still_channels(head_dim), persistent=False)
         # queries and keys of one size, so that only their directions decide where to attend
         self.qk_norm = RMSNorm() if config.qk_norm else None
         # set through GPT.use_flash_attention, in place of PyTorch's attention
@@ -128,7 +177,7 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x, value_embedding=None):
+    def forward(self, x, value_embedding=None, value_mixture=None):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -136,6 +185,8 @@ class CausalSelfAttention(nn.Module):
         if value_embedding is not None:
             gate = 3 * torch.sigmoid(self.value_gate(x[..., :VALUE_GATE_CHANNELS])) # (B, T, nh), range (0, 3)
             v = v + gate.repeat_interleave(C // self.n_head, dim=-1) * value_embedding
+        if value_mixture is not None:
+            v = v + value_mixture
         k = k.view(B, T, self.n_head, C // self.n_head) # (B, T, nh, hs)
         q = q.view(B, T, self.n_head, C // self.n_head) # (B, T, nh, hs)
         v = v.view(B, T, self.n_head, C // self.n_head) # (B, T, nh, hs)
@@ -143,24 +194,29 @@ class CausalSelfAttention(nn.Module):
             q, k = rotate(q, self.rotary_cos, self.rotary_sin), rotate(k, self.rotary_cos, self.rotary_sin)
         if self.qk_norm is not None:
             q, k = self.qk_norm(q), self.qk_norm(k)
+        if self.key_offset:
+            k = offset_keys(k, self.still)
         if self.flash_attention is not None:
             # All three must be bf16, as autocast makes them for PyTorch's attention.
-            y = self.flash_attention(q.bfloat16(), k.bfloat16(), v.bfloat16(), causal=True)
-            return self.resid_dropout(self.c_proj(y.contiguous().view(B, T, C)))
-        k, q, v = k.transpose(1, 2), q.transpose(1, 2), v.transpose(1, 2) # (B, nh, T, hs)
-
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            y = self.flash_attention(q.bfloat16(), k.bfloat16(), v.bfloat16(), causal=True) # (B, T, nh, hs)
         else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+            k, q, v = k.transpose(1, 2), q.transpose(1, 2), v.transpose(1, 2) # (B, nh, T, hs)
+            # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+            if self.flash:
+                # efficient attention using Flash Attention CUDA kernels
+                y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            else:
+                # manual implementation of attention
+                att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+                att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+                att = F.softmax(att, dim=-1)
+                att = self.attn_dropout(att)
+                y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+            y = y.transpose(1, 2) # (B, T, nh, hs)
+        if self.attention_gate is not None:
+            gate = torch.sigmoid(self.attention_gate(x[..., :ATTENTION_GATE_CHANNELS])) # (B, T, nh), range (0, 1)
+            y = y * gate.unsqueeze(-1).to(y.dtype)
+        y = y.contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
@@ -213,8 +269,8 @@ class Block(nn.Module):
         self.ln_2 = make_norm(config)
         self.mlp = MLP(config)
 
-    def forward(self, x, value_embedding=None):
-        x = x + self.attn(self.ln_1(x), value_embedding)
+    def forward(self, x, value_embedding=None, value_mixture=None):
+        x = x + self.attn(self.ln_1(x), value_embedding, value_mixture)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -238,6 +294,11 @@ class GPTConfig:
     logit_softcap: float = 0.0 # above zero: the logits are squashed smoothly into plus or minus this
     count: bool = False # True: the input also takes the output table's rows of the tokens a COUNT table expects next
     dispersion: float = 0.0 # above zero: the weight of a loss that spreads the directions of each row's token vectors
+    bigram_table: bool = False # True: a table looked up by each token and the one before it adds to every block's input
+    attention_gate: bool = False # True: each head's output is scaled by a gate read from the first channels of the input
+    key_offset: bool = False # True: half of each head's channel pairs do not turn, and the keys take them from the token before
+    dense_connections: bool = False # True: the last two blocks add mixtures of earlier outputs, weighted per position (MUDD)
+    backout: bool = False # True: a share of the stream after two thirds of the layers is taken out before the prediction
 
 class GPT(nn.Module):
 
@@ -266,6 +327,24 @@ class GPT(nn.Module):
         # how much the COUNT table's view of what comes next adds to the input, as a weight it learns
         if config.count:
             self.count_gate = nn.Parameter(torch.full((1,), 0.1))
+        # a table of hashed pairs of tokens, which adds to each block's input by a weight per layer
+        if config.bigram_table:
+            self.bigram_table = nn.Embedding(BIGRAM_ROWS_PER_TOKEN * config.vocab_size, config.n_embd)
+            self.bigram_weights = nn.Parameter(torch.full((config.n_layer,), 0.1))
+        # the small MLPs that weigh, at each position, the earlier outputs that the last two blocks mix
+        if config.dense_connections:
+            assert config.n_layer >= 3, "the last two blocks mix outputs from before them"
+            self.dense_sources = dense_sources(config.n_layer)
+            most = max(len(sources) for sources in self.dense_sources.values())
+            self.dense_in = nn.Parameter(torch.empty(2, DENSE_INNER, config.n_embd))
+            for weight in self.dense_in:
+                torch.nn.init.kaiming_uniform_(weight, a=math.sqrt(5))
+            # two ways to add each mixture, to the values of the next block and to the stream, starting at nothing
+            self.dense_out = nn.Parameter(torch.zeros(2, DENSE_INNER, 2, most))
+            self.dense_bias = nn.Parameter(torch.zeros(2, 2, most))
+        # how much of the stream after two thirds of the layers is taken out before the prediction
+        if config.backout:
+            self.backout_weight = nn.Parameter(torch.full((1,), 0.5))
         # set through GPT.use_count_table
         self.count_table = None
         # only the direction of each token's vector in a separate reading table goes on into the blocks
@@ -296,6 +375,12 @@ class GPT(nn.Module):
         for block in self.transformer.h:
             if block.attn.value_gate is not None:
                 torch.nn.init.uniform_(block.attn.value_gate.weight, 0.0, 0.02)
+            # attention gates start at zero, half open everywhere, as in modded-nanogpt's record 28
+            if block.attn.attention_gate is not None:
+                torch.nn.init.zeros_(block.attn.attention_gate.weight)
+        # the table of pairs starts at zero, so that it adds nothing until it learns
+        if config.bigram_table:
+            torch.nn.init.zeros_(self.bigram_table.weight)
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
@@ -340,6 +425,8 @@ class GPT(nn.Module):
             if self.config.separate_embeddings:
                 n_params -= self.transformer.wte.weight.numel()
             n_params -= sum(p.numel() for p in self.value_embeds.parameters())
+            if self.config.bigram_table:
+                n_params -= self.bigram_table.weight.numel()
         return n_params
 
     def _init_weights(self, module):
@@ -349,6 +436,22 @@ class GPT(nn.Module):
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
+    def mix_earlier_outputs(self, layer, x, outputs):
+        """MUDD (arXiv 2502.12170) as modded-nanogpt's record 81 cuts it down: after one of the last two blocks, a
+        small MLP of the stream weighs some earlier outputs at each position. One mixture adds to the stream, and
+        after the second last block another goes to the values of the last. Both start at zero."""
+        sources = self.dense_sources[layer]
+        count = len(sources)
+        which = layer - (self.config.n_layer - 2)
+        hidden = F.gelu(F.linear(x, self.dense_in[which].to(x.dtype)))
+        weights = torch.einsum('bti,icl->btcl', hidden, self.dense_out[which, :, :, :count].to(x.dtype))
+        weights = (weights + self.dense_bias[which, :, :count].to(x.dtype)) * (0.2 / math.sqrt(count))
+        stacked = torch.stack([outputs[source] for source in sources], dim=-1) # (b, t, n_embd, count)
+        x = x + (stacked * weights[:, :, 1:2]).sum(-1)
+        if layer == self.config.n_layer - 1:
+            return x, None
+        return x, DENSE_VALUE_SCALE * (stacked * weights[:, :, 0:1]).sum(-1)
 
     def cap_logits(self, logits):
         """Squashes the logits as the config asks, in float32, since tanh loses too much in bfloat16."""
@@ -373,15 +476,35 @@ class GPT(nn.Module):
             x = x.to(self.stream_dtype)
         x = self.transformer.drop(x)
         x0 = x
+        pairs = None
+        if self.config.bigram_table:
+            pairs = self.bigram_table(bigram_rows(idx, self.bigram_table.num_embeddings)).to(x.dtype)
+        dense = self.config.dense_connections
+        kept = {source for sources in self.dense_sources.values() for source in sources} if dense else set()
+        outputs = {-1: x0}
+        value_mixture = None
+        backout_stream = None
         dispersing = self.training and targets is not None and self.config.dispersion > 0
         sampled = []
         for layer, block in enumerate(self.transformer.h):
             if self.config.residual_weights:
                 x = self.resid_weights[layer] * x + self.x0_weights[layer] * x0
+            if pairs is not None:
+                x = x + self.bigram_weights[layer] * pairs
             table = self.value_embeds[str(layer)] if str(layer) in self.value_embeds else None
-            x = block(x, table(idx).to(x.dtype) if table is not None else None)
+            x = block(x, table(idx).to(x.dtype) if table is not None else None, value_mixture)
+            value_mixture = None
+            if layer in kept:
+                outputs[layer] = x
+            if dense and layer in self.dense_sources:
+                x, value_mixture = self.mix_earlier_outputs(layer, x, outputs)
+            if self.config.backout and layer == backout_layer(self.config.n_layer):
+                backout_stream = x
             if dispersing:
                 sampled.append(x[:, DISPERSION_STRIDE - 1::DISPERSION_STRIDE])
+        if backout_stream is not None:
+            # the context that later layers needed but the prediction does not, as in modded-nanogpt's record 40
+            x = x - self.backout_weight * backout_stream
         x = self.transformer.ln_f(x)
 
         if targets is not None:

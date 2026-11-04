@@ -7,7 +7,7 @@
 - **速度記録：** [modded-nanogpt の記録](../sources/modded-nanogpt-records.md)の2番は、学習率の調整と合わせて1.43倍分で、分けた数字はない。
 - **費用：** 計算が1〜3%増える（記事の値）。今の規模で約0.1%の損に相当する。位置の表（最初の束で約66万パラメータ）はなくなる。
 - **採用：** autoresearch、nanochat、多くのフロンティアのモデルが使っている。
-- **一部の次元だけに回転をかける形：** `language-model` の[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/partial-rope.md)にある。Marin では約0.1%、nanochat では少し悪い。[Marin の記事](../sources/marin-moe.md)の Partial Key Offset は、効果の半分がこの形から来るとしている。Qwen 3.6 が回転させるのは次元の25%という記事があるが、この比較の元の研究は読んでいない。
+- **一部の次元だけに回転をかける形：** `language-model` の[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/partial-rope.md)にある。Marin では約0.1%、nanochat では少し悪い。[Marin の記事](../sources/marin-moe.md)の Partial Key Offset は、効果の半分がこの形から来るとしている。Qwen 3.6 が回転させるのは次元の25%という記事があるが、この比較の元の研究は読んでいない。3番目の束は、Partial Key Offset のために各ヘッドのチャンネルの組の半分を回転させない（[speedrun の部品](speedrun-parts.md)）。
 - **代わりの方式：** 2026-11 の検索では、言語モデルの学習で RoPE を上回るという比較は見つけていない。RoPE を疑う[論文](../sources/rope-not-relative.md)はあるが、代わりは提案していない。
 
 ## 今の見方

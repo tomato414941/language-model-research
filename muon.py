@@ -20,6 +20,9 @@ POLAR_EXPRESS = [
     (2.3465413258596377, -1.7097828382687081, 0.42323551169305323),
 ]
 
+# modded-nanogpt's record 81 gives MUDD's weights a quarter of the rate its other AdamW weights take
+DENSE_RATE_SHARE = 0.25
+
 WARMDOWN_SHARE = 0.5
 MOMENTUM_START = 0.85
 MOMENTUM_END = 0.95
@@ -111,9 +114,12 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
 
     A token table that only reads gets embedding_lr. A table shared with the predictions gets other_lr.
     The x0 weights and the COUNT gate get scalar_lr and the resid weights a hundredth of it, since they
-    multiply through the layers, as in karpathy/nanochat.
+    multiply through the layers, as in karpathy/nanochat. The table of token pairs takes the value embeddings'
+    rate and its weights, like the backout's, the x0 weights' rate, as their counterparts in modded-nanogpt do.
+    MUDD's weights get a share of other_lr with a slower second moment, as in modded-nanogpt's record 81.
     """
     matrices, query_key_value, value_embeddings, reading_table, resid_weights, x0_weights, others = ([] for _ in range(7))
+    pair_table, dense = [], []
     for name, p in model.named_parameters():
         if not p.requires_grad:
             continue
@@ -121,10 +127,14 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
             value_embeddings.append(p)
         elif name == 'transformer.wte.weight' and model.config.separate_embeddings:
             reading_table.append(p)
+        elif name == 'bigram_table.weight':
+            pair_table.append(p)
         elif name == 'resid_weights':
             resid_weights.append(p)
-        elif name in ('x0_weights', 'count_gate'):
+        elif name in ('x0_weights', 'count_gate', 'bigram_weights', 'backout_weight'):
             x0_weights.append(p)
+        elif name.startswith('dense_'):
+            dense.append(p)
         elif not name.startswith('transformer.h.') or p.dim() != 2:
             others.append(p)
         elif name.endswith('c_attn.weight'):
@@ -143,6 +153,9 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
         dict(adamw, params=reading_table, lr=embedding_lr, initial_lr=embedding_lr),
         dict(adamw, params=resid_weights, lr=scalar_lr * 0.01, initial_lr=scalar_lr * 0.01),
         dict(adamw, params=x0_weights, lr=scalar_lr, initial_lr=scalar_lr, betas=(0.96, betas[1])),
+        dict(adamw, params=pair_table, lr=value_embedding_lr, initial_lr=value_embedding_lr),
+        dict(adamw, params=dense, lr=other_lr * DENSE_RATE_SHARE, initial_lr=other_lr * DENSE_RATE_SHARE,
+             betas=(0.9, 0.99)),
     ]
     return MuonAdamW([group for group in groups if group['params']])
 

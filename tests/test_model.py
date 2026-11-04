@@ -13,9 +13,10 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from attention_check import agree
-from model import (GPT, GPTConfig, ReLUSquared, RMSNorm, choose_attention, dispersion_loss, has_value_embedding,
-                   load_flash_attention, rotary_tables, rotate)
-from muon import configure_muon
+from model import (DENSE_VALUE_SCALE, GPT, GPTConfig, ReLUSquared, RMSNorm, backout_layer, bigram_rows,
+                   choose_attention, dense_sources, dispersion_loss, has_value_embedding, load_flash_attention,
+                   offset_keys, rotary_tables, rotate, still_channels)
+from muon import DENSE_RATE_SHARE, configure_muon
 
 
 def small_model(layers=3, value_embeddings=True):
@@ -795,6 +796,309 @@ class DispersionTest(unittest.TestCase):
         _, with_term = spreading(batch[:, :-1], batch[:, 1:].contiguous())
         _, without = plain(batch[:, :-1], batch[:, 1:].contiguous())
         self.assertAlmostEqual(with_term.item(), without.item(), places=6)
+
+
+def part_model(layers=4, **options):
+    """A small model of the second bundle's shape, with the parts that the options turn on."""
+    torch.manual_seed(0)
+    shape = dict(block_size=16, vocab_size=32, n_layer=layers, n_head=2, n_embd=32, bias=False, rotary=True,
+                 rms_norm=True, qk_norm=True, relu_squared=True, separate_embeddings=True, residual_weights=True)
+    shape.update(options)
+    return GPT(GPTConfig(**shape))
+
+
+def with_shared_weights(source, target):
+    """`target`, holding the weights that it shares with `source`."""
+    target.load_state_dict({k: v for k, v in source.state_dict().items() if k in target.state_dict()})
+    return target
+
+
+def fixed_batch_losses(model, steps=30):
+    optimizer = configure_muon(model, muon_lr=0.04, other_lr=0.0044, embedding_lr=0.66)
+    batch = tokens()
+    losses = []
+    for _ in range(steps):
+        _, loss = model(batch[:, :-1], batch[:, 1:].contiguous())
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        losses.append(loss.item())
+    return losses
+
+
+def group_of(model, parameter, **rates):
+    groups = configure_muon(model, muon_lr=0.04, other_lr=0.0044, **rates).param_groups
+    return next(group for group in groups if any(p is parameter for p in group['params']))
+
+
+def logits_with_a_later_token_changed(model):
+    inputs = tokens()[:, :-1]
+    changed = inputs.clone()
+    changed[:, -1] = (changed[:, -1] + 1) % 32
+    return all_logits(model, inputs)[:, :-1], all_logits(model, changed)[:, :-1]
+
+
+def block_inputs(model, inputs):
+    seen = []
+    hooks = [block.register_forward_pre_hook(lambda _, args: seen.append(args[0].detach()))
+             for block in model.transformer.h]
+    all_logits(model, inputs)
+    for hook in hooks:
+        hook.remove()
+    return seen
+
+
+class BigramTableTest(unittest.TestCase):
+    def test_gives_a_pair_of_tokens_the_same_row_wherever_it_comes(self):
+        rows = bigram_rows(torch.tensor([[3, 4, 3, 4, 5]]), 160)
+        self.assertEqual(rows[0, 1].item(), rows[0, 3].item())
+        self.assertNotEqual(rows[0, 1].item(), rows[0, 2].item())
+
+    def test_gives_the_first_position_the_last_row_and_the_others_the_rest(self):
+        rows = bigram_rows(tokens(), 160)
+        self.assertTrue(torch.equal(rows[:, 0], torch.full((4,), 159)))
+        self.assertTrue(bool((rows[:, 1:] < 159).all()) and bool((rows[:, 1:] >= 0).all()))
+
+    def test_keeps_five_rows_for_each_token(self):
+        self.assertEqual(part_model(bigram_table=True).bigram_table.weight.shape, (160, 32))
+
+    def test_predicts_as_a_model_without_it_at_the_start(self):
+        model = part_model(bigram_table=True)
+        plain = with_shared_weights(model, part_model())
+        inputs = tokens()[:, :-1]
+        self.assertTrue(torch.allclose(all_logits(model, inputs), all_logits(plain, inputs), atol=1e-6))
+
+    def test_adds_its_rows_to_each_block_input_by_that_layers_weight(self):
+        # With outputs at zero the blocks add nothing, so each input holds the weights of the layers so far.
+        model = part_model(bigram_table=True, zero_output=True)
+        torch.nn.init.normal_(model.bigram_table.weight)
+        with torch.no_grad():
+            model.bigram_weights.copy_(torch.tensor([0.1, 0.2, 0.3, 0.4]))
+        plain = with_shared_weights(model, part_model(zero_output=True))
+        inputs = tokens()[:, :-1]
+        rows = model.bigram_table(bigram_rows(inputs, 160))
+        for layer, (with_rows, without) in enumerate(zip(block_inputs(model, inputs), block_inputs(plain, inputs))):
+            share = sum([0.1, 0.2, 0.3, 0.4][:layer + 1])
+            self.assertTrue(torch.allclose(with_rows - without, share * rows, atol=1e-5))
+
+    def test_keeps_earlier_positions_blind_to_later_tokens(self):
+        model = part_model(bigram_table=True)
+        torch.nn.init.normal_(model.bigram_table.weight)
+        before, after = logits_with_a_later_token_changed(model)
+        self.assertTrue(torch.allclose(before, after, atol=1e-6))
+
+    def test_leaves_the_table_out_of_the_count_used_for_compute(self):
+        self.assertEqual(part_model(bigram_table=True).get_num_params(), part_model().get_num_params() + 4)
+
+    def test_gives_the_table_the_value_embeddings_rate_and_its_weights_the_x0_weights_rate(self):
+        model = part_model(bigram_table=True)
+        table = group_of(model, model.bigram_table.weight, value_embedding_lr=0.1)
+        self.assertEqual((table['kind'], table['lr']), ('adamw', 0.1))
+        weights = group_of(model, model.bigram_weights)
+        self.assertTrue(any(p is model.x0_weights for p in weights['params']))
+
+    def test_learns_a_fixed_batch_with_muon_and_fills_its_table(self):
+        model = part_model(bigram_table=True)
+        losses = fixed_batch_losses(model)
+        self.assertLess(losses[-1], losses[0] * 0.8)
+        self.assertGreater(model.bigram_table.weight.abs().sum().item(), 0.0)
+
+
+class AttentionGateTest(unittest.TestCase):
+    def test_starts_half_open_on_every_head(self):
+        model = part_model(attention_gate=True)
+        plain = with_shared_weights(model, part_model())
+        x = torch.randn(2, 8, 32, generator=torch.Generator().manual_seed(2))
+        gated, ungated = model.transformer.h[0].attn(x), plain.transformer.h[0].attn(x)
+        self.assertTrue(torch.allclose(gated, 0.5 * ungated, atol=1e-6))
+
+    def test_lets_a_head_add_nothing(self):
+        model = part_model(attention_gate=True)
+        attention = model.transformer.h[0].attn
+        x = torch.randn(2, 8, 32, generator=torch.Generator().manual_seed(2))
+        x[..., 0] = 1.0
+        with torch.no_grad():
+            attention.attention_gate.weight[1, 0] = -50.0
+        shut = attention(x)
+        with torch.no_grad():
+            attention.attention_gate.weight.zero_()
+            attention.c_proj.weight[:, 16:] = 0.0 # the second head's channels
+        self.assertTrue(torch.allclose(shut, attention(x), atol=1e-5))
+
+    def test_keeps_earlier_positions_blind_to_later_tokens(self):
+        model = part_model(attention_gate=True)
+        for block in model.transformer.h:
+            torch.nn.init.normal_(block.attn.attention_gate.weight)
+        before, after = logits_with_a_later_token_changed(model)
+        self.assertTrue(torch.allclose(before, after, atol=1e-6))
+
+    def test_predicts_the_same_through_the_flash_attention_call(self):
+        model = part_model(attention_gate=True)
+        with torch.amp.autocast(device_type="cpu", dtype=torch.bfloat16):
+            before = all_logits(model, tokens()[:, :-1]).float()
+            model.use_flash_attention(attention_with_heads_after_time)
+            after = all_logits(model, tokens()[:, :-1]).float()
+        self.assertTrue(torch.allclose(after, before, atol=1e-2))
+
+    def test_gives_its_weights_to_muon(self):
+        model = part_model(attention_gate=True)
+        self.assertEqual(group_of(model, model.transformer.h[1].attn.attention_gate.weight)['kind'], 'muon')
+
+    def test_learns_a_fixed_batch_with_muon(self):
+        losses = fixed_batch_losses(part_model(attention_gate=True))
+        self.assertLess(losses[-1], losses[0] * 0.8)
+
+
+class KeyOffsetTest(unittest.TestCase):
+    def test_leaves_the_last_pairs_still_and_spreads_the_others_over_the_rates(self):
+        cos, sin = rotary_tables(8, 16, still_pairs=4)
+        self.assertTrue(torch.equal(cos[..., 4:], torch.ones_like(cos[..., 4:])))
+        self.assertTrue(torch.equal(sin[..., 4:], torch.zeros_like(sin[..., 4:])))
+        whole_cos, whole_sin = rotary_tables(8, 8)
+        self.assertTrue(torch.allclose(cos[..., :4], whole_cos) and torch.allclose(sin[..., :4], whole_sin))
+
+    def test_moves_the_channels_that_rotation_leaves_still(self):
+        cos, sin = rotary_tables(8, 16, still_pairs=4)
+        x = torch.randn(1, 8, 1, 16, generator=torch.Generator().manual_seed(2))
+        still = still_channels(16)
+        self.assertEqual(still.sum().item(), 8)
+        self.assertTrue(torch.allclose(rotate(x, cos, sin)[..., still], x[..., still]))
+
+    def test_gives_each_position_the_still_channels_of_the_key_before_it(self):
+        k = torch.randn(2, 5, 3, 16, generator=torch.Generator().manual_seed(2))
+        still = still_channels(16)
+        moved = offset_keys(k, still)
+        self.assertTrue(torch.equal(moved[:, 1:][..., still], k[:, :-1][..., still]))
+        self.assertTrue(torch.equal(moved[..., ~still], k[..., ~still]))
+        self.assertTrue(torch.equal(moved[:, 0], k[:, 0]))
+
+    def test_changes_the_predictions(self):
+        model = part_model(key_offset=True)
+        # The predicting table starts near zero, which would hide the difference.
+        torch.nn.init.normal_(model.lm_head.weight)
+        plain = with_shared_weights(model, part_model())
+        inputs = tokens()[:, :-1]
+        self.assertFalse(torch.allclose(all_logits(model, inputs), all_logits(plain, inputs), atol=1e-4))
+
+    def test_needs_rotary_positions(self):
+        with self.assertRaises(AssertionError):
+            part_model(key_offset=True, rotary=False)
+
+    def test_keeps_earlier_positions_blind_to_later_tokens(self):
+        before, after = logits_with_a_later_token_changed(part_model(key_offset=True))
+        self.assertTrue(torch.allclose(before, after, atol=1e-6))
+
+    def test_predicts_the_same_through_the_flash_attention_call(self):
+        model = part_model(key_offset=True)
+        with torch.amp.autocast(device_type="cpu", dtype=torch.bfloat16):
+            before = all_logits(model, tokens()[:, :-1]).float()
+            model.use_flash_attention(attention_with_heads_after_time)
+            after = all_logits(model, tokens()[:, :-1]).float()
+        self.assertTrue(torch.allclose(after, before, atol=1e-2))
+
+    def test_learns_no_weights_of_its_own(self):
+        self.assertEqual(set(part_model(key_offset=True).state_dict()), set(part_model().state_dict()))
+
+    def test_learns_a_fixed_batch_with_muon(self):
+        losses = fixed_batch_losses(part_model(key_offset=True))
+        self.assertLess(losses[-1], losses[0] * 0.8)
+
+
+class DenseConnectionsTest(unittest.TestCase):
+    def test_mixes_what_modded_nanogpt_mixes_for_eleven_layers(self):
+        self.assertEqual(dense_sources(11), {9: (-1, 7, 9), 10: (-1, 9)})
+
+    def test_mixes_the_same_places_for_ten_layers(self):
+        self.assertEqual(dense_sources(10), {8: (-1, 6, 8), 9: (-1, 8)})
+
+    def test_predicts_as_a_model_without_them_at_the_start(self):
+        model = part_model(dense_connections=True)
+        plain = with_shared_weights(model, part_model())
+        inputs = tokens()[:, :-1]
+        self.assertTrue(torch.allclose(all_logits(model, inputs), all_logits(plain, inputs), atol=1e-6))
+
+    def test_gives_the_last_block_a_mixture_of_earlier_outputs_for_its_values(self):
+        model = part_model(dense_connections=True, residual_weights=False)
+        with torch.no_grad():
+            model.dense_bias[0, 0] = 1.0 # the values' weights after the second last block
+        outputs, mixtures = {}, []
+        for layer in (0, 2):
+            model.transformer.h[layer].register_forward_hook(
+                lambda _, __, out, layer=layer: outputs.__setitem__(layer, out.detach()))
+        model.transformer.h[0].register_forward_pre_hook(lambda _, args: outputs.__setitem__(-1, args[0].detach()))
+        model.transformer.h[3].register_forward_pre_hook(lambda _, args: mixtures.append(args[2]))
+        all_logits(model, tokens()[:, :-1])
+        expected = DENSE_VALUE_SCALE * 0.2 / math.sqrt(3) * (outputs[-1] + outputs[0] + outputs[2])
+        self.assertTrue(torch.allclose(mixtures[0], expected, atol=1e-5))
+
+    def test_changes_the_predictions_once_its_weights_move(self):
+        model = part_model(dense_connections=True)
+        before = all_logits(model, tokens()[:, :-1])
+        with torch.no_grad():
+            model.dense_bias.fill_(1.0)
+        self.assertFalse(torch.allclose(before, all_logits(model, tokens()[:, :-1]), atol=1e-4))
+
+    def test_keeps_earlier_positions_blind_to_later_tokens(self):
+        model = part_model(dense_connections=True)
+        torch.nn.init.normal_(model.dense_out)
+        before, after = logits_with_a_later_token_changed(model)
+        self.assertTrue(torch.allclose(before, after, atol=1e-6))
+
+    def test_gives_its_weights_a_share_of_the_other_rate_and_a_slower_second_moment(self):
+        model = part_model(dense_connections=True)
+        group = group_of(model, model.dense_out)
+        self.assertEqual((group['kind'], group['lr'], group['betas']), ('adamw', 0.0044 * DENSE_RATE_SHARE, (0.9, 0.99)))
+        self.assertTrue(any(p is model.dense_in for p in group['params']))
+
+    def test_learns_a_fixed_batch_with_muon_and_moves_its_weights(self):
+        model = part_model(dense_connections=True)
+        losses = fixed_batch_losses(model)
+        self.assertLess(losses[-1], losses[0] * 0.8)
+        self.assertGreater(model.dense_out.abs().sum().item(), 0.0)
+
+
+class BackoutTest(unittest.TestCase):
+    def test_keeps_the_stream_after_8_of_11_layers_and_7_of_10(self):
+        self.assertEqual(backout_layer(11), 7)
+        self.assertEqual(backout_layer(10), 6)
+
+    def test_takes_half_of_the_kept_stream_out_before_the_last_norm_at_the_start(self):
+        model = part_model(backout=True)
+        plain = with_shared_weights(model, part_model())
+        kept, final, plain_final = [], [], []
+        model.transformer.h[backout_layer(4)].register_forward_hook(lambda _, __, out: kept.append(out.detach()))
+        model.transformer.ln_f.register_forward_pre_hook(lambda _, args: final.append(args[0].detach()))
+        plain.transformer.ln_f.register_forward_pre_hook(lambda _, args: plain_final.append(args[0].detach()))
+        all_logits(model, tokens()[:, :-1])
+        all_logits(plain, tokens()[:, :-1])
+        self.assertTrue(torch.allclose(final[0], plain_final[0] - 0.5 * kept[0], atol=1e-5))
+
+    def test_gives_its_weight_the_x0_weights_rate(self):
+        model = part_model(backout=True)
+        self.assertTrue(any(p is model.x0_weights for p in group_of(model, model.backout_weight)['params']))
+
+    def test_learns_a_fixed_batch_with_muon_and_moves_its_weight(self):
+        model = part_model(backout=True)
+        losses = fixed_batch_losses(model)
+        self.assertLess(losses[-1], losses[0] * 0.8)
+        self.assertNotEqual(model.backout_weight.item(), 0.5)
+
+
+class ThirdBundlePartsTest(unittest.TestCase):
+    def model(self):
+        return part_model(bigram_table=True, attention_gate=True, key_offset=True, dense_connections=True,
+                          backout=True, zero_output=True, value_embeddings=True)
+
+    def test_keeps_earlier_positions_blind_to_later_tokens_with_every_part(self):
+        model = self.model()
+        torch.nn.init.normal_(model.bigram_table.weight)
+        torch.nn.init.normal_(model.dense_out)
+        before, after = logits_with_a_later_token_changed(model)
+        self.assertTrue(torch.allclose(before, after, atol=1e-6))
+
+    def test_learns_a_fixed_batch_with_muon_with_every_part(self):
+        losses = fixed_batch_losses(self.model())
+        self.assertLess(losses[-1], losses[0] * 0.8)
 
 
 class AttentionCheckTest(unittest.TestCase):
