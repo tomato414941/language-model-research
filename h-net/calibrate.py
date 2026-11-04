@@ -5,11 +5,13 @@ machine's own speed cancels out.
 H-Net is timed with a chunk at every 6 bytes, the ratio loss's target: early in training its routing begins a chunk at
 about every other byte, which a short timing would take for the cost of the whole run.
 
-Writes results/hnet-speed.json with each model's costs and updates.
+Writes results/hnet-speed.json with each model's costs and updates. HNET_TIMING_OPTIONS, train.py's options separated
+by spaces, go to every timed run, so that a try on a small GPU can time smaller passes.
 Usage: python h-net/calibrate.py BPE_DATASET [NAME...]
 """
 
 import json
+import os
 import sys
 
 sys.path.insert(0, ".")
@@ -32,10 +34,11 @@ def main():
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
     dataset, names = sys.argv[1], sys.argv[2:] or list(MODELS)
+    extra = os.environ.get("HNET_TIMING_OPTIONS", "").split()
     RESULTS.mkdir(exist_ok=True)
     baseline = {"name": "hnet-baseline", "config": "configs/baseline.py", "attention": "sdpa",
                 "options": {"dataset": dataset}}
-    costs = {"baseline": measure(baseline, [])}
+    costs = {"baseline": measure(baseline, extra)}
     print(f"baseline: {costs['baseline']}", file=sys.stderr, flush=True)
     if costs["baseline"] is None:
         raise SystemExit("The baseline did not run, so nothing can be compared.")
@@ -44,7 +47,7 @@ def main():
     baseline_updates = config_value("configs/baseline.py", "max_iters")
     updates = {}
     for name in names:
-        costs[name] = measure(way(name), [])
+        costs[name] = measure(way(name), extra)
         print(f"{name}: {costs[name]}", file=sys.stderr, flush=True)
         if costs[name] is not None:
             updates[name] = updates_for_the_cost(baseline_updates, costs["baseline"], costs[name])
