@@ -37,7 +37,7 @@ class MixedWeightsTest(unittest.TestCase):
             [sys.executable, "-u", "train.py", "configs/bundle2.py", "--device=cpu", "--dtype=float32", "--compile=False",
              "--n_layer=1", "--n_embd=32", "--n_head=1", "--block_size=8", "--batch_size=2", "--gradient_accumulation_steps=1",
              f"--max_iters={UPDATES}", f"--lr_decay_iters={UPDATES}", f"--eval_interval={UPDATES}", "--eval_iters=1",
-             f"--dataset={self.directory / 'data'}", "--decay_dataset=", f"--out_dir={self.out}", *options],
+             f"--dataset={self.directory / 'data'}", f"--out_dir={self.out}", *options],
             cwd=REPOSITORY, capture_output=True, text=True, timeout=300,
         )
 
