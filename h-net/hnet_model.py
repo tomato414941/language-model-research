@@ -79,8 +79,10 @@ def outer_mixer(kind, width, index):
     if kind == "mamba2":
         from mamba_ssm import Mamba2
 
-        # The paper's encoder and decoder layers, as in its configs/hnet_1stage_L.json.
-        return Mamba2(d_model=width, d_state=128, d_conv=4, expand=2, headdim=64, chunk_size=256, layer_idx=index)
+        # The paper's encoder and decoder layers, as in its configs/hnet_1stage_L.json. The fused path calls
+        # causal-conv1d's CUDA functions, which have no build for this PyTorch, so the convolution is PyTorch's.
+        return Mamba2(d_model=width, d_state=128, d_conv=4, expand=2, headdim=64, chunk_size=256, layer_idx=index,
+                      use_mem_eff_path=False)
     if kind == "mamba3":
         from mamba_ssm import Mamba3
 

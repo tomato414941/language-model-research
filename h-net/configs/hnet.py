@@ -15,9 +15,10 @@ value_embeddings = False  # its tables are by token, and the main network reads 
 attention = 'fa2'
 stream_bfloat16 = True
 compile = False  # the model compiles its main network's blocks, around the attention kernel, itself
-# The routing begins a chunk at about every other byte early on, which half as many rows per pass keeps in memory.
-batch_size = 64
-gradient_accumulation_steps = 8
+# The routing begins a chunk at about every other byte early on, and Mamba-2 without its fused path keeps about
+# twice the activations; a quarter of the bundle's rows per pass keeps both within an H100's memory.
+batch_size = 32
+gradient_accumulation_steps = 16
 
 outer_width = 512
 encoder_layers = 4
