@@ -504,7 +504,7 @@ class GPT(nn.Module):
                 sampled.append(x[:, DISPERSION_STRIDE - 1::DISPERSION_STRIDE])
         if backout_stream is not None:
             # the context that later layers needed but the prediction does not, as in modded-nanogpt's record 40
-            x = x - self.backout_weight * backout_stream
+            x = x - self.backout_weight.to(x.dtype) * backout_stream
         x = self.transformer.ln_f(x)
 
         if targets is not None:
