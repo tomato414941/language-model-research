@@ -22,7 +22,6 @@
 | 学習率を下げる期間と下限（今は後半で0まで。Recursive は95%で5%まで、記録 #92 は80%で20%まで） | 不明 | 割れている。下限を上げると、最後の重みを混ぜる効果が大きくなるという報告がある（weight-averaging.md）。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md) | 小 |
 | 学習する n-gram の表（2トークンの組で引く表を各層に足す。engram.md） | 約0.2%（Marin）。記録 #92 の約1.1%は表を大きくした分で、語彙は5万 | nanochat の12層では更新の数、計算量、時間のどれでも勝ったが、25層では時間で比べると消えて外した。COUNT と役割が重なるので、COUNT が効かなかったときに試す。今の語彙なら表は約2,600万パラメータ | 小 |
 | 文書の前のトークンをコピーするポインタを出力に混ぜる（[CPLM](../sources/modded-nanogpt-cplm.md)） | 約0.7%（同じ損失に届く時間 −11%）。今の形では小さくなる見込み | speedrun の PR #379 のみ。未採用で論文は未公開、損失だけの報告で、ポインタの範囲を変えた比較もない。向こうは7つの注意の層のうち5つの窓が768トークン以下で、ポインタは検証で8,192トークン前まで届く。今は全層が行の1,024トークンを全部見る。採点のコードも混ぜた分布に変える必要がある。論文が出たら読み直す | 中 |
-| 文書の途中から始まる行を少し混ぜる | 不明 | 2番目の束で弱さが分かった。document-rows.md | 小 |
 | 束の学習率と weight decay、1回の更新の大きさの調整（良い値は形で変わるので、束の形を決めたあと。大きさを変えると学習率も変わる） | 不明 | 実測できる。1回の更新は、autoresearch の探索で良かった設定がどれも今の524,288より小さい（Karpathy の最良は262,144、[Recursive](../sources/recursive-first-steps.md) は147,456と、131,072から262,144に上げる形）。ただ、どれもほかの変更と一緒で、大きさだけの効果は分けていない。nanochat の法則（最適な大きさは読む量の0.383乗に比例）では、今の読む量に合うのは約43万（自分たちの計算） | 小 |
 | 埋め込みを共有したまま入力の学習率を上げる、学習の途中で分離する | 不明 | 記録の一部のみ | 中 |
 | TIDE（トークンごとの表を複数持ち、各層で混ぜて足す） | 不明 | 7.5億以上、Adam のみ。residual-weights.md | 中 |
@@ -78,6 +77,7 @@
 | 勾配を要素ごとに累乗する（[GradPower](../sources/gradpower.md)） | 論文の p=1.2 は悪化しそう。逆の p=0.9 で0.1〜0.3%（種による揺れの約0.3%以下） | 論文は1回131,072トークンで、AdamW で0.4〜0.9%、Muon で約0.5%。最適な p は更新が大きいほど下がるとし、524,288トークンでは AdamW でも約0.3%。今と同じ大きさの更新と Muon の [Parameter Golf](../sources/parameter-golf-gradpower.md)（1,700万）では、p=1.2 で約1.4%悪化し、0.9 で −0.14〜−0.27%。[Marin](../sources/marin-belay.md)（MoE、MuonH）では0.9で差がない。NorMuon での数字はない。1回の更新の大きさを変えたら見直す |
 | Q、K、V をヘッドごとに直交化する（[T-Muon](../sources/t-muon.md)、[Group Muon](../sources/group-muon.md)。今は Q、K、V を別々に直交化している） | NorMuon では小さそう（speedrun で約0.04%）。普通の Muon では0.6〜0.7% | T-Muon は今と同じ1回524,288トークン、文脈1,024、種3つで、6,000万〜3.5億の LLaMA 型で loss が0.6〜0.7%低い。ただし普通の Muon。NorMuon の [speedrun](../sources/modded-nanogpt-paired-head-muon.md) では、K と V を2ヘッドずつに分けて −0.0012（ステップ −0.7%）。Group Muon（普通の Muon、weight decay なし）では、ヘッドごとに全部分けると最後は少し悪い（+0.06%）。NorMuon の著者は Q、K、V を分けても改善がなかったとしていて、細かく分ける得は NorMuon と重なると見ている（自分たちの見方）。NorMuon をやめるときに見直す |
 | 行の大きさを別に Adam で更新する（[Muown](../sources/muown.md)） | 今の NorMuon と比べると約0.1%（1.24億） | 普通の Muon より0.6〜1.1%低い（1.24億〜27億、10億以上は種1つ）。NorMuon との比較は1.24億の図だけで、どちらも weight decay なし。今は NorMuon と cautious weight decay の組で、Muown は NorMuon と置き換える形。今の束は出力の射影を0から始めるので、そのままでは使えない（初期化を変えるか、対象から外す）。NorMuon をやめるときに見直す |
+| 文書の途中から始まる行を少し混ぜる | 測る点では0か少し悪い | 弱さは、BOS のない途中から始まる行の最初の64トークンだけ（2番目の束で +47%）。測る課題と正解の BPB は、どれも BOS から始まる。混ぜる形を比べた研究は見つけていない。nanochat と modded-nanogpt は学習の行を BOS から始める。途中から読むときは、学習を変えるより先に、先頭に BOS を置く形を試す（document-rows.md） |
 | 1回の更新を小さく始めて大きくする（記録 #92 は約5.7万から59万） | 小さい。nanochat は小さな得しかなく入れなかった（試した形の大きさは書かれていない）。speedrun の記録 #46 は、同じ損失に届く時間が −1.4%（今の規模に粗く直すと約0.1%） | nanochat の LOG、記録 #46、[Fast Catch-up](../sources/fast-catch-up.md)（AdamW で1回3.3万〜6.6万トークン、数字は図のみ）。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/batch-size-schedule.md) |
 
 ## 今の規模では効きにくそうな候補
