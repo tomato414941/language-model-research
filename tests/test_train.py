@@ -18,7 +18,7 @@ VOCABULARY = 16
 UPDATES = 8
 
 
-class MixedWeightsTest(unittest.TestCase):
+class TinyRun:
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -44,6 +44,25 @@ class MixedWeightsTest(unittest.TestCase):
     def saved(self, *parts):
         return torch.load(self.out.joinpath(*parts, "ckpt.pt"), map_location="cpu")
 
+
+class TrainingPartsTest(TinyRun, unittest.TestCase):
+    def test_trains_with_document_attention_stem_triples_xielu_and_cautious_adamw(self):
+        done = self.train("--document_attention=True", "--stem=True", "--bigram_table=True", "--trigram_table=True",
+                          "--bigram_rows_per_token=4", "--xielu=True", "--muon_cautious_adamw=True",
+                          "--muon_warmdown_share=0.75")
+        self.assertEqual(done.returncode, 0, done.stderr[-800:])
+        model_args = self.saved()["model_args"]
+        self.assertEqual(model_args["document_bos"], 0)
+        self.assertTrue(model_args["stem"] and model_args["trigram_table"] and model_args["xielu"])
+        self.assertEqual(model_args["bigram_rows_per_token"], 4)
+
+    def test_lets_attention_cross_documents_unless_asked(self):
+        done = self.train()
+        self.assertEqual(done.returncode, 0, done.stderr[-800:])
+        self.assertEqual(self.saved()["model_args"]["document_bos"], -1)
+
+
+class MixedWeightsTest(TinyRun, unittest.TestCase):
     def test_writes_the_last_weights_mixed_with_the_average_of_the_last_few(self):
         done = self.train("--average_last=3", "--average_every=2")
         self.assertEqual(done.returncode, 0, done.stderr[-800:])

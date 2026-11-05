@@ -31,7 +31,7 @@ from averaging import WeightAverage, averaged_updates
 from count_table import CountTable
 from model import GPTConfig, GPT, choose_attention
 from muon import configure_muon, set_schedule
-from rows import document_heads, whole_row_heads
+from rows import bos_token, document_heads, whole_row_heads
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -80,6 +80,11 @@ attention_gate = False # is each head's output scaled by a gate read from the fi
 key_offset = False # do half of each head's channel pairs stay unturned, the keys taking them from the token before?
 dense_connections = False # do the last two blocks add mixtures of earlier outputs, weighted per position (MUDD)?
 backout = False # is a share of the stream after two thirds of the layers taken out before the prediction?
+bigram_rows_per_token = 5 # the rows of the tables of pairs and of triples, per token of the vocabulary
+trigram_table = False # does a table looked up by each token and the two before it add to every block's input?
+stem = False # do half of the MLPs scale their widened values by a table looked up by each token (STEM)?
+xielu = False # is xIELU the MLP's activation, in the place of ReLU squared or GELU?
+document_attention = False # does attention stay within each document, which begins with the tokenizer's BOS?
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -103,6 +108,8 @@ muon_weight_decay = 0.2 # at the start of training, falling to zero at the end
 muon_polar_express = True
 muon_neuron_normalization = True
 muon_cautious_decay = True
+muon_cautious_adamw = False # does AdamW skip each step that points against the gradient (Cautious AdamW)?
+muon_warmdown_share = 0.5 # the last share of training over which the learning rate falls to zero
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 seed = 1337
@@ -207,7 +214,10 @@ model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=bloc
                   residual_weights=residual_weights, logit_softcap=logit_softcap, count=bool(count_table),
                   dispersion=dispersion, bigram_table=bigram_table, attention_gate=attention_gate,
                   key_offset=key_offset, dense_connections=dense_connections,
-                  backout=backout) # start with model_args from command line
+                  backout=backout, bigram_rows_per_token=bigram_rows_per_token, trigram_table=trigram_table,
+                  stem=stem, xielu=xielu,
+                  document_bos=bos_token(os.path.join(data_dir, 'tokenizer.json')) if document_attention else -1,
+                  ) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -229,8 +239,10 @@ elif init_from == 'resume':
         model_args[k] = checkpoint_model_args[k]
     for k in ['value_embeddings', 'rotary', 'rms_norm', 'qk_norm', 'relu_squared', 'zero_output', 'separate_embeddings',
               'residual_weights', 'logit_softcap', 'count', 'dispersion', 'bigram_table', 'attention_gate',
-              'key_offset', 'dense_connections', 'backout']:
+              'key_offset', 'dense_connections', 'backout', 'trigram_table', 'stem', 'xielu']:
         model_args[k] = checkpoint_model_args.get(k, False)
+    for k in ['bigram_rows_per_token', 'document_bos']:
+        model_args[k] = checkpoint_model_args.get(k, getattr(GPTConfig, k))
     # create the model
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
@@ -275,7 +287,7 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 if optimizer_name == 'muon':
     optimizer = configure_muon(model, muon_lr, muon_other_lr, muon_value_embedding_lr, muon_polar_express,
                                muon_neuron_normalization, muon_cautious_decay, embedding_lr=muon_embedding_lr,
-                               scalar_lr=muon_scalar_lr)
+                               scalar_lr=muon_scalar_lr, cautious_adamw=muon_cautious_adamw)
 else:
     optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 if init_from == 'resume':
@@ -339,7 +351,7 @@ while True:
 
     # determine and set the learning rate for this iteration
     if optimizer_name == 'muon':
-        lr = muon_lr * set_schedule(optimizer, iter_num, max_iters, muon_weight_decay)
+        lr = muon_lr * set_schedule(optimizer, iter_num, max_iters, muon_weight_decay, muon_warmdown_share)
         if decay_dataset and lr < muon_lr and train_dir == data_dir:
             train_dir = os.path.join('data', decay_dataset)
             row_heads = row_starts(train_dir)

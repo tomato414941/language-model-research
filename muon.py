@@ -78,7 +78,13 @@ class MuonAdamW(torch.optim.Optimizer):
         state['square'].lerp_(p.grad.square(), 1 - beta2)
         square = state['square'] / (1 - beta2 ** state['step'])
         step_size = group['lr'] / (1 - beta1 ** state['step'])
-        p.addcdiv_(state['average'], square.sqrt() + group['eps'], value=-step_size)
+        average = state['average']
+        if group.get('cautious'):
+            # Cautious AdamW (arXiv 2411.16085): no step where the average points against the gradient, and the
+            # other steps scaled up to keep the size, as in its authors' code
+            agrees = (average * p.grad > 0).to(average.dtype)
+            average = average * agrees * (agrees.numel() / (agrees.sum() + 1))
+        p.addcdiv_(average, square.sqrt() + group['eps'], value=-step_size)
 
     def _step_muon(self, p, group):
         state = self.state[p]
@@ -109,13 +115,14 @@ class MuonAdamW(torch.optim.Optimizer):
 
 def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_express=True,
                    neuron_normalization=True, cautious_decay=True, betas=(0.8, 0.95), eps=1e-10, beta2=0.95,
-                   embedding_lr=0.6, scalar_lr=0.5):
-    """Gives the matrices of the blocks to Muon and every other weight to AdamW.
+                   embedding_lr=0.6, scalar_lr=0.5, cautious_adamw=False):
+    """Gives the matrices of the blocks to Muon and every other weight to AdamW, cautious if cautious_adamw.
 
     A token table that only reads gets embedding_lr. A table shared with the predictions gets other_lr.
     The x0 weights and the COUNT gate get scalar_lr and the resid weights a hundredth of it, since they
     multiply through the layers, as in karpathy/nanochat. The table of token pairs takes the value embeddings'
     rate and its weights, like the backout's, the x0 weights' rate, as their counterparts in modded-nanogpt do.
+    The table of triples and STEM's tables, which start at zero like the table of pairs, take what it takes.
     MUDD's weights get a share of other_lr with a slower second moment, as in modded-nanogpt's record 81.
     """
     matrices, query_key_value, value_embeddings, reading_table, resid_weights, x0_weights, others = ([] for _ in range(7))
@@ -127,11 +134,11 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
             value_embeddings.append(p)
         elif name == 'transformer.wte.weight' and model.config.separate_embeddings:
             reading_table.append(p)
-        elif name == 'bigram_table.weight':
+        elif name in ('bigram_table.weight', 'trigram_table.weight') or name.startswith('stem_tables.'):
             pair_table.append(p)
         elif name == 'resid_weights':
             resid_weights.append(p)
-        elif name in ('x0_weights', 'count_gate', 'bigram_weights', 'backout_weight'):
+        elif name in ('x0_weights', 'count_gate', 'bigram_weights', 'trigram_weights', 'backout_weight'):
             x0_weights.append(p)
         elif name.startswith('dense_'):
             dense.append(p)
@@ -144,7 +151,7 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
     muon = dict(kind='muon', lr=muon_lr, momentum=MOMENTUM_START, weight_decay=0.0, beta2=beta2,
                 polar_express=polar_express, normalize_neurons=neuron_normalization,
                 cautious_decay=cautious_decay)
-    adamw = dict(kind='adamw', betas=betas, eps=eps)
+    adamw = dict(kind='adamw', betas=betas, eps=eps, cautious=cautious_adamw)
     groups = [
         dict(adamw, params=others, lr=other_lr, initial_lr=other_lr),
         dict(muon, params=matrices, chunks=1, initial_lr=muon_lr),
@@ -160,10 +167,11 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
     return MuonAdamW([group for group in groups if group['params']])
 
 
-def set_schedule(optimizer, update, total_updates, weight_decay):
-    """Sets the values for this update and returns the share of the full learning rate in use."""
+def set_schedule(optimizer, update, total_updates, weight_decay, warmdown_share=WARMDOWN_SHARE):
+    """Sets the values for this update and returns the share of the full learning rate in use, which falls in a
+    straight line to zero over the last `warmdown_share` of training."""
     progress = min(update / total_updates, 1.0)
-    share = min((1 - progress) / WARMDOWN_SHARE, 1.0)
+    share = min((1 - progress) / warmdown_share, 1.0)
     rise = min(update / MOMENTUM_RISE_UPDATES, 1.0)
     momentum = MOMENTUM_START + rise * (MOMENTUM_END - MOMENTUM_START)
     for group in optimizer.param_groups:

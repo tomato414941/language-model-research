@@ -15,6 +15,12 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+try:
+    # PyTorch's attention over sequences of different lengths, which keeps each document to itself on a GPU
+    from torch.nn.attention.varlen import varlen_attn
+except ImportError:
+    varlen_attn = None
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -50,19 +56,64 @@ def still_channels(head_dim):
     channel = torch.arange(head_dim) % (head_dim // 2)
     return channel >= head_dim // 4
 
-def offset_keys(k, still):
+def offset_keys(k, still, first=None):
     """Gives each position the still channels of the key before it, so that one layer can find what followed an
-    earlier copy of a token, as in modded-nanogpt's record 49. The first position keeps its own. k is (B, T, nh, hs)."""
-    return torch.where(still, torch.cat([k[:, :1], k[:, :-1]], dim=1), k)
+    earlier copy of a token, as in modded-nanogpt's record 49. The first position keeps its own, and so does each
+    position where `first` (B, T) is true, the head of a document when attention stays within one. k is (B, T, nh, hs)."""
+    moved = torch.cat([k[:, :1], k[:, :-1]], dim=1)
+    if first is not None:
+        moved = torch.where(first[:, :, None, None], k, moved)
+    return torch.where(still, moved, k)
 
 BIGRAM_ROWS_PER_TOKEN = 5 # as in karpathy/nanochat and modded-nanogpt's record 62
 
-def bigram_rows(idx, rows):
+def bigram_rows(idx, rows, documents=None):
     """Each position's row in a table of `rows`: a hash of its token and the one before it, as in modded-nanogpt's
-    record 62. The first position of a row has no token before it and takes the last row."""
+    record 62. The first position of a row has no token before it and takes the last row, and so does the head of
+    a document when `documents` (document_ids) is given."""
     idx = idx.long()
     hashed = torch.bitwise_xor(36313 * idx[:, 1:], 27191 * idx[:, :-1]) % (rows - 1)
+    if documents is not None:
+        hashed = torch.where(documents[:, 1:] == documents[:, :-1], hashed, rows - 1)
     return torch.cat([torch.full_like(idx[:, :1], rows - 1), hashed], dim=1)
+
+def trigram_rows(idx, rows, documents=None):
+    """Each position's row in a table of `rows`: a hash of its token and the two before it, as Over-Encoding
+    (arXiv 2501.16975) adds 3-grams to 2-grams. A position with fewer than two tokens before it in its row, or in
+    its document when `documents` is given, takes the last row."""
+    idx = idx.long()
+    hashed = torch.bitwise_xor(torch.bitwise_xor(36313 * idx[:, 2:], 27191 * idx[:, 1:-1]), 51497 * idx[:, :-2])
+    hashed = hashed % (rows - 1)
+    if documents is not None:
+        hashed = torch.where(documents[:, 2:] == documents[:, :-2], hashed, rows - 1)
+    return torch.cat([torch.full_like(idx[:, :2], rows - 1), hashed], dim=1)
+
+# Room for the documents of a pass in attention over variable lengths: this many per row on average. Should a
+# pass hold more, the latest documents of a row share attention, as all of a row's documents did before.
+SEGMENTS_PER_ROW = 8
+
+def document_ids(idx, bos):
+    """Each position's document within its row: how many BOS tokens the row has read up to and including it."""
+    return torch.cumsum((idx == bos).int(), dim=1)
+
+def segment_bounds(documents):
+    """The flat positions at which a row or a document begins, then the end, as the cumulative sequence positions
+    of attention over variable lengths. The list has a fixed length, SEGMENTS_PER_ROW per row and one, so that
+    a compiled model takes every batch alike: the room left over repeats the end. Every row's beginning is kept,
+    so that no segment runs past a row."""
+    b, t = documents.shape
+    end = b * t
+    positions = torch.arange(end, device=documents.device)
+    heads = torch.ones_like(documents, dtype=torch.bool)
+    heads[:, 1:] = documents[:, 1:] != documents[:, :-1]
+    rows = positions % t == 0
+    # rows first, then documents in order, then everything else, with room for a pass shorter than the list
+    keys = torch.where(rows, positions - end, torch.where(heads.flatten(), positions, 2 * end))
+    room = b * SEGMENTS_PER_ROW
+    keys = torch.cat([keys, keys.new_full((max(room - end, 0),), 2 * end)])
+    kept = torch.sort(keys).values[:room]
+    kept = torch.where(kept < 0, kept + end, torch.clamp(kept, max=end))
+    return torch.cat([torch.sort(kept).values, kept.new_full((1,), end)]).int()
 
 DENSE_INNER = 64 # the width of the small MLP that weighs the earlier outputs, as in modded-nanogpt's record 81
 DENSE_VALUE_SCALE = 1.15 # the record's scale on the mixture added to the values
@@ -94,6 +145,11 @@ DISPERSION_TEMPERATURE = 1.0
 def has_value_embedding(layer, n_layer):
     """Value embeddings sit on every other layer and always on the last, as in karpathy/nanochat."""
     return layer % 2 == (n_layer - 1) % 2
+
+def has_stem_table(layer, n_layer):
+    """STEM's tables sit on the layers without value embeddings: half of an even number of layers, at even intervals,
+    which STEM (arXiv 2601.10639) found better than a third or all of them."""
+    return not has_value_embedding(layer, n_layer)
 
 def load_flash_attention():
     """FlashAttention-3's attention function, or None where it cannot run. Its kernels stop at Hopper GPUs."""
@@ -177,7 +233,9 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x, value_embedding=None, value_mixture=None):
+    def forward(self, x, value_embedding=None, value_mixture=None, documents=None, bounds=None):
+        """With `documents` (document_ids), each position attends only within its document. On a GPU this takes
+        `bounds` (segment_bounds) for attention over variable lengths; elsewhere a mask does the same."""
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -195,8 +253,21 @@ class CausalSelfAttention(nn.Module):
         if self.qk_norm is not None:
             q, k = self.qk_norm(q), self.qk_norm(k)
         if self.key_offset:
-            k = offset_keys(k, self.still)
-        if self.flash_attention is not None:
+            first = None
+            if documents is not None:
+                first = torch.ones_like(documents, dtype=torch.bool)
+                first[:, 1:] = documents[:, 1:] != documents[:, :-1]
+            k = offset_keys(k, self.still, first)
+        if documents is not None and bounds is not None:
+            # (-1, 0) is a causal window with no limit to the left
+            y = varlen_attn(q.bfloat16().flatten(0, 1), k.bfloat16().flatten(0, 1), v.bfloat16().flatten(0, 1),
+                            bounds, bounds, T, T, window_size=(-1, 0)).view(B, T, self.n_head, C // self.n_head)
+        elif documents is not None:
+            causal = torch.ones(T, T, dtype=torch.bool, device=x.device).tril()
+            mask = (documents[:, None, :, None] == documents[:, None, None, :]) & causal
+            k, q, v = k.transpose(1, 2), q.transpose(1, 2), v.transpose(1, 2) # (B, nh, T, hs)
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v.to(q.dtype), attn_mask=mask).transpose(1, 2)
+        elif self.flash_attention is not None:
             # All three must be bf16, as autocast makes them for PyTorch's attention.
             y = self.flash_attention(q.bfloat16(), k.bfloat16(), v.bfloat16(), causal=True) # (B, T, nh, hs)
         else:
@@ -244,18 +315,45 @@ class ReLUSquared(nn.Module):
     def forward(self, input):
         return F.relu(input).square()
 
+def inverse_softplus(value):
+    return math.log(math.expm1(value))
+
+class XIELU(nn.Module):
+    """xIELU (arXiv 2411.13010), as Apertus runs it: alpha_p x^2 + beta x above zero, and
+    alpha_n (e^x - 1) - alpha_n x + beta x below, where the layer learns alpha_p and alpha_n through softplus."""
+
+    def __init__(self, alpha_p=0.8, alpha_n=0.8, beta=0.5, eps=-1e-6):
+        super().__init__()
+        self.alpha_p = nn.Parameter(torch.tensor([inverse_softplus(alpha_p)]))
+        self.alpha_n = nn.Parameter(torch.tensor([inverse_softplus(alpha_n - beta)]))
+        self.beta = beta
+        self.eps = eps
+
+    def forward(self, input):
+        alpha_p = F.softplus(self.alpha_p).to(input.dtype)
+        alpha_n = (self.beta + F.softplus(self.alpha_n)).to(input.dtype)
+        negative = (torch.expm1(torch.clamp(input, max=self.eps)) - input) * alpha_n
+        return torch.where(input > 0, alpha_p * input * input, negative) + self.beta * input
+
 class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
         self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.activation = ReLUSquared() if config.relu_squared else nn.GELU()
+        if config.xielu:
+            self.activation = XIELU()
+        else:
+            self.activation = ReLUSquared() if config.relu_squared else nn.GELU()
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
-    def forward(self, x):
+    def forward(self, x, stem_row=None):
+        """With `stem_row`, the token's row of a STEM table, which scales each of the widened values by one plus its
+        own number, in the place of the up projection that STEM replaces in a gated MLP."""
         x = self.c_fc(x)
         x = self.activation(x)
+        if stem_row is not None:
+            x = x * (1 + stem_row.to(x.dtype))
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
@@ -269,9 +367,9 @@ class Block(nn.Module):
         self.ln_2 = make_norm(config)
         self.mlp = MLP(config)
 
-    def forward(self, x, value_embedding=None, value_mixture=None):
-        x = x + self.attn(self.ln_1(x), value_embedding, value_mixture)
-        x = x + self.mlp(self.ln_2(x))
+    def forward(self, x, value_embedding=None, value_mixture=None, documents=None, bounds=None, stem_row=None):
+        x = x + self.attn(self.ln_1(x), value_embedding, value_mixture, documents, bounds)
+        x = x + self.mlp(self.ln_2(x), stem_row)
         return x
 
 @dataclass
@@ -299,6 +397,11 @@ class GPTConfig:
     key_offset: bool = False # True: half of each head's channel pairs do not turn, and the keys take them from the token before
     dense_connections: bool = False # True: the last two blocks add mixtures of earlier outputs, weighted per position (MUDD)
     backout: bool = False # True: a share of the stream after two thirds of the layers is taken out before the prediction
+    bigram_rows_per_token: int = BIGRAM_ROWS_PER_TOKEN # the rows of the table of pairs, and of triples, per token
+    trigram_table: bool = False # True: a table looked up by each token and the two before it adds to every block's input
+    stem: bool = False # True: half of the MLPs scale their widened values by a table looked up by each token (STEM)
+    xielu: bool = False # True: xIELU in the MLP, in the place of ReLU squared or GELU
+    document_bos: int = -1 # at least zero: attention stays within each document, which begins with this token
 
 class GPT(nn.Module):
 
@@ -329,8 +432,17 @@ class GPT(nn.Module):
             self.count_gate = nn.Parameter(torch.full((1,), 0.1))
         # a table of hashed pairs of tokens, which adds to each block's input by a weight per layer
         if config.bigram_table:
-            self.bigram_table = nn.Embedding(BIGRAM_ROWS_PER_TOKEN * config.vocab_size, config.n_embd)
+            self.bigram_table = nn.Embedding(config.bigram_rows_per_token * config.vocab_size, config.n_embd)
             self.bigram_weights = nn.Parameter(torch.full((config.n_layer,), 0.1))
+        # a table of hashed triples of tokens, which adds to each block's input like the table of pairs
+        if config.trigram_table:
+            self.trigram_table = nn.Embedding(config.bigram_rows_per_token * config.vocab_size, config.n_embd)
+            self.trigram_weights = nn.Parameter(torch.full((config.n_layer,), 0.1))
+        # STEM's tables, one row per token as wide as the widened values of the MLP
+        self.stem_tables = nn.ModuleDict({
+            str(layer): nn.Embedding(config.vocab_size, 4 * config.n_embd) for layer in range(config.n_layer)
+            if config.stem and has_stem_table(layer, config.n_layer)
+        })
         # the small MLPs that weigh, at each position, the earlier outputs that the last two blocks mix
         if config.dense_connections:
             assert config.n_layer >= 3, "the last two blocks mix outputs from before them"
@@ -378,9 +490,14 @@ class GPT(nn.Module):
             # attention gates start at zero, half open everywhere, as in modded-nanogpt's record 28
             if block.attn.attention_gate is not None:
                 torch.nn.init.zeros_(block.attn.attention_gate.weight)
-        # the table of pairs starts at zero, so that it adds nothing until it learns
+        # the tables of pairs and triples start at zero, so that they add nothing until they learn
         if config.bigram_table:
             torch.nn.init.zeros_(self.bigram_table.weight)
+        if config.trigram_table:
+            torch.nn.init.zeros_(self.trigram_table.weight)
+        # STEM's tables start at zero, so that each MLP starts as it would without one
+        for table in self.stem_tables.values():
+            torch.nn.init.zeros_(table.weight)
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
@@ -425,8 +542,11 @@ class GPT(nn.Module):
             if self.config.separate_embeddings:
                 n_params -= self.transformer.wte.weight.numel()
             n_params -= sum(p.numel() for p in self.value_embeds.parameters())
+            n_params -= sum(p.numel() for p in self.stem_tables.parameters())
             if self.config.bigram_table:
                 n_params -= self.bigram_table.weight.numel()
+            if self.config.trigram_table:
+                n_params -= self.trigram_table.weight.numel()
         return n_params
 
     def _init_weights(self, module):
@@ -476,9 +596,16 @@ class GPT(nn.Module):
             x = x.to(self.stream_dtype)
         x = self.transformer.drop(x)
         x0 = x
-        pairs = None
+        documents = bounds = None
+        if self.config.document_bos >= 0:
+            documents = document_ids(idx, self.config.document_bos)
+            if idx.is_cuda and varlen_attn is not None:
+                bounds = segment_bounds(documents)
+        pairs = triples = None
         if self.config.bigram_table:
-            pairs = self.bigram_table(bigram_rows(idx, self.bigram_table.num_embeddings)).to(x.dtype)
+            pairs = self.bigram_table(bigram_rows(idx, self.bigram_table.num_embeddings, documents)).to(x.dtype)
+        if self.config.trigram_table:
+            triples = self.trigram_table(trigram_rows(idx, self.trigram_table.num_embeddings, documents)).to(x.dtype)
         dense = self.config.dense_connections
         kept = {source for sources in self.dense_sources.values() for source in sources} if dense else set()
         outputs = {-1: x0}
@@ -491,8 +618,12 @@ class GPT(nn.Module):
                 x = self.resid_weights[layer] * x + self.x0_weights[layer] * x0
             if pairs is not None:
                 x = x + self.bigram_weights[layer] * pairs
+            if triples is not None:
+                x = x + self.trigram_weights[layer] * triples
             table = self.value_embeds[str(layer)] if str(layer) in self.value_embeds else None
-            x = block(x, table(idx).to(x.dtype) if table is not None else None, value_mixture)
+            stem = self.stem_tables[str(layer)] if str(layer) in self.stem_tables else None
+            x = block(x, table(idx).to(x.dtype) if table is not None else None, value_mixture, documents, bounds,
+                      stem(idx) if stem is not None else None)
             value_mixture = None
             if layer in kept:
                 outputs[layer] = x

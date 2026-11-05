@@ -12,7 +12,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from rows import document_heads, whole_row_heads
+from rows import bos_token, document_heads, whole_row_heads
 
 
 class DocumentHeadsTest(unittest.TestCase):
@@ -26,6 +26,9 @@ class DocumentHeadsTest(unittest.TestCase):
         self.tokenizer = self.directory / "tokenizer.json"
         np.array(self.TOKENS, dtype=np.uint16).tofile(self.tokens)
         self.tokenizer.write_text(json.dumps({"added_tokens": [{"id": 7, "content": "<|bos|>"}]}), encoding="utf-8")
+
+    def test_finds_the_number_of_the_bos_token(self):
+        self.assertEqual(bos_token(self.tokenizer), 7)
 
     def test_finds_the_head_of_every_document(self):
         self.assertEqual(document_heads(self.tokens, self.tokenizer).tolist(), [0, 3, 5, 7])

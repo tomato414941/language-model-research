@@ -251,6 +251,43 @@ class ScheduleTest(unittest.TestCase):
         module.set_schedule(self.optimizer, 1000, 1000, 0.2)
         self.assertEqual(self.muon['weight_decay'], 0.0)
 
+    def test_lowers_the_learning_rate_over_the_share_of_training_it_is_given(self):
+        self.assertEqual(module.set_schedule(self.optimizer, 250, 1000, 0.2, warmdown_share=0.75), 1.0)
+        self.assertAlmostEqual(module.set_schedule(self.optimizer, 625, 1000, 0.2, warmdown_share=0.75), 0.5)
+        self.assertEqual(module.set_schedule(self.optimizer, 1000, 1000, 0.2, warmdown_share=0.75), 0.0)
+
+
+class CautiousAdamWTest(unittest.TestCase):
+    def two_steps(self, cautious):
+        weight = torch.nn.Parameter(torch.zeros(4))
+        optimizer = module.MuonAdamW([dict(kind='adamw', params=[weight], lr=0.1, betas=(0.8, 0.95), eps=1e-10,
+                                           cautious=cautious)])
+        weight.grad = torch.ones(4)
+        optimizer.step()
+        first = weight.detach().clone()
+        # The average still points up where the gradient now points a little down.
+        weight.grad = torch.tensor([-0.1, -0.1, 1.0, 1.0])
+        optimizer.step()
+        return first, weight.detach().clone()
+
+    def test_takes_no_step_where_the_average_points_against_the_gradient(self):
+        first, second = self.two_steps(cautious=True)
+        self.assertTrue(torch.equal(second[:2], first[:2]))
+        self.assertTrue((second[2:] < first[2:]).all())
+
+    def test_scales_up_the_steps_it_takes_to_keep_their_size(self):
+        cautious_first, cautious_second = self.two_steps(cautious=True)
+        first, second = self.two_steps(cautious=False)
+        self.assertTrue(torch.allclose(cautious_second[2:] - cautious_first[2:], (second[2:] - first[2:]) * 4 / 3))
+
+    def test_steps_every_weight_when_not_cautious(self):
+        first, second = self.two_steps(cautious=False)
+        self.assertTrue((second != first).all())
+
+    def test_makes_every_adamw_group_cautious_when_asked(self):
+        optimizer = configure(small_model(), cautious_adamw=True)
+        self.assertTrue(all(group['cautious'] for group in optimizer.param_groups if group['kind'] == 'adamw'))
+
 
 if __name__ == "__main__":
     unittest.main()
