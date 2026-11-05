@@ -12,7 +12,6 @@ Everything trained and measured in this repository, from any window, follows thi
 - **Other models:** Do not use other models in training: no distillation, and no other model's weights or outputs.
 - **GPU:** One H100 SXM. Each rental lasts at most 1 hour and holds the setup, the training and the evaluation. Every rental needs the user's approval.
 - **Acceptance:** Compare a candidate with the current best only on the evaluations both were measured with. When both have the three suites, adopt the candidate when the rates by which its BPB falls below the current best's, averaged over the suites, are positive (each suite counts equally); otherwise adopt it when its validation BPB is lower. Measure each candidate once and accept the noise: never repeat a run, add seeds or average runs to make a number more certain. Later bundles and retried changes correct wrong calls.
-- Never re-measure an earlier model when the measurement changes. A new evaluation is measured from the next run on and starts deciding once the current best has it. If no shared evaluation is comparable (for example after a change of training time or GPU, or before anything has been measured under the frame), the next run becomes the baseline without a comparison.
 - Keep the frame in one place in the code.
 
 ## What is free
