@@ -1,7 +1,8 @@
 #!/bin/bash
-# One run under frame.py on a rented machine, inside the rental's hour: the packages, training for the time budget
-# and frame.py's evaluation of the last weights. The summary, CORE's results and the logs go to results/, and the
-# last weights, in 16 bits, to models/run. Each stage gets a stamp, so that its time can be read afterwards.
+# One run under frame.py on a rented machine, inside the rental's hour: the packages, training for the time budget and
+# frame.py's evaluation of the last weights. olmes runs in an environment of its own, with the torch it pins, which is
+# built and given its tasks' data while training runs. The summary, olmes's results and the logs go to results/, and
+# the last weights, in 16 bits, to models/run. Each stage gets a stamp, so that its time can be read afterwards.
 # Usage: run.sh [TRAIN_OPTION...]
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -24,13 +25,27 @@ mkdir -p results models
 stamp check
 python attention_check.py documents
 
+# olmes's environment and its tasks' data, beside training on the CPU. The requests come built from the processing
+# machine (frame.py requests), and the tasks' data in its Hugging Face cache, data/hf; loading every task once checks
+# that olmes runs here before training ends.
+export HF_HOME=$PWD/data/hf
+(
+    python -m venv /root/olmes-venv
+    /root/olmes-venv/bin/pip install -q torch==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+    /root/olmes-venv/bin/pip install -q --no-deps -r olmes.txt
+    PATH=/root/olmes-venv/bin:$PATH python frame.py data out/olmes-data data/olmes-requests
+) > results/olmes-setup.log 2>&1 &
+setup=$!
+
 stamp train
 python -u train.py --out_dir=out/run "$@" > results/train.log 2>&1
 
-# CORE scores each example alone, which leaves the GPU mostly idle, so processes share it as nanochat shares GPUs.
+stamp wait for olmes
+wait $setup
 stamp evaluate
-torchrun --standalone --nproc_per_node=4 frame.py evaluate out/run > results/evaluate.log 2>&1
-cp out/run/summary.json out/run/core.json out/run/core.csv results/
+PATH=/root/olmes-venv/bin:$PATH python frame.py evaluate out/run data/olmes-requests > results/evaluate.log 2>&1
+cp out/run/summary.json results/
+cp out/run/olmes/metrics-all.jsonl results/olmes-metrics.jsonl
 
 stamp keep
 python - <<'PY'
@@ -41,8 +56,8 @@ import torch
 checkpoint = torch.load("out/run/ckpt.pt", map_location="cpu")
 weights = {key.removeprefix("_orig_mod."): value.to(torch.bfloat16) for key, value in checkpoint["model"].items()}
 os.makedirs("models/run", exist_ok=True)
-# A COUNT model needs to know where its table is.
-config = {"count_table": checkpoint["config"].get("count_table", "")}
+# A COUNT model needs to know where its table is, and its evaluation which data it read.
+config = {key: checkpoint["config"].get(key, "") for key in ("count_table", "dataset")}
 torch.save({"model_args": checkpoint["model_args"], "model": weights, "config": config}, "models/run/ckpt.pt")
 PY
 stamp finished
