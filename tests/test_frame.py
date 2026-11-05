@@ -1,8 +1,11 @@
+import functools
 import importlib.util
 import json
 import math
+import random
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -19,7 +22,7 @@ from model import GPT, GPTConfig
 from prepare import BOS, train_tokenizer
 
 TEXTS = ["The cat sat on the mat. Ünïcödé text, with numbers 12345.", "Another document; café au lait."] * 20
-HAS_TRANSFORMERS = importlib.util.find_spec("transformers") is not None
+HAS_OLMES = all(importlib.util.find_spec(name) is not None for name in ("oe_eval", "transformers"))
 
 
 class FrameTest(unittest.TestCase):
@@ -31,6 +34,9 @@ class FrameTest(unittest.TestCase):
         self.tokenizer = train_tokenizer(iter(TEXTS), 300)
         self.tokenizer.save(str(self.tokenizer_path))
         self.bos = self.tokenizer.token_to_id(BOS)
+
+    def encode(self, text):
+        return self.tokenizer.encode(text, add_special_tokens=False).ids
 
 
 def scores(qa, math_, code):
@@ -53,122 +59,213 @@ class DecisionTest(unittest.TestCase):
             frame.suites_improve(scores(math.nan, 1.0, 1.0), scores(1.0, 1.0, 1.0))
 
 
-class TokenizerTest(FrameTest):
-    @unittest.skipUnless(HAS_TRANSFORMERS, "olmes's wrapper needs transformers")
-    def test_puts_the_bos_token_before_each_text_for_olmes_and_pads_with_it(self):
-        tokenizer = frame.olmes_tokenizer(self.tokenizer_path)
-        ids = self.tokenizer.encode(TEXTS[0], add_special_tokens=False).ids
-        self.assertEqual(tokenizer.encode(TEXTS[0]), [self.bos, *ids])
-        self.assertEqual(tokenizer.encode(TEXTS[0], add_special_tokens=False), ids)
-        self.assertEqual(tokenizer.pad_token_id, self.bos)
+def request(doc_id, idx, label, continuation=" x", context="Q:"):
+    return {"doc_id": doc_id, "native_id": doc_id % frame.UNCONDITIONED, "idx": idx, "label": label,
+            "request": {"context": context, "continuation": continuation}}
 
 
-class CountTest(FrameTest):
-    def write_requests(self, instances):
-        directory = self.directory / "requests"
-        directory.mkdir()
-        with (directory / "piqa:rc:bpb.jsonl").open("w") as f:
-            for instance in instances:
-                f.write(json.dumps(instance) + "\n")
-        return directory
+def multiple_choice(labels, choices=3, unconditioned=True):
+    """A task's requests as olmes writes them: each question's choices, then the same without the questions."""
+    asked = [request(doc_id, idx, label, f" choice {doc_id}-{idx}") for doc_id, label in enumerate(labels)
+             for idx in range(choices)]
+    unasked = [{**r, "doc_id": r["doc_id"] + frame.UNCONDITIONED,
+                "request": {"context": "Answer:", "continuation": r["request"]["continuation"]}}
+               for r in asked] if unconditioned else []
+    return asked + unasked
 
-    @unittest.skipUnless(HAS_TRANSFORMERS, "olmes's tokenizer needs transformers")
-    def test_counts_the_tokens_the_model_reads_for_each_request_within_its_context(self):
-        context, continuation = TEXTS[0], " " + TEXTS[1]
-        directory = self.write_requests([
-            {"request_type": "loglikelihood", "request": {"context": context, "continuation": continuation}},
-            {"request_type": "loglikelihood_rolling", "request": {"context": TEXTS[1]}},
-        ])
-        whole = len(self.tokenizer.encode(context + continuation, add_special_tokens=False).ids) + 1
-        rolling = len(self.tokenizer.encode(TEXTS[1], add_special_tokens=False).ids) + 1
-        counts = frame.count_tokens(directory, self.tokenizer_path, context=8)
-        self.assertEqual(counts, {"piqa:rc:bpb": {"requests": 2, "tokens": min(whole, 9) - 1 + rolling}})
 
-    @unittest.skipUnless(HAS_TRANSFORMERS, "olmes's tokenizer needs transformers")
-    def test_refuses_requests_that_a_bpb_suite_does_not_make(self):
-        directory = self.write_requests([{"request_type": "generate_until", "request": {"context": "x"}}])
+class ScoredRequestTest(unittest.TestCase):
+    def test_takes_the_choice_at_each_questions_label_and_leaves_out_the_ones_without_it(self):
+        scored = frame.scored_requests(multiple_choice([2, 0]))
+        self.assertEqual([r["request"]["continuation"] for r in scored], [" choice 0-2", " choice 1-0"])
+
+    def test_takes_the_only_request_of_a_question_whose_label_is_not_a_number(self):
+        requests = [request(0, 0, "4"), request(1, 0, None), request(2, 0, ["a", "b"])]
+        self.assertEqual(frame.scored_requests(requests), requests)
+
+    def test_refuses_requests_without_their_question_in_another_order(self):
+        requests = multiple_choice([1])
+        requests[3:] = requests[3:][::-1]
         with self.assertRaises(ValueError):
-            frame.count_tokens(directory, self.tokenizer_path)
+            frame.scored_requests(requests)
 
 
-def small_model(vocabulary):
+class EncodeTest(FrameTest):
+    def test_moves_the_contexts_trailing_spaces_to_the_answer_after_the_bos_token(self):
+        context, answer = "The cat sat on the", "mat."
+        [(tokens, length)] = frame.encode_answers(self.tokenizer_path, [{"context": context + " ", "continuation": answer}])
+        whole = self.encode(context + " " + answer)
+        before = self.encode(context)
+        self.assertEqual(tokens.tolist(), [self.bos, *before, *whole[len(before):]])
+        self.assertEqual(length, len(whole) - len(before))
+
+    def test_keeps_one_token_more_than_the_length_from_the_end_of_a_row(self):
+        context, answer = TEXTS[0], " " + TEXTS[1]
+        [(tokens, length)] = frame.encode_answers(self.tokenizer_path, [{"context": context, "continuation": answer}],
+                                                  length=20)
+        before, whole = self.encode(context), self.encode(context + answer)
+        self.assertEqual(tokens.tolist(), [self.bos, *before, *whole[len(before):]][-21:])
+        self.assertEqual(length, len(whole) - len(before))
+
+    def test_refuses_an_answer_longer_than_the_length(self):
+        with self.assertRaises(ValueError):
+            frame.encode_answers(self.tokenizer_path, [{"context": "A", "continuation": " " + TEXTS[1]}], length=3)
+
+    @unittest.skipUnless(HAS_OLMES, "needs olmes")
+    def test_makes_the_rows_that_olmes_wrapper_makes(self):
+        import transformers
+        from lm_eval.api.model import TemplateLM
+        from oe_eval.models.eleuther_huggingface import HFLM_Verbose
+
+        tokenizer = transformers.PreTrainedTokenizerFast(tokenizer_object=self.tokenizer, bos_token=BOS)
+        wrapper = types.SimpleNamespace(tokenizer=tokenizer, add_bos_token=True,
+                                        AUTO_MODEL_CLASS=transformers.AutoModelForCausalLM)
+        wrapper.tok_encode = functools.partial(HFLM_Verbose.tok_encode, wrapper)
+        requests = [{"context": TEXTS[k] + "  ", "continuation": TEXTS[k + 1][:k + 3]} for k in range(10)]
+        requests += [{"context": "Question: what?\nAnswer:", "continuation": " café"}]
+        for (tokens, length), r in zip(frame.encode_answers(self.tokenizer_path, requests, length=16), requests):
+            context, answer = TemplateLM._encode_pair(wrapper, r["context"], r["continuation"])
+            self.assertEqual(tokens.tolist(), (context + answer)[-17:])
+            self.assertEqual(length, len(answer))
+
+
+def small_model(vocabulary, block_size=8):
     torch.manual_seed(0)
-    return GPT(GPTConfig(block_size=8, vocab_size=vocabulary, n_layer=1, n_head=2, n_embd=16, bias=False,
-                         rotary=True))
+    return GPT(GPTConfig(block_size=block_size, vocab_size=vocabulary, n_layer=1, n_head=2, n_embd=16, bias=False,
+                         rotary=True)).eval()
 
 
-@unittest.skipUnless(HAS_TRANSFORMERS, "olmes's wrapper needs transformers")
-class OlmesModelTest(unittest.TestCase):
+class WindowTest(unittest.TestCase):
+    def test_reads_a_row_within_the_context_whole(self):
+        self.assertEqual(frame.answer_windows(6, 2, 8), [(0, 6, 4)])
+
+    def test_reads_a_longer_row_in_windows_that_end_at_its_end_and_step_back_by_half(self):
+        self.assertEqual(frame.answer_windows(11, 11, 8), [(3, 11, 7), (0, 7, 0)])
+        self.assertEqual(frame.answer_windows(20, 14, 8), [(12, 20, 16), (8, 16, 12), (4, 12, 8), (0, 8, 6)])
+
+    def test_reads_only_the_windows_that_reach_the_answer(self):
+        self.assertEqual(frame.answer_windows(11, 4, 8), [(3, 11, 7)])
+
+
+class LogLikelihoodTest(unittest.TestCase):
     PAD = 0
 
     def setUp(self):
         self.network = small_model(300)  # a context of 8
-        self.model = frame.OlmesModel(self.network, self.PAD)
 
-    def alone(self, row):
-        row = row.contiguous()
-        return self.network(row, row)[0]
+    def expected(self, tokens, answer):
+        """The answer's log-likelihood, each prediction read in its window alone."""
+        total = 0.0
+        for start, end, first in frame.answer_windows(len(tokens) - 1, answer, 8):
+            row = tokens[None, start:end]
+            logits = self.network(row, row)[0][0].log_softmax(-1)
+            total += sum(logits[p - start, tokens[p + 1]].item() for p in range(first, end))
+        return total
 
-    def test_gives_the_logits_of_every_position_as_a_causal_language_model(self):
-        tokens = torch.randint(1, 300, (3, 6), generator=torch.Generator().manual_seed(1))
-        self.assertTrue(torch.allclose(self.model(tokens).logits, self.alone(tokens)))
-        self.assertEqual(self.model.config.model_type, "gpt2")
-        self.assertEqual(self.model.device, torch.device("cpu"))
+    def test_sums_the_log_softmax_of_the_answers_tokens(self):
+        generator = torch.Generator().manual_seed(1)
+        rows = [(torch.randint(1, 300, (n,), generator=generator), answer) for n, answer in ((7, 3), (12, 9), (20, 2))]
+        totals = frame.answer_log_likelihoods(self.network, rows, self.PAD)
+        for (tokens, answer), total in zip(rows, totals):
+            self.assertAlmostEqual(total, self.expected(tokens, answer), places=4)
 
-    def test_reads_a_longer_row_in_windows_that_end_at_its_end_and_step_back_by_half(self):
-        row = torch.randint(1, 300, (1, 11), generator=torch.Generator().manual_seed(1))
-        logits = self.model(row).logits
-        self.assertEqual(logits.shape, (1, 11, 300))
-        # the last half of a context from the window that ends with the row, the rest from the one at the start
-        self.assertTrue(torch.allclose(logits[:, 7:], self.alone(row[:, 3:])[:, 4:], atol=1e-5))
-        self.assertTrue(torch.allclose(logits[:, :7], self.alone(row[:, :8])[:, :7], atol=1e-5))
-
-    def test_reads_only_the_windows_that_reach_the_longest_answer(self):
-        row = torch.randint(1, 300, (1, 11), generator=torch.Generator().manual_seed(1))
-        self.model.answer_tokens = 4
-        logits = self.model(row).logits
-        self.assertTrue(torch.allclose(logits[:, 7:], self.alone(row[:, 3:])[:, 4:], atol=1e-5))
-        self.assertEqual(logits[:, :7].abs().sum().item(), 0.0)
-
-    def test_reads_a_row_by_its_own_length_whatever_rows_share_its_batch(self):
-        long_row = torch.randint(1, 300, (12,), generator=torch.Generator().manual_seed(1))
-        padded_long = torch.cat([long_row[:10], torch.full((2,), self.PAD)])
-        short = torch.cat([long_row[:5], torch.full((7,), self.PAD)])
-        logits = self.model(torch.stack([long_row, padded_long, short])).logits
-        self.assertTrue(torch.allclose(logits[1, 6:10], self.alone(padded_long[None, 2:10])[0, 4:], atol=1e-5))
-        self.assertTrue(torch.allclose(logits[2, :5], self.alone(short[None, :5])[0], atol=1e-5))
+    def test_gives_each_answer_the_same_whatever_rows_share_its_batch(self):
+        generator = torch.Generator().manual_seed(2)
+        rows = [(torch.randint(1, 300, (n,), generator=generator), 2) for n in (4, 6, 9, 13)]
+        together = frame.answer_log_likelihoods(self.network, rows, self.PAD, batch_tokens=64)
+        alone = [frame.answer_log_likelihoods(self.network, [row], self.PAD)[0] for row in rows]
+        for a, b in zip(together, alone):
+            self.assertAlmostEqual(a, b, places=4)
 
 
-class ShareTest(FrameTest):
-    def test_splits_the_tasks_into_shares_of_about_equal_requests(self):
-        requests = self.directory / "requests"
-        requests.mkdir()
-        tasks = []
-        for alias, size in (("a", 900), ("b", 500), ("c", 400), ("d", 300), ("e", 200)):
-            (requests / f"{alias}.jsonl").write_text("x" * size)
-            tasks.append(json.dumps({"task_name": alias, "metadata": {"alias": alias}}))
-        shares = frame.task_shares(tasks, requests, 2)
-        aliases = [sorted(json.loads(task)["metadata"]["alias"] for task in share) for share in shares]
-        # largest first, each to the share with the fewest so far: 900+300 and 500+400+200
-        self.assertEqual(sorted(aliases), [["a", "d"], ["b", "c", "e"]])
+class ScoreTest(FrameTest):
+    def write_answers(self, tasks, groups):
+        directory = self.directory / "answers"
+        directory.mkdir()
+        for name, answers in tasks.items():
+            (directory / f"{name}.jsonl").write_text("".join(json.dumps(answer) + "\n" for answer in answers))
+        (directory / "suites.json").write_text(json.dumps(groups))
+        return directory
+
+    def test_scores_a_task_by_the_mean_bits_per_byte_of_its_answers(self):
+        answers = [{"doc_id": 0, "context": TEXTS[0], "continuation": " café"},
+                   {"doc_id": 1, "context": TEXTS[1], "continuation": " au lait"}]
+        directory = self.write_answers({"task": answers}, {})
+        network = small_model(300, block_size=64)
+        rows = frame.encode_answers(self.tokenizer_path, answers)
+        totals = frame.answer_log_likelihoods(network, rows, self.bos)
+        bits = [-frame.LOG_2_OF_E * total / len(a["continuation"].encode("utf-8")) for total, a in zip(totals, answers)]
+        scores = frame.task_scores(network, self.tokenizer_path, directory)
+        self.assertAlmostEqual(scores["task"], sum(bits) / 2, places=6)
+
+    def test_averages_each_suites_members_a_group_counting_as_one(self):
+        qa, math_, code = frame.OLMES_SUITES
+        groups = {qa: ["a", "group"], "group": ["b", "c", "d"], math_: ["e"], code: ["f", "g"]}
+        directory = self.write_answers({}, groups)
+        tasks = {"a": 1.0, "b": 2.0, "c": 3.0, "d": 7.0, "e": 0.5, "f": 1.0, "g": 2.0}
+        self.assertEqual(frame.suite_scores(tasks, directory), {qa: 2.5, math_: 0.5, code: 1.5})
+
+    def test_reads_the_rows_kept_for_its_tokenizer_and_encodes_them_for_another(self):
+        answers = [{"doc_id": k, "context": TEXTS[k], "continuation": " " + TEXTS[k + 1][:k + 2]} for k in range(4)]
+        directory = self.write_answers({"task": answers}, {})
+        self.assertEqual(frame.make_rows(directory, self.tokenizer_path), 4)
+        other = self.directory / "other.json"
+        train_tokenizer(iter(TEXTS[::-1]), 280).save(str(other))
+        for tokenizer in (self.tokenizer_path, other):
+            rows = frame.answer_rows(directory, tokenizer, answers)
+            encoded = frame.encode_answers(tokenizer, answers)
+            self.assertEqual([(t.tolist(), a) for t, a in rows], [(t.tolist(), a) for t, a in encoded])
+
+    def test_counts_the_tokens_that_the_model_reads_in_its_windows(self):
+        answers = [{"doc_id": 0, "context": TEXTS[0], "continuation": " " + TEXTS[1]}]
+        directory = self.write_answers({"task": answers}, {})
+        [(tokens, length)] = frame.encode_answers(self.tokenizer_path, answers)
+        windows = frame.answer_windows(len(tokens) - 1, length, 8)
+        counts = frame.count_tokens(directory, self.tokenizer_path, context=8)
+        self.assertEqual(counts, {"task": {"answers": 1, "tokens": sum(end - start for start, end, _ in windows)}})
 
 
-@unittest.skipUnless(importlib.util.find_spec("oe_eval") is not None, "needs olmes")
-class AverageTest(unittest.TestCase):
-    def task(self, alias, bpb, instances=10):
-        return {"task_name": alias, "task_idx": 0, "num_instances": instances, "metrics": {"primary_score": bpb},
-                "task_config": {"metadata": {"alias": alias}}, "model_hash": "", "model_config": {},
-                "compute_config": {}, "processing_time": 0, "current_date": "", "beaker_info": {}}
+@unittest.skipUnless(HAS_OLMES, "needs olmes")
+class OlmesTest(unittest.TestCase):
+    def test_scores_a_task_as_olmes_scores_it_from_every_request(self):
+        from oe_eval.metrics.metric import MCAccuracy
 
-    def test_averages_arc_easy_and_challenge_as_one_member_of_the_qa_suite(self):
-        from oe_eval.configs.task_suites import TASK_SUITE_CONFIGS
+        rng = random.Random(0)
+        for requests, unconditioned in ((multiple_choice([2, 0, 1, 2]), True),
+                                        (multiple_choice([1, 0], choices=2, unconditioned=False), False),
+                                        ([request(k, 0, "gold", " ü" * (k + 1)) for k in range(3)], False)):
+            results = [{**r, "model_resps": {"sum_logits": -rng.uniform(1, 30), "num_tokens": 3}} for r in requests]
+            metric = MCAccuracy(**({"uncond_docid_offset": frame.UNCONDITIONED} if unconditioned else {}))
+            metric.compute_for_docs([dict(result, model_resps=dict(result["model_resps"])) for result in results])
+            expected = metric.aggregate_to_task("bits_per_byte_corr")["primary_score"]
+            logits = {id(r): result["model_resps"]["sum_logits"] for r, result in zip(requests, results)}
+            bits = [-frame.LOG_2_OF_E * logits[id(r)] / len(r["request"]["continuation"].encode("utf-8"))
+                    for r in frame.scored_requests(requests)]
+            self.assertAlmostEqual(sum(bits) / len(bits), expected, places=12)
+
+    def test_averages_the_suites_as_olmes_aggregates_them(self):
         from oe_eval.tasks.aggregate_tasks import add_aggregate_tasks
 
-        frame.average_arc()
-        tasks = [self.task("arc_easy:rc:bpb::olmes:full", 1.0), self.task("arc_challenge:rc:bpb::olmes:full", 2.0)]
-        groups = {task["task_name"]: task for task in add_aggregate_tasks(tasks)}
-        self.assertAlmostEqual(groups["arc:rc:bpb::olmes:full"]["metrics"]["primary_score"], 1.5)
-        self.assertIn("arc:rc:bpb::olmes:full", TASK_SUITE_CONFIGS["olmo3:base_easy:qa_bpb"]["tasks"])
+        groups = frame.suite_groups()
+        leaves = sorted({m for members in groups.values() for m in members if m not in groups})
+        rng = random.Random(0)
+        tasks = {name: rng.uniform(0.5, 3.0) for name in leaves}
+        metrics = [{"task_name": name, "task_idx": k, "num_instances": rng.randint(10, 1000),
+                    "metrics": {"primary_score": score}, "task_config": {"metadata": {"alias": name}},
+                    "model_hash": "", "model_config": {}, "compute_config": {}, "processing_time": 0,
+                    "current_date": "", "beaker_info": {}} for k, (name, score) in enumerate(tasks.items())]
+        aggregated = {entry["task_name"]: entry["metrics"]["primary_score"] for entry in add_aggregate_tasks(metrics)}
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "suites.json").write_text(json.dumps(groups))
+            for suite, score in frame.suite_scores(tasks, directory).items():
+                self.assertAlmostEqual(score, aggregated[suite], places=12)
+        self.assertEqual(len(leaves), 109)
+
+    def test_averages_arc_easy_and_challenge_as_one_member_of_the_qa_suite(self):
+        groups = frame.suite_groups()
+        self.assertEqual(groups["arc:rc:bpb::olmes:full"],
+                         ["arc_easy:rc:bpb::olmes:full", "arc_challenge:rc:bpb::olmes:full"])
+        self.assertIn("arc:rc:bpb::olmes:full", groups["olmo3:base_easy:qa_bpb"])
 
 
 @unittest.skipUnless(importlib.util.find_spec("datasets") is not None, "needs datasets")
@@ -188,7 +285,7 @@ class ValidationTest(FrameTest):
 
         data = self.directory / "data" / "tiny"
         data.mkdir(parents=True)
-        tokens = [token for text in TEXTS for token in [self.bos, *self.tokenizer.encode(text, add_special_tokens=False).ids]]
+        tokens = [token for text in TEXTS for token in [self.bos, *self.encode(text)]]
         np.array(tokens, dtype=np.uint16).tofile(data / "val.bin")
         self.tokenizer.save(str(data / "tokenizer.json"))
         run = self.directory / "run"
