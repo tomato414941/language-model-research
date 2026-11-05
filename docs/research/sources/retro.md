@@ -23,7 +23,7 @@ BPB values. From left to right, 172 million, 425 million, 1.5 billion and 7.5 bi
 - DB size (smallest model, C4, baseline 0.98): 0.97 at 2 billion and 4 billion, 0.96 at 9 billion–36 billion, 0.95 at 90 billion, 0.94 at 180 billion, 0.92 at 360 billion, 0.88 at 900 billion and 0.82 at 1.75 trillion.
 - Retrieving more neighbors at evaluation helps up to 10 for the smallest model and up to 40 for the largest, and hurts beyond that.
 - With retrieval turned off, it is nearly the same as the baseline.
-- The Pile: the abstract says it is "comparable to GPT-3 and Jurassic-1, with 25× fewer parameters". Counting the table's 16 entries, the 7.5-billion-parameter RETRO beats Jurassic-1 (178 billion) on 10 and Gopher (280 billion) on 9.
+- The Pile: the abstract says it "obtains comparable performance to GPT-3 and Jurassic-1 on the Pile, despite using 25× fewer parameters". Counting the table's 16 entries, the 7.5-billion-parameter RETRO beats Jurassic-1 (178 billion) on 10 and Gopher (280 billion) on 9.
 - Question answering (Natural Questions): 30.4% without retrieval, RETRO 45.5%, FiD 51.4%.
 - Retrofitting: the weights are frozen, and only the added parts are trained, on 3% of the pretraining tokens. On C4 it approaches the value of training from scratch. On Curation Corpus the smallest model's perplexity stays at about 20.7, the same as the baseline, while training from scratch gives about 18 (read from Figure 5).
 - Small data: trained on Wikitext103 alone, RETRO from scratch overfit and was worse than the baseline. Retrofitted onto the baseline, retrieving from the 4-billion-token Wikipedia took the perplexity from 21.53 to 18.46.

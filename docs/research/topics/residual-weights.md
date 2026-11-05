@@ -19,7 +19,7 @@ The differences are our own calculations.
 - **The start of training:** in a trial with the second bundle's shape at a batch about 1/500 of the real one, the version with the weights had its loss jump at the 4th update (9.36 against 8.04) and had nearly caught up by around the 30th ([the check's record](../experiments/second-bundle-code-check.md)). It is not a comparison of quality.
 - **Learned values:** in [a post that examined one training run](../sources/modded-nanogpt-lambdas.md), the x0 weights are large in many layers. It is not a with-and-without comparison.
 
-**Adoption:** it is used by nanochat, autoresearch and modded-nanogpt (code of the same lineage) and in Marin's comparison; no adoption in a large model has been found. modded-nanogpt's optimization track leaves it out as an "unusual component".
+**Adoption:** it is used by nanochat, autoresearch and modded-nanogpt (code of the same lineage) and in Marin's comparison; no adoption in a large model has been found. modded-nanogpt's optimization track leaves it out as one of the "non-standard neural network parameters".
 
 **Other forms of a similar idea:**
 

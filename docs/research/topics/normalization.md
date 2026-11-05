@@ -3,7 +3,7 @@
 The computation that evens out the size of each layer's input. The baseline, nanoGPT, uses LayerNorm, with learned weights (scales). The candidate forms and computations are these three:
 
 - LayerNorm: subtracts the mean and divides by the standard deviation.
-- RMSNorm: does not subtract the mean, and divides by the mean square. Slightly lighter.
+- RMSNorm: does not subtract the mean, and divides by the root mean square. Slightly lighter.
 - For each, with or without learned weights. In the first bundle these weights number 13,440 in all, and hardly matter for compute.
 
 ## What is known

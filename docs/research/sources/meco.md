@@ -19,7 +19,7 @@ For the first 90% of training, the URL's domain (for example, `en.wikipedia.org`
 | 3 billion | 59.2 | 59.8 |
 | 8 billion | 57.8 | 58.4 |
 
-- Mean over 10 tasks (Table 17). MeCo at 1.6 billion matches the plain model trained on 240 billion tokens (56.7), which is the basis for "33% less data needed" (Table 1).
+- Mean over 10 tasks (Table 17). MeCo at 1.6 billion matches the plain model trained on 240 billion tokens (56.7), which is the basis for "33% less data" (Table 1).
 - Perplexity at 1.6 billion is 13.2 for plain and 13.3 for MeCo (Table 1). The paper says perplexity does not correlate with the downstream scores.
 - The authors say the gain appears larger for larger models, but the trend is inconsistent.
 
