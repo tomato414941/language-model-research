@@ -16,7 +16,8 @@ attention = 'fa2'
 stream_bfloat16 = True
 # The model compiles its parts itself (compile_main), since train.py's compile cannot run through Mamba-2's kernels.
 compile = False
-# The routing begins a chunk at about every other byte early on, which passes of 32 rows leave room for.
+# On an H100 with a chunk at every 6 bytes, passes of 64 and 128 rows were only 1.3% and 2.6% faster than 32, and
+# 64 ran out of memory in the ninth update on FineWeb, while the routing still began many chunks.
 batch_size = 32
 gradient_accumulation_steps = 16
 

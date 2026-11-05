@@ -5,10 +5,10 @@
 #   before-32x16     the version in before/, in its passes of 32 rows
 #   unfused-32x16    this version with Mamba-2 on its unfused path, as before
 #   fused-ROWSxN     this version, in each of PASSES
-# and for the fastest of those: eager-* with nothing compiled (or, if the compiled model fails, every pass that way),
-# profile-*, chunks3-* with a chunk at every 3 bytes and chunks2-* at every 2, from the fastest pass down to the first
-# that fits; then the second bundle on random tokens, and last fineweb-*: 200 updates on the BPE dataset's bytes, with
-# the routing's own chunks, in the pass that fitted chunks of 2 bytes.
+# and then in the config's passes of 32 rows: eager-32x16 with nothing compiled (which every later run takes too if
+# the compiled model fails), profile-32x16, chunks3-32x16 and chunks2-32x16 with a chunk at every 3 and 2 bytes, the
+# second bundle on random tokens, and last fineweb-32x16: 200 updates on the BPE dataset's bytes with the routing's
+# own chunks.
 # Usage: [PASSES="32x16 64x8 128x4"] bash h-net/speed.sh
 set -uo pipefail
 export PYTHONUNBUFFERED=1
@@ -64,54 +64,23 @@ if [ -d before ]; then
     DIR=before UPDATES=12 time_way before-32x16 --profile=10:11 $hnet $(pass_options 32x16)
 fi
 UPDATES=12 time_way unfused-32x16 --unfused $hnet $(pass_options 32x16)
-# The fastest of PREFIX-ROWSxN over PASSES that finished, or nothing.
-fastest() {
-    python - "$1" "${passes[@]}" <<'PY'
-import json, sys
-prefix, timed = sys.argv[1], {}
-for way in sys.argv[2:]:
-    try:
-        seconds = json.load(open(f"results/speed-{prefix}-{way}.json"))["seconds_per_update"]
-    except FileNotFoundError:
-        continue
-    if seconds is not None:
-        timed[way] = seconds
-print(min(timed, key=timed.get) if timed else "")
-PY
-}
-
 for pass in "${passes[@]}"; do
     time_way "fused-$pass" $hnet $(pass_options "$pass")
 done
-best=$(fastest fused)
+train=$(pass_options 32x16)
+time_way eager-32x16 $hnet $train --compile_main=False
 compiled=""
-if [ -n "$best" ]; then
-    time_way "eager-$best" $hnet $(pass_options "$best") --compile_main=False
-else
-    echo "the compiled model did not run; timing it uncompiled"
-    compiled="--compile_main=False"
-    for pass in "${passes[@]}"; do
-        time_way "eager-$pass" $hnet $(pass_options "$pass") $compiled
-    done
-    best=$(fastest eager)
-    [ -n "$best" ] || { echo "the fused path did not run"; exit 1; }
-fi
-UPDATES=12 time_way "profile-$best" --profile=10:12 $hnet $(pass_options "$best") $compiled
-time_way "chunks3-$best" h-net/configs/hnet_mamba2.py --fixed_chunks=3 $(pass_options "$best") $compiled
-# Early in training the routing begins a chunk at about every other byte: the largest pass that holds that.
-fits=""
-for pass in $(printf '%s\n' "${passes[@]}" | sort -t x -k1,1nr); do
-    [ "${pass%x*}" -le "${best%x*}" ] || continue
-    time_way "chunks2-$pass" h-net/configs/hnet_mamba2.py --fixed_chunks=2 $(pass_options "$pass") $compiled
-    [ -f "results/speed-chunks2-$pass.json" ] && { fits=$pass; break; }
-done
+[ -f results/speed-fused-32x16.json ] || { echo "the compiled model did not run; going on uncompiled"; compiled="--compile_main=False"; }
+UPDATES=12 time_way profile-32x16 --profile=10:12 $hnet $train $compiled
+time_way chunks3-32x16 h-net/configs/hnet_mamba2.py --fixed_chunks=3 $train $compiled
+time_way chunks2-32x16 h-net/configs/hnet_mamba2.py --fixed_chunks=2 $train $compiled
 time_way bundle2 configs/bundle2.py --dataset=tokens --attention=fa2 --stream_bfloat16=True
 
-if [ -f data/fineweb/train.bin ] && [ -n "$fits" ]; then
+if [ -f data/fineweb/train.bin ]; then
     stamp bytes
     mv data/hnet-bytes data/hnet-random
     python h-net/bytes_from_tokens.py data/fineweb data/hnet-bytes || exit 1
-    UPDATES=200 time_way "fineweb-$fits" h-net/configs/hnet_mamba2.py $(pass_options "$fits") $compiled
-    grep "^h-net:" "results/speed-fineweb-$fits.log"
+    UPDATES=200 time_way fineweb-32x16 h-net/configs/hnet_mamba2.py $train $compiled
+    grep "^h-net:" results/speed-fineweb-32x16.log
 fi
 stamp done

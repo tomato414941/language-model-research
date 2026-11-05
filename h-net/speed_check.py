@@ -16,6 +16,7 @@ Usage:
   python h-net/speed_check.py run OUTPUT [--profile=FIRST:LAST] [--unfused] CONFIG [TRAIN_OPTION...]
 """
 
+import gzip
 import json
 import pickle
 import runpy
@@ -53,6 +54,22 @@ def write_data(directory, vocabulary=None):
     (directory / "tokenizer.json").write_text(json.dumps({"added_tokens": [{"id": bos, "content": "<|bos|>"}]}) + "\n")
     if vocabulary is None:
         (directory / "rows.json").write_text(json.dumps({"block_size": BLOCK_SIZE, "source": "random bytes"}) + "\n")
+
+
+def gpu_busy_seconds(trace):
+    """The time in which a kernel, copy or set ran on the GPU, from a chrome trace that torch.profiler wrote."""
+    with gzip.open(trace, "rt") as f:
+        events = json.load(f)["traceEvents"]
+    spans = sorted((event["ts"], event["ts"] + event["dur"]) for event in events
+                   if event.get("ph") == "X" and event.get("cat") in ("kernel", "gpu_memcpy", "gpu_memset"))
+    busy, start, end = 0.0, None, None
+    for begin, finish in spans:
+        if end is None or begin > end:
+            busy += 0.0 if end is None else end - start
+            start, end = begin, finish
+        else:
+            end = max(end, finish)
+    return (busy + (0.0 if end is None else end - start)) / 1e6
 
 
 def use_unfused_mamba2():
@@ -94,9 +111,10 @@ class Watch:
             self.profiler.stop()
             averages = self.profiler.key_averages()
             self.table = averages.table(sort_by="self_device_time_total", row_limit=60, max_name_column_width=90)
-            kernels = sum(event.self_device_time_total for event in averages) / 1e6
-            self.busy = {"wall_seconds": wall, "gpu_seconds": kernels, "updates": self.profile[1] - self.profile[0]}
-            self.profiler.export_chrome_trace(str(self.output.with_suffix(".trace.json.gz")))
+            trace = self.output.with_suffix(".trace.json.gz")
+            self.profiler.export_chrome_trace(str(trace))
+            self.busy = {"wall_seconds": wall, "gpu_busy_seconds": gpu_busy_seconds(trace),
+                         "updates": self.profile[1] - self.profile[0]}
         self.write()
 
     def write(self):
