@@ -6,12 +6,16 @@ begins, by how far each byte's vector turns from the one before it. The main net
 marks. A dechunking layer smooths the main network's outputs by the marks' probabilities and gives each byte the
 output of its chunk, and a decoder runs over the bytes and predicts the next one. These parts follow the authors'
 code (github.com/goombalab/hnet, MIT): the routing, the smoothing, the residual projection that starts at zero, the
-straight-through confidence, and the ratio loss with its weight of 0.03 and its target of 6 bytes per chunk.
+straight-through confidence, and the ratio loss with its weight of 0.03 and its target of 6 bytes per chunk. While
+chunks are finer than the target, the ratio loss's weight rises above 0.03, so that the main network's cost stays
+near the target's; the paper keeps it at 0.03.
 
 The encoder and decoder layers are Mamba-2 as in the paper, or Mamba-3 or Gated DeltaNet in their place; 'conv' is a
 causal convolution that runs without a GPU, for tests. The main network is the second bundle's: model.py's blocks
 with its norms, rotary positions and the x0 and resid weights. The chunks of all rows are packed into one sequence
-that attends only within each row, so that a row with fewer chunks costs less.
+that attends only within each row, so that a row with fewer chunks costs less. Finding the chunks is the one point
+in a pass that waits for the GPU. On a GPU the main network compiles as one graph for any number of chunks, and the
+steps between the outer layers' mixers, the routing and the prediction compile too.
 
 train.py trains it when a config names HNet as GPT and HNetConfig, with these fields set, as GPTConfig; see
 h-net/configs.
@@ -30,6 +34,11 @@ import torch.nn.functional as F
 
 from model import GPT, Block, GPTConfig, RMSNorm, make_norm
 
+try:
+    from torch.nn.attention.varlen import varlen_attn
+except ImportError:
+    varlen_attn = None
+
 BOS = 256  # the token that begins a document, after the 256 byte values
 SMOOTHING_BLOCK = 64
 REPORT_EVERY = 100  # training passes between reports of the bytes per chunk
@@ -44,8 +53,12 @@ class HNetConfig(GPTConfig):
     encoder_layers: int = 4
     decoder_layers: int = 4
     target_ratio: float = 6.0  # the bytes per chunk that the ratio loss aims for
-    ratio_weight: float = 0.03
-    compile_main: bool = True  # compile the main network's blocks, whose length changes with every batch
+    ratio_weight: float = 0.03  # the ratio loss's weight at the start, and its least
+    # How fast the log of the ratio loss's weight moves in training, per 512 rows and per unit of target_ratio times
+    # the share of bytes that begin a chunk, less one: up while chunks are finer than the target, and back down to
+    # ratio_weight while they are coarser. At most 1. Zero keeps the weight at ratio_weight, as the paper does.
+    ratio_weight_rate: float = 0.03
+    compile_main: bool = True  # on a GPU, compile the main network, the steps around the mixers and the prediction
     # Above zero, a chunk begins at every this many bytes, whatever the routing says. Only for timing: early in
     # training the routing begins a chunk at about every other byte, which a short timing would take as the cost.
     fixed_chunks: int = 0
@@ -115,15 +128,28 @@ def outer_mixer(kind, width, index):
     raise ValueError(f"unknown outer layer: {kind}")
 
 
+def normalized(x, dtype):
+    """An outer layer's pre-norm, in the type its mixer reads if one is given, as autocast would give it."""
+    x = F.rms_norm(x, (x.size(-1),))
+    return x if dtype is None else x.to(dtype)
+
+
+def added(x, y):
+    return x + y.float()
+
+
 class OuterLayer(nn.Module):
-    """A pre-norm residual layer over the bytes, its stream kept in float32 as the authors' blocks keep it."""
+    """A pre-norm residual layer over the bytes, its stream kept in float32 as the authors' blocks keep it. HNet sets
+    input_dtype when it trains in bfloat16, and on a GPU gives it compiled versions of the steps around the mixer."""
 
     def __init__(self, kind, width, index):
         super().__init__()
         self.mixer = outer_mixer(kind, width, index)
+        self.input_dtype = None
+        self.normalize, self.add = normalized, added
 
     def forward(self, x):
-        return x + self.mixer(F.rms_norm(x, (x.size(-1),))).float()
+        return self.add(x, self.mixer(self.normalize(x, self.input_dtype)))
 
 
 class STE(torch.autograd.Function):
@@ -147,11 +173,9 @@ def turn(x, cos, sin):
 
 
 def causal_within_rows(q, k, v, starts, longest):
-    """Causal attention within each row of a packed sequence; q, k and v are (tokens, heads, head size) and starts
-    holds each row's first token and, last, their number."""
+    """Causal attention within each row of a packed sequence; q, k and v are (tokens, heads, head size), starts
+    holds each row's first token and, last, their number, and no row is longer than `longest`."""
     if q.is_cuda:
-        from torch.nn.attention.varlen import varlen_attn
-
         # FlashAttention's variable-length kernel; (-1, 0) is the causal window.
         out = varlen_attn(q.bfloat16(), k.bfloat16(), v.bfloat16(), starts, starts, longest, longest,
                           window_size=(-1, 0))
@@ -223,6 +247,8 @@ class HNet(nn.Module):
         self.stream_dtype = None
         self.passes = 0
         self.selected = None  # the share of bytes that began a chunk in the last training pass, kept on its device
+        floor = math.log(config.ratio_weight) if config.ratio_weight > 0 else -math.inf
+        self.register_buffer("ratio_log_weight", torch.tensor(floor), persistent=False)
         if not config.separate_embeddings:
             self.transformer.wte.weight = self.lm_head.weight
 
@@ -251,13 +277,16 @@ class HNet(nn.Module):
             torch.nn.init.normal_(self.lm_head.weight, mean=0.0, std=0.001)
         else:
             torch.nn.init.normal_(self.lm_head.weight, mean=0.0, std=0.02)
-        # The attention kernel takes the longest row as a number, so it runs between the compiled parts. Each block
-        # compiles its own copy of them, more than torch.compile keeps by default.
-        self.project, self.finish = self._project, self._finish
+        self.route, self.main_network, self.predict = self._route, self._main_network, self._predict
         if config.compile_main and torch.cuda.is_available():
-            torch._dynamo.config.cache_size_limit = max(torch._dynamo.config.cache_size_limit, 8 * config.n_layer)
-            self.project = torch.compile(self._project, dynamic=True)
-            self.finish = torch.compile(self._finish, dynamic=True)
+            # The main network is one graph whatever the number of chunks, since the attention kernel is told the
+            # longest a row can be rather than the longest that this pass holds. The other parts keep their shapes.
+            self.route = torch.compile(self._route)
+            self.main_network = torch.compile(self._main_network, dynamic=True)
+            self.predict = torch.compile(self._predict)
+            steps = torch.compile(normalized), torch.compile(added)
+            for layer in (*self.encoder, *self.decoder):
+                layer.normalize, layer.add = steps
         print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
     @property
@@ -280,7 +309,10 @@ class HNet(nn.Module):
         raise ValueError("H-Net reads bytes, which a COUNT table does not count")
 
     def keep_stream_in(self, dtype):
+        """The main network's stream, and what the outer layers' mixers read; the outer stream stays in float32."""
         self.stream_dtype = dtype
+        for layer in (*self.encoder, *self.decoder):
+            layer.input_dtype = dtype
 
     def crop_block_size(self, block_size):
         raise ValueError("train it with the block size it was made for")
@@ -302,15 +334,16 @@ class HNet(nn.Module):
         flops = 6 * (outer + main / ratio) * self.config.block_size * fwdbwd_per_iter
         return flops / dt / 312e12
 
-    def routing(self, hidden):
-        """Each byte's probability of beginning a chunk, from the angle between its vector and the one before it.
-        A row's first byte always begins one."""
-        cosine = F.cosine_similarity(self.routing_query(hidden[:, :-1]).float(), self.routing_key(hidden[:, 1:]).float(),
-                                     dim=-1)
+    def _route(self, x):
+        """The encoder's normalized output, and each byte's probability of beginning a chunk, from the angle between
+        its vector and the one before it, and whether it begins one. A row's first byte always begins one."""
+        encoded = F.rms_norm(x, (x.size(-1),))
+        cosine = F.cosine_similarity(self.routing_query(encoded[:, :-1]).float(),
+                                     self.routing_key(encoded[:, 1:]).float(), dim=-1)
         probability = F.pad(((1 - cosine) / 2).clamp(0.0, 1.0), (1, 0), value=1.0)
-        return probability, probability > 0.5
+        return encoded, probability, probability > 0.5
 
-    def main_network(self, x, positions, starts, longest):
+    def _main_network(self, x, positions, starts, longest):
         """model.GPT's blocks with model.CausalSelfAttention's weights and steps, on packed chunks."""
         cos = sin = None
         if self.config.rotary:
@@ -320,8 +353,8 @@ class HNet(nn.Module):
         for layer, block in enumerate(self.transformer.h):
             if self.config.residual_weights:
                 x = self.resid_weights[layer] * x + self.x0_weights[layer] * x0
-            q, k, v = self.project(block, x, cos, sin)
-            x = self.finish(block, x, causal_within_rows(q, k, v, starts, longest))
+            q, k, v = self._project(block, x, cos, sin)
+            x = self._finish(block, x, causal_within_rows(q, k, v, starts, longest))
         return self.transformer.ln_f(x)
 
     @staticmethod
@@ -341,6 +374,24 @@ class HNet(nn.Module):
         x = x + block.attn.resid_dropout(block.attn.c_proj(y.reshape(x.shape)))
         return x + block.mlp(block.ln_2(x))
 
+    def _predict(self, x, targets=None):
+        """The logits of every position, and their loss against the targets if there are any."""
+        logits = self.lm_head(F.rms_norm(x, (x.size(-1),)))
+        if self.config.logit_softcap > 0:
+            cap = self.config.logit_softcap
+            logits = cap * torch.tanh(logits.float() / cap)
+        if targets is None:
+            return logits, None
+        return logits, F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1), ignore_index=-1)
+
+    def adjust_ratio_weight(self, selected, rows):
+        """Moves the ratio loss's weight by how far this pass's share of chunk starts was from the target's, on the
+        GPU, without waiting for it."""
+        rate = self.config.ratio_weight_rate * rows / 512
+        if rate and self.config.ratio_weight > 0:
+            moved = self.ratio_log_weight + rate * (self.config.target_ratio * selected - 1)
+            self.ratio_log_weight.copy_(moved.clamp(math.log(self.config.ratio_weight), 0.0))
+
     def forward(self, idx, targets=None):
         b, t = idx.size()
         assert t <= self.config.block_size, f"rows hold at most {self.config.block_size} bytes"
@@ -349,12 +400,12 @@ class HNet(nn.Module):
             x = self.input_norm(x)
         for layer in self.encoder:
             x = layer(x)
-        encoded = F.rms_norm(x, (x.size(-1),))
 
-        probability, boundary = self.routing(encoded)
+        encoded, probability, boundary = self.route(x)
         if self.config.fixed_chunks:
             boundary = (torch.arange(t, device=idx.device) % self.config.fixed_chunks == 0).expand(b, t)
-        # The chunks of every row, one row after another.
+        # The chunks of every row, one row after another. Their number sizes what follows, so finding them waits
+        # for the GPU; nothing else in the pass does.
         counts = boundary.sum(dim=1)
         starts = F.pad(counts.cumsum(0), (1, 0)).to(torch.int32)
         marks = boundary.reshape(-1).nonzero().squeeze(1)
@@ -365,7 +416,8 @@ class HNet(nn.Module):
             chunks = torch.cat([chunks, self.widening.to(chunks.dtype).expand(len(chunks), -1)], dim=-1)
         if self.stream_dtype is not None:
             chunks = chunks.to(self.stream_dtype)
-        out = self.main_network(chunks, positions, starts, int(counts.max()))[:, : self.config.outer_width]
+        # A row holds at most t chunks.
+        out = self.main_network(chunks, positions, starts, t)[:, : self.config.outer_width]
 
         smoothed = smooth(out, probability.reshape(-1)[marks], positions == 0)
         spread = smoothed[(starts[:-1, None] + within).reshape(-1)].view(b, t, -1)
@@ -375,27 +427,22 @@ class HNet(nn.Module):
         x = spread * STE.apply(confidence)[..., None] + residual
         for layer in self.decoder:
             x = layer(x)
-        x = F.rms_norm(x, (x.size(-1),))
 
-        logits = self.lm_head(x)
-        if self.config.logit_softcap > 0:
-            cap = self.config.logit_softcap
-            logits = cap * torch.tanh(logits.float() / cap)
-        loss = None
-        if targets is not None:
-            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1), ignore_index=-1)
-            selected = boundary.float().mean()
-            ratio = self.config.target_ratio
-            ratio_loss = ratio / (ratio - 1) * ((ratio - 1) * selected * probability.mean()
-                                                + (1 - selected) * (1 - probability.mean()))
-            loss = loss + self.config.ratio_weight * ratio_loss
-            if self.training:
-                self.selected = selected.detach()
-                self.passes += 1
-                if self.passes % REPORT_EVERY == 0:
-                    print(f"h-net: {self.passes} passes, {self.bytes_per_chunk:.2f} bytes per chunk", flush=True)
-        else:
-            logits = logits[:, [-1], :]
+        if targets is None:
+            return self._predict(x[:, [-1]])
+        logits, loss = self.predict(x, targets)
+        selected = boundary.float().mean()
+        ratio = self.config.target_ratio
+        ratio_loss = ratio / (ratio - 1) * ((ratio - 1) * selected * probability.mean()
+                                            + (1 - selected) * (1 - probability.mean()))
+        loss = loss + self.ratio_log_weight.exp() * ratio_loss
+        if self.training:
+            self.selected = selected.detach()
+            self.adjust_ratio_weight(self.selected, b)
+            self.passes += 1
+            if self.passes % REPORT_EVERY == 0:
+                print(f"h-net: {self.passes} passes, {self.bytes_per_chunk:.2f} bytes per chunk, ratio weight "
+                      f"{self.ratio_log_weight.exp().item():.4f}", flush=True)
         return logits, loss
 
 

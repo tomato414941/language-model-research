@@ -14,9 +14,9 @@ block_size = json.load(open('data/hnet-bytes/rows.json'))['block_size']
 value_embeddings = False  # its tables are by token, and the main network reads chunks
 attention = 'fa2'
 stream_bfloat16 = True
-compile = False  # the model compiles its main network's blocks, around the attention kernel, itself
-# The routing begins a chunk at about every other byte early on, and Mamba-2 without its fused path keeps about
-# twice the activations; a quarter of the bundle's rows per pass keeps both within an H100's memory.
+# The model compiles its parts itself (compile_main), since train.py's compile cannot run through Mamba-2's kernels.
+compile = False
+# The routing begins a chunk at about every other byte early on, which passes of 32 rows leave room for.
 batch_size = 32
 gradient_accumulation_steps = 16
 
@@ -25,9 +25,11 @@ encoder_layers = 4
 decoder_layers = 4
 target_ratio = 6.0
 ratio_weight = 0.03
+ratio_weight_rate = 0.03
+compile_main = True
 fixed_chunks = 0
 HNET_FIELDS = ('outer', 'outer_width', 'encoder_layers', 'decoder_layers', 'target_ratio', 'ratio_weight',
-               'fixed_chunks')
+               'ratio_weight_rate', 'compile_main', 'fixed_chunks')
 GPT = HNet
 
 

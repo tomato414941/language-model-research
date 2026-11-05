@@ -67,6 +67,37 @@ class HNetTest(unittest.TestCase):
             model(tokens, tokens)
         self.assertAlmostEqual(model.bytes_per_chunk, 30 / 8, places=5)
 
+    def test_raises_the_ratio_weight_in_training_up_to_one_while_chunks_are_finer_than_the_target(self):
+        model = small_model(fixed_chunks=2, ratio_weight_rate=100.0).train()
+        tokens = torch.randint(0, 256, (2, 30))
+        weights = []
+        with torch.no_grad():
+            for _ in range(20):
+                model(tokens, tokens)
+                weights.append(model.ratio_log_weight.exp().item())
+        self.assertGreater(weights[0], 0.03)
+        self.assertGreater(weights[1], weights[0])
+        self.assertAlmostEqual(weights[-1], 1.0, places=6)
+
+    def test_lowers_the_ratio_weight_to_its_start_while_chunks_are_coarser_than_the_target(self):
+        model = small_model(fixed_chunks=12, ratio_weight_rate=100.0).train()
+        model.ratio_log_weight.fill_(-1.0)
+        tokens = torch.randint(0, 256, (2, 30))
+        with torch.no_grad():
+            model(tokens, tokens)
+            lowered = model.ratio_log_weight.exp().item()
+            for _ in range(40):
+                model(tokens, tokens)
+        self.assertLess(lowered, torch.tensor(-1.0).exp().item())
+        self.assertAlmostEqual(model.ratio_log_weight.exp().item(), 0.03, places=6)
+
+    def test_keeps_the_ratio_weight_outside_training(self):
+        model = small_model(fixed_chunks=2, ratio_weight_rate=100.0).eval()
+        tokens = torch.randint(0, 256, (2, 30))
+        with torch.no_grad():
+            model(tokens, tokens)
+        self.assertAlmostEqual(model.ratio_log_weight.exp().item(), 0.03, places=6)
+
     def test_gives_the_main_networks_matrices_to_muon_and_the_byte_table_its_own_rate(self):
         model = small_model()
         optimizer = configure_muon(model, 0.04, 0.0044, embedding_lr=0.66)

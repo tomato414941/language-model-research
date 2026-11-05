@@ -2,9 +2,11 @@
 that it never touches a bundle's rental.
 
 Commands are rental.py's: offers [GPU], rent [GPU], send [HOST:DIRECTORY [PATH...]], start SCRIPT [ARGUMENT...],
-shell COMMAND, fetch, destroy, guard MINUTES; and send-data HOST:DIRECTORY DATASET..., which sends each dataset's
+shell COMMAND, fetch, destroy, guard MINUTES; send-data HOST:DIRECTORY DATASET..., which sends each dataset's
 meta.pkl, tokenizer.json and val.bin and then its train.bin, which takes its name only once all of it has come, so
-that run.sh, started while it is sent, can wait for it. The record and the fetched files go to out/h-net-rental.
+that run.sh, started while it is sent, can wait for it; and send-commit COMMIT DIRECTORY, which sends that commit's
+code to DIRECTORY inside the sent repository, so that an earlier version can be timed on the same machine. The
+record and the fetched files go to out/h-net-rental.
 """
 
 import os
@@ -32,6 +34,11 @@ def send_data(source, *datasets):
             raise SystemExit("naming train.bin failed")
 
 
+def send_commit(commit, directory):
+    there = f"{research.REMOTE}/{shlex.quote(directory)}"
+    research.stream(["git", "-C", str(research.REPOSITORY), "archive", commit], f"mkdir -p {there} && tar -x -C {there}")
+
+
 def main():
     command, *arguments = sys.argv[1:] or ["help"]
     if command == "help":
@@ -45,7 +52,8 @@ def main():
         return done.returncode
     actions = {"offers": research.show_offers, "rent": research.rent, "send": research.send, "start": research.start,
                "shell": research.shell, "fetch": research.fetch, "destroy": research.destroy,
-               "guard": lambda minutes: research.guard(int(minutes)), "send-data": send_data}
+               "guard": lambda minutes: research.guard(int(minutes)), "send-data": send_data,
+               "send-commit": send_commit}
     return actions[command](*arguments) or 0
 
 
