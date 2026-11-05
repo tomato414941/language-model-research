@@ -20,6 +20,10 @@ if [ "$used" -gt 1024 ]; then
 fi
 mkdir -p results models
 
+# Attention within documents goes through PyTorch's varlen attention on a GPU, which tests without one cannot reach.
+stamp check
+python attention_check.py documents
+
 stamp train
 python -u train.py --out_dir=out/run "$@" > results/train.log 2>&1
 cp out/run/summary.json out/run/core.json out/run/core.csv results/
