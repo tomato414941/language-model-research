@@ -18,6 +18,7 @@ import tempfile
 import time
 import urllib.request
 import zipfile
+from contextlib import nullcontext
 from decimal import Decimal
 
 import numpy as np
@@ -112,6 +113,17 @@ def prepare_core(core_dir=CORE_DIR):
     return verify_core_assets(core_dir)
 
 
+def _rank_and_world():
+    import torch.distributed as dist
+
+    return (dist.get_rank(), dist.get_world_size()) if dist.is_initialized() else (0, 1)
+
+
+def _print0(*arguments, **options):
+    if _rank_and_world()[0] == 0:
+        print(*arguments, **options)
+
+
 def _load_nanochat_core(core_dir):
     import yaml
 
@@ -127,7 +139,7 @@ def _load_nanochat_core(core_dir):
         tree = ast.parse(f.read(), filename=runner_path)
     function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "evaluate_core")
     namespace = dict(os=os, csv=csv, time=time, json=json, random=random, yaml=yaml,
-                     get_base_dir=lambda: core_dir, print0=print, evaluate_task=module.evaluate_task)
+                     get_base_dir=lambda: core_dir, print0=_print0, evaluate_task=module.evaluate_task)
     exec(compile(ast.Module(body=[function], type_ignores=[]), runner_path, "exec"), namespace)
     return namespace["evaluate_core"]
 
@@ -225,7 +237,23 @@ def token_bytes(tokenizer_path):
 @torch.no_grad()
 def evaluate_bpb(network, validation_path, tokenizer_path, device, rows_per_pass=64):
     """The reference validation BPB: rows of the model's context and one more token, each beginning at the head of
-    a document and none overlapping, over the whole validation file, as training reads its rows."""
+    a document and none overlapping, over the whole validation file, as training reads its rows. Processes under
+    torchrun share the rows."""
+    import torch.distributed as dist
+
+    rank, world = _rank_and_world()
+    nats, size = bpb_sums(network, validation_path, tokenizer_path, device, rank, world, rows_per_pass)
+    if world > 1:
+        # gloo, which lets the processes share a GPU, sums on the host
+        nats, size = nats.cpu(), size.cpu()
+        dist.all_reduce(nats)
+        dist.all_reduce(size)
+    return (nats / (math.log(2) * size)).item()
+
+
+@torch.no_grad()
+def bpb_sums(network, validation_path, tokenizer_path, device, rank=0, world=1, rows_per_pass=64):
+    """The nats of the counted targets and their bytes over every world-th row of evaluate_bpb, from rank."""
     from rows import bos_token
 
     network = getattr(network, "_orig_mod", network)
@@ -237,6 +265,7 @@ def evaluate_bpb(network, validation_path, tokenizer_path, device, rows_per_pass
         if head >= next_free and head + length <= len(data):
             starts.append(head)
             next_free = head + length - 1
+    starts = starts[rank::world]
     sizes = torch.from_numpy(token_bytes(tokenizer_path)).to(device)
     training = network.training
     network.eval()
@@ -255,8 +284,57 @@ def evaluate_bpb(network, validation_path, tokenizer_path, device, rows_per_pass
             size += counted.sum()
     finally:
         network.train(training)
-    return (nats / (math.log(2) * size)).item()
+    return nats, size.double()
+
+
+def evaluate_run(directory, device="cuda"):
+    """The evaluation of a run, from the last weights that train.py saved in directory: the reference validation
+    BPB, then CORE. Under torchrun, its processes share one GPU and split the rows and CORE's examples, as nanochat
+    splits them over several GPUs; each example is scored as it would be alone. The results go beside the weights."""
+    import torch.distributed as dist
+
+    from model import GPT, GPTConfig
+
+    began = time.time()
+    if "RANK" in os.environ:
+        # NCCL takes one GPU per process; gloo lets several share one.
+        dist.init_process_group("gloo")
+    rank, _ = _rank_and_world()
+    checkpoint = torch.load(os.path.join(directory, "ckpt.pt"), map_location="cpu")
+    network = GPT(GPTConfig(**checkpoint["model_args"]))
+    network.load_state_dict({key.removeprefix("_orig_mod."): value for key, value in checkpoint["model"].items()})
+    network.to(device)
+    if network.config.count:
+        from count_table import CountTable
+
+        network.use_count_table(CountTable(checkpoint["config"]["count_table"], device))
+    data_dir = os.path.join("data", checkpoint["config"]["dataset"])
+    tokenizer_path = os.path.join(data_dir, "tokenizer.json")
+    context = torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16) if "cuda" in device else nullcontext()
+    with context:
+        val_bpb = evaluate_bpb(network, os.path.join(data_dir, "val.bin"), tokenizer_path, device)
+        core = evaluate_core(network, CoreTokenizer(tokenizer_path), device)
+    if rank == 0:
+        save_core_results(core, directory)
+        path = os.path.join(directory, "summary.json")
+        with open(path) as f:
+            summary = json.load(f)
+        summary.update(val_bpb=val_bpb, core_metric=core["core_metric"], evaluation_seconds=time.time() - began)
+        with open(path, "w") as f:
+            json.dump(summary, f, indent=2)
+        print("---")
+        print(f"core_metric:      {core['core_metric']:.17g}")
+        print(f"val_bpb:          {val_bpb:.6f}")
+        print(f"evaluation_seconds: {summary['evaluation_seconds']:.1f}")
+    if dist.is_initialized():
+        dist.destroy_process_group()
+    return core, val_bpb
 
 
 if __name__ == "__main__":
-    print(f"CORE: all {len(prepare_core())} upstream tasks ready (nanochat {CORE_NANOCHAT_REVISION})")
+    import sys
+
+    if sys.argv[1:2] == ["evaluate"]:
+        evaluate_run(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else "cuda")
+    else:
+        print(f"CORE: all {len(prepare_core())} upstream tasks ready (nanochat {CORE_NANOCHAT_REVISION})")

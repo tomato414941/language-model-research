@@ -1,7 +1,7 @@
 #!/bin/bash
 # One run under frame.py on a rented machine, inside the rental's hour: the packages, training for the time budget
-# and the evaluation, which train.py ends with. The summary, CORE's results and the training log go to results/, and
-# the last weights, in 16 bits, to models/run. Each stage gets a stamp, so that its time can be read afterwards.
+# and frame.py's evaluation of the last weights. The summary, CORE's results and the logs go to results/, and the
+# last weights, in 16 bits, to models/run. Each stage gets a stamp, so that its time can be read afterwards.
 # Usage: run.sh [TRAIN_OPTION...]
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -26,6 +26,10 @@ python attention_check.py documents
 
 stamp train
 python -u train.py --out_dir=out/run "$@" > results/train.log 2>&1
+
+# CORE scores each example alone, which leaves the GPU mostly idle, so processes share it as nanochat shares GPUs.
+stamp evaluate
+torchrun --standalone --nproc_per_node=4 frame.py evaluate out/run > results/evaluate.log 2>&1
 cp out/run/summary.json out/run/core.json out/run/core.csv results/
 
 stamp keep

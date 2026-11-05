@@ -102,5 +102,59 @@ class ModelTest(FrameTest):
         self.assertAlmostEqual(bpb, expected, places=5)
 
 
+    def test_splits_the_rows_so_that_the_processes_together_count_them_all(self):
+        network = small_model(300)
+        documents = [self.tokenizer.encode(text, add_special_tokens=False).ids for text in TEXTS[:6]]
+        tokens = np.array([token for ids in documents for token in [self.bos, *ids]], dtype=np.uint16)
+        validation = self.directory / "val.bin"
+        tokens.tofile(validation)
+        whole = frame.bpb_sums(network, validation, self.tokenizer_path, "cpu")
+        parts = [frame.bpb_sums(network, validation, self.tokenizer_path, "cpu", rank, 2) for rank in range(2)]
+        self.assertAlmostEqual(sum(part[0].item() for part in parts), whole[0].item(), places=6)
+        self.assertEqual(sum(part[1].item() for part in parts), whole[1].item())
+
+
+CORE_RUN = """
+import os, sys
+sys.path.insert(0, os.getcwd())
+import torch
+import torch.distributed as dist
+import frame
+from model import GPT, GPTConfig
+if "RANK" in os.environ:
+    dist.init_process_group("gloo")
+tokenizer = frame.CoreTokenizer("data/fineweb/tokenizer.json")
+torch.manual_seed(0)
+network = GPT(GPTConfig(block_size=1024, vocab_size=8192, n_layer=1, n_head=2, n_embd=32, bias=False, rotary=True))
+network.eval()
+result = frame._load_nanochat_core(frame.CORE_DIR)(frame.CoreModel(network), tokenizer, "cpu", max_per_task=12)
+if not dist.is_initialized() or dist.get_rank() == 0:
+    print("RESULT", repr(result["core_metric"]))
+"""
+
+
+@unittest.skipUnless((Path(__file__).parent.parent / frame.CORE_DIR / "eval_bundle").exists()
+                     and (Path(__file__).parent.parent / frame.DATA_DIR / "tokenizer.json").exists(),
+                     "CORE's files and the tokenizer are not here")
+class SharedCoreTest(unittest.TestCase):
+    def run_core(self, *launcher):
+        import subprocess
+
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "core_run.py"
+            script.write_text(CORE_RUN)
+            done = subprocess.run([*launcher, str(script)], cwd=Path(__file__).parent.parent, capture_output=True,
+                                  text=True, timeout=1200)
+        self.assertEqual(done.returncode, 0, done.stderr[-1500:])
+        results = [line for line in done.stdout.splitlines() if line.startswith("RESULT")]
+        self.assertEqual(len(results), 1, done.stdout[-1500:])
+        return results[0]
+
+    def test_scores_the_same_when_processes_share_the_examples(self):
+        alone = self.run_core(sys.executable)
+        shared = self.run_core(sys.executable, "-m", "torch.distributed.run", "--standalone", "--nproc_per_node=2")
+        self.assertEqual(shared, alone)
+
+
 if __name__ == "__main__":
     unittest.main()

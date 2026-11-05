@@ -51,7 +51,7 @@ class CurrentBestTest(TinyRun, unittest.TestCase):
         return subprocess.run(
             [sys.executable, "-u", "train.py", "--device=cpu", "--dtype=float32", "--compile=False", "--n_layer=3",
              "--n_embd=32", "--n_head=1", "--block_size=16", "--batch_size=2", "--gradient_accumulation_steps=1",
-             "--count_table=", "--eval_iters=1", "--evaluate=False", f"--dataset={self.directory / 'data'}",
+             "--count_table=", "--eval_iters=1", f"--dataset={self.directory / 'data'}",
              f"--out_dir={self.out}", *options],
             cwd=REPOSITORY, capture_output=True, text=True, timeout=300,
         )

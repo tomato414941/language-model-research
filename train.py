@@ -31,7 +31,7 @@ from torch.distributed import init_process_group, destroy_process_group
 from averaging import WeightAverage, averaged_updates
 from count_table import CountTable
 from model import GPTConfig, GPT, choose_attention
-from frame import TIME_BUDGET, UNCOUNTED_UPDATES, CoreTokenizer, evaluate_bpb, evaluate_core, save_core_results
+from frame import TIME_BUDGET, UNCOUNTED_UPDATES
 from muon import configure_muon, set_schedule_at
 from rows import bos_token, document_heads, whole_row_heads
 
@@ -39,7 +39,8 @@ started = time.time()
 
 # -----------------------------------------------------------------------------
 # The defaults are research's current best (docs/research/README.md), the run that a candidate must beat. A candidate
-# changes them here, directly. The frame that every run follows, its data, training time and evaluation, is frame.py's.
+# changes them here, directly. The frame that every run follows, its data, training time and evaluation, is frame.py's;
+# `python frame.py evaluate OUT_DIR` evaluates the weights that a run leaves.
 # configs/ holds earlier runs, which set back what they need.
 # I/O
 out_dir = 'out/run'
@@ -63,7 +64,6 @@ gradient_accumulation_steps = 4 # used to simulate larger batch sizes
 batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
 time_budget = TIME_BUDGET # seconds of training, frame.py's; at or below zero, max_iters updates instead
-evaluate = True # does the run end with frame.py's evaluation, CORE and the reference validation BPB?
 # model
 n_layer = 10
 n_head = 5
@@ -470,25 +470,17 @@ while True:
     if iter_num > max_iters:
         break
 
-# frame.py's evaluation of the last weights, and a summary of the run beside them
+# a summary of the run beside its last weights, to which frame.py's evaluation adds its scores
 if master_process:
     summary = {'updates': iter_num, 'training_seconds': training_seconds, 'total_seconds': time.time() - started,
                'tokens': iter_num * tokens_per_iter}
-    if evaluate:
-        tokenizer_path = os.path.join(data_dir, 'tokenizer.json')
-        with ctx:
-            summary['val_bpb'] = evaluate_bpb(raw_model, os.path.join(data_dir, 'val.bin'), tokenizer_path, device)
-            core = evaluate_core(raw_model, CoreTokenizer(tokenizer_path), device)
-        save_core_results(core, out_dir)
-        summary['core_metric'] = core['core_metric']
-        summary['total_seconds'] = time.time() - started
     if device_type == 'cuda':
         summary['peak_vram_mb'] = torch.cuda.max_memory_allocated() / 1024 / 1024
     with open(os.path.join(out_dir, 'summary.json'), 'w') as f:
         json.dump(summary, f, indent=2)
     print("---")
     for key, value in summary.items():
-        print(f"{key + ':':<18}{value:.17g}" if key == 'core_metric' else f"{key + ':':<18}{value}")
+        print(f"{key + ':':<18}{value}")
 
 if ddp:
     destroy_process_group()

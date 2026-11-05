@@ -6,9 +6,8 @@
 dataset = 'fineweb'
 out_dir = 'out/baseline'
 # train.py's defaults are research's current best; this run, and those built on it, set back nanoGPT's.
-# They run their updates without frame.py's time budget or evaluation, as they did before the frame.
+# They run their updates without frame.py's time budget, as they did before the frame.
 time_budget = 0
-evaluate = False
 n_layer = 12
 n_head = 12
 n_embd = 768
