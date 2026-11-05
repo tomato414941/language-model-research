@@ -175,11 +175,12 @@ def turn(x, cos, sin):
 def causal_within_rows(q, k, v, starts, longest):
     """Causal attention within each row of a packed sequence; q, k and v are (tokens, heads, head size), starts
     holds each row's first token and, last, their number, and no row is longer than `longest`."""
-    if q.is_cuda:
+    if q.is_cuda and varlen_attn is not None:
         # FlashAttention's variable-length kernel; (-1, 0) is the causal window.
         out = varlen_attn(q.bfloat16(), k.bfloat16(), v.bfloat16(), starts, starts, longest, longest,
                           window_size=(-1, 0))
         return out.to(q.dtype)
+    # Row by row elsewhere, and where PyTorch has no varlen_attn (before 2.9), as in olmes's environment.
     rows = []
     for begin, end in zip(starts[:-1].tolist(), starts[1:].tolist()):
         row = [t[begin:end].transpose(0, 1)[None] for t in (q, k, v)]
