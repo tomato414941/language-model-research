@@ -1,6 +1,6 @@
 # H-Net around the second bundle's main network, on research's dataset as bytes_from_tokens.py writes it. A row holds
 # the text of 1,024 of the BPE model's tokens. The files beside this one name the encoder and decoder layers and then
-# read it; calibrate.py sets the updates that the baseline's cost buys.
+# read it. It trains for frame.py's time, as every run does.
 import json
 import sys
 
@@ -10,6 +10,10 @@ from hnet_model import HNet, HNetConfig  # noqa: E402
 
 out_dir = 'out/hnet'
 dataset = 'hnet-bytes'
+# The configs above set back a count of updates; frame.py's time ends the run instead, as train.py's defaults do.
+time_budget = TIME_BUDGET
+max_iters = 1000000
+eval_interval = 1000000
 block_size = json.load(open('data/hnet-bytes/rows.json'))['block_size']
 value_embeddings = False  # its tables are by token, and the main network reads chunks
 attention = 'fa2'
@@ -21,7 +25,9 @@ compile = False
 batch_size = 32
 gradient_accumulation_steps = 16
 
-outer_width = 512
+# At 512, wider beside the main network's 640 than the paper's 1,024 beside 1,536, Mamba-2's kernels took two thirds
+# of the GPU's time on an H100 and an update 4.2 times the second bundle's.
+outer_width = 256
 encoder_layers = 4
 decoder_layers = 4
 target_ratio = 6.0

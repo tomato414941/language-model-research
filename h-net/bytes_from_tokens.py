@@ -2,9 +2,10 @@
 same order, each token replaced by its bytes and BOS by the byte model's BOS (256), so that H-Net reads exactly what
 the BPE model reads.
 
-Writes OUTPUT/train.bin, val.bin, meta.pkl, a tokenizer.json that gives rows.py the BOS, and rows.json, whose
-block_size holds as many bytes as 1,024 of the source's tokens hold on average, so that a row of either model holds
-the same text.
+Writes OUTPUT/train.bin, val.bin, meta.pkl, rows.json, whose block_size holds as many bytes as 1,024 of the source's
+tokens hold on average, so that a row of either model holds the same text, and tokenizer.json: a tokenizer, in the
+format that prepare.py's is saved in, whose tokens are the 256 byte values and BOS, so that what reads a dataset's
+tokenizer (rows.py's BOS, frame.py's bytes per token) reads the bytes as they are.
 
 Usage: python h-net/bytes_from_tokens.py SOURCE OUTPUT, both directories as train.py reads them (data/<dataset>)
 """
@@ -39,6 +40,19 @@ def byte_alphabet():
             table[chr(256 + others)] = byte
             others += 1
     return table
+
+
+def byte_tokenizer():
+    """The 256 byte values as tokens numbered by their value, through the byte-level characters of byte_alphabet and
+    no merges, and BOS as the 257th."""
+    from tokenizers import AddedToken, decoders, models, pre_tokenizers
+
+    tokenizer = Tokenizer(models.BPE(vocab=dict(byte_alphabet()), merges=[]))
+    tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False, use_regex=False)
+    tokenizer.decoder = decoders.ByteLevel()
+    tokenizer.add_special_tokens([AddedToken(BOS, special=True)])
+    assert tokenizer.token_to_id(BOS) == BYTE_BOS
+    return tokenizer
 
 
 class TokenBytes:
@@ -81,7 +95,7 @@ def bytes_from_tokens(source, output):
     counts = {split: convert(source / f"{split}.bin", output / f"{split}.bin", table) for split in ("train", "val")}
     with (output / "meta.pkl").open("wb") as meta:
         pickle.dump({"vocab_size": BYTE_BOS + 1}, meta)
-    (output / "tokenizer.json").write_text(json.dumps({"added_tokens": [{"id": BYTE_BOS, "content": BOS}]}) + "\n")
+    byte_tokenizer().save(str(output / "tokenizer.json"))
     train = counts["train"]
     bytes_per_token = (train["bytes"] - train["documents"]) / (train["tokens"] - train["documents"])
     # A multiple of 256, which the outer layers' kernels split rows into.

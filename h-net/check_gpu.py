@@ -20,6 +20,7 @@ sys.path[:0] = [".", "h-net"]
 from hnet_model import OuterLayer, causal_within_rows, outer_mixer  # noqa: E402
 
 KINDS = ("mamba2", "mamba3", "gated_deltanet")
+WIDTH = 256  # h-net/configs/hnet.py's outer_width
 # The largest difference between the two paths, as a share of the size of what they compare: rounding to bfloat16
 # differs by well under 1%, and a wrong convolution by tens of percent.
 MOST_FUSED_DIFFERENCE = 0.05
@@ -27,8 +28,8 @@ MOST_FUSED_DIFFERENCE = 0.05
 
 def check_outer(kind):
     torch.manual_seed(0)
-    layer = OuterLayer(kind, 512, 0).cuda()
-    x = torch.randn(4, 3328, 512, device="cuda", requires_grad=True)
+    layer = OuterLayer(kind, WIDTH, 0).cuda()
+    x = torch.randn(4, 3328, WIDTH, device="cuda", requires_grad=True)
     torch.cuda.synchronize()
     began = time.perf_counter()
     with torch.autocast("cuda", dtype=torch.bfloat16):
@@ -61,10 +62,10 @@ def check_attention():
 def check_fused_mamba2():
     """The largest difference between the fused and unfused paths' outputs and gradients, each relative to its size."""
     torch.manual_seed(0)
-    fused = outer_mixer("mamba2", 512, 0).cuda()
+    fused = outer_mixer("mamba2", WIDTH, 0).cuda()
     unfused = copy.deepcopy(fused)
     unfused.use_mem_eff_path = False
-    x = torch.randn(2, 3840, 512, device="cuda")
+    x = torch.randn(2, 3840, WIDTH, device="cuda")
     results = []
     for layer in (fused, unfused):
         given = x.clone().requires_grad_()
