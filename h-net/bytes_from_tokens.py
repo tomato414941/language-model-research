@@ -5,7 +5,7 @@ the BPE model reads.
 Writes OUTPUT/train.bin, val.bin, meta.pkl, rows.json, whose block_size holds as many bytes as 1,024 of the source's
 tokens hold on average, so that a row of either model holds the same text, and tokenizer.json: a tokenizer, in the
 format that prepare.py's is saved in, whose tokens are the 256 byte values and BOS, so that what reads a dataset's
-tokenizer (rows.py's BOS, frame.py's bytes per token) reads the bytes as they are.
+tokenizer (rows.py's BOS, frame.py's tokenizer for olmes) reads the bytes as they are.
 
 Usage: python h-net/bytes_from_tokens.py SOURCE OUTPUT, both directories as train.py reads them (data/<dataset>)
 """

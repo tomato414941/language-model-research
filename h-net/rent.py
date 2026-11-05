@@ -4,9 +4,11 @@ that it never touches a bundle's rental.
 Commands are rental.py's: offers [GPU], rent [GPU], send [HOST:DIRECTORY [PATH...]], start SCRIPT [ARGUMENT...],
 shell COMMAND, fetch, destroy, guard MINUTES; send-data HOST:DIRECTORY DATASET..., which sends each dataset's
 meta.pkl, tokenizer.json and val.bin and then its train.bin, which takes its name only once all of it has come, so
-that run.sh, started while it is sent, can wait for it; and send-commit COMMIT DIRECTORY, which sends that commit's
-code to DIRECTORY inside the sent repository, so that an earlier version can be timed on the same machine. The
-record and the fetched files go to out/h-net-rental.
+that run.sh, started while it is sent, can wait for it; send-olmes HOST:DIRECTORY, which sends frame.py's requests
+(olmes-requests) and the Hugging Face cache of its tasks' data (hf) from that data directory and then marks them as
+come with data/olmes.sent; and send-commit COMMIT DIRECTORY, which sends that commit's code to DIRECTORY inside the
+sent repository: "." sends the code of a commit other than HEAD, and a directory an earlier version to be timed on
+the same machine. The record and the fetched files go to out/h-net-rental.
 """
 
 import os
@@ -34,6 +36,12 @@ def send_data(source, *datasets):
             raise SystemExit("naming train.bin failed")
 
 
+def send_olmes(source):
+    research.send_data(source, "olmes-requests", "hf")
+    if research.shell(f"touch {research.REMOTE}/data/olmes.sent"):
+        raise SystemExit("marking olmes's data failed")
+
+
 def send_commit(commit, directory):
     there = f"{research.REMOTE}/{shlex.quote(directory)}"
     research.stream(["git", "-C", str(research.REPOSITORY), "archive", commit], f"mkdir -p {there} && tar -x -C {there}")
@@ -53,7 +61,7 @@ def main():
     actions = {"offers": research.show_offers, "rent": research.rent, "send": research.send, "start": research.start,
                "shell": research.shell, "fetch": research.fetch, "destroy": research.destroy,
                "guard": lambda minutes: research.guard(int(minutes)), "send-data": send_data,
-               "send-commit": send_commit}
+               "send-olmes": send_olmes, "send-commit": send_commit}
     return actions[command](*arguments) or 0
 
 

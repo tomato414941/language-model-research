@@ -55,12 +55,6 @@ class BytesFromTokensTest(unittest.TestCase):
         self.assertEqual(tokenizer.decode(ids), text)
         self.assertEqual(tokenizer.get_vocab_size(), module.BYTE_BOS + 1)
 
-    def test_counts_one_byte_for_each_byte_token_and_none_for_bos(self):
-        from frame import token_bytes
-
-        sizes = token_bytes(self.output / "tokenizer.json")
-        self.assertEqual(sizes.tolist(), [1] * 256 + [0])
-
     def test_sizes_a_row_to_hold_the_text_of_1024_tokens(self):
         train = self.counts["train"]
         per_token = (train["bytes"] - train["documents"]) / (train["tokens"] - train["documents"])

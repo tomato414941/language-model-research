@@ -470,12 +470,13 @@ def byte_language_model(network, device, batch_tokens):
 
 
 def load(directory, device):
-    """A model that train.py saved in directory; h-net/configs/hnet.py saves the fields of HNetConfig with it."""
-    checkpoint = torch.load(f"{directory}/ckpt.pt", map_location=device)
+    """The model that train.py saved in directory, ready to read, and the run's configuration; h-net/configs/hnet.py
+    saves the fields of HNetConfig with the model's."""
+    checkpoint = torch.load(f"{directory}/ckpt.pt", map_location="cpu")
     fields = {**checkpoint["model_args"], "compile_main": False}
     known = set(inspect.signature(HNetConfig).parameters)
     network = HNet(HNetConfig(**{key: value for key, value in fields.items() if key in known}))
     network.load_state_dict({key.removeprefix("_orig_mod."): value for key, value in checkpoint["model"].items()})
     network.to(device)
     network.eval()
-    return network
+    return network, checkpoint.get("config", {})
