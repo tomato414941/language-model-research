@@ -57,7 +57,7 @@ class HNetConfig(GPTConfig):
     # How fast the log of the ratio loss's weight moves in training, per 512 rows and per unit of target_ratio times
     # the share of bytes that begin a chunk, less one: up while chunks are finer than the target, and back down to
     # ratio_weight while they are coarser. At most 1. Zero keeps the weight at ratio_weight, as the paper does.
-    ratio_weight_rate: float = 0.03
+    ratio_weight_rate: float = 0.1
     compile_main: bool = True  # on a GPU, compile the main network, the steps around the mixers and the prediction
     # Above zero, a chunk begins at every this many bytes, whatever the routing says. Only for timing: early in
     # training the routing begins a chunk at about every other byte, which a short timing would take as the cost.
@@ -248,6 +248,7 @@ class HNet(nn.Module):
         self.stream_dtype = None
         self.passes = 0
         self.selected = None  # the share of bytes that began a chunk in the last training pass, kept on its device
+        self.cross_entropy = None  # that pass's loss before the ratio loss, which the reported loss includes
         floor = math.log(config.ratio_weight) if config.ratio_weight > 0 else -math.inf
         self.register_buffer("ratio_log_weight", torch.tensor(floor), persistent=False)
         if not config.separate_embeddings:
@@ -432,18 +433,20 @@ class HNet(nn.Module):
         if targets is None:
             return self._predict(x[:, [-1]])
         logits, loss = self.predict(x, targets)
+        cross_entropy = loss.detach()
         selected = boundary.float().mean()
         ratio = self.config.target_ratio
         ratio_loss = ratio / (ratio - 1) * ((ratio - 1) * selected * probability.mean()
                                             + (1 - selected) * (1 - probability.mean()))
         loss = loss + self.ratio_log_weight.exp() * ratio_loss
         if self.training:
-            self.selected = selected.detach()
+            self.selected, self.cross_entropy = selected.detach(), cross_entropy
             self.adjust_ratio_weight(self.selected, b)
             self.passes += 1
             if self.passes % REPORT_EVERY == 0:
                 print(f"h-net: {self.passes} passes, {self.bytes_per_chunk:.2f} bytes per chunk, ratio weight "
-                      f"{self.ratio_log_weight.exp().item():.4f}", flush=True)
+                      f"{self.ratio_log_weight.exp().item():.4f}, cross entropy {self.cross_entropy.item():.4f}",
+                      flush=True)
         return logits, loss
 
 

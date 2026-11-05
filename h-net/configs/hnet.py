@@ -32,7 +32,9 @@ encoder_layers = 4
 decoder_layers = 4
 target_ratio = 6.0
 ratio_weight = 0.03
-ratio_weight_rate = 0.03
+# On the CPU, a small H-Net on FineWeb's text drifted to 3.3 bytes per chunk in 400 updates at the paper's fixed
+# weight; at this rate it held 5.4 to 6.2 from the 80th update.
+ratio_weight_rate = 0.1
 compile_main = True
 fixed_chunks = 0
 HNET_FIELDS = ('outer', 'outer_width', 'encoder_layers', 'decoder_layers', 'target_ratio', 'ratio_weight',
