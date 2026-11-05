@@ -1,12 +1,12 @@
 # Research rules
 
-Research is the line of work that picks techniques from papers and other people's records, bundles changes, and tests them. The evaluation, the training time, the GPU and the acceptance threshold are the same as the `language-model-autoresearch` loop's. Their training data differs (research reads FineWeb, the loop FineWeb-Edu). The evaluation does not depend on the training data, so the two lines' scores can be set side by side, keeping in mind that the data differs.
+Research is the line of work that picks techniques from papers and other people's records, bundles changes, and tests them. The evaluation, the training time, the GPU and the acceptance threshold are the same as the `language-model-autoresearch` loop's. Their training data differs (research reads FineWeb, the loop FineWeb-Edu; both may also read FineMath). The evaluation does not depend on the training data, so the two lines' scores can be set side by side, keeping in mind that the data differs.
 
 ## The frame (fixed; only the user changes it)
 
 Everything trained and measured in this repository, from any window, follows this frame. Only the part being tested may differ.
 
-- **Data:** FineWeb. Only the user adds allowed data.
+- **Data:** FineWeb, and FineMath's `finemath-3plus` and `finemath-4plus` subsets ([HuggingFaceTB/finemath](https://huggingface.co/datasets/HuggingFaceTB/finemath) at revision `e92b25a616738fe95dc186b64dfb19f9c8525594`, ODC-By 1.0). How much of each to read is free. Only the user adds allowed data.
 - **Evaluation:** AI2's three OLMES suites `olmo3:base_easy:qa_bpb`, `olmo3:base_easy:math_bpb` and `olmo3:base_easy:code_bpb`: each is the macro average over its tasks of the bits per byte of the correct answer. Run them with AI2's `olmes` at a pinned revision, with every task, example, prompt and scoring unchanged; only connect them to the model and tokenizer. Before the first run, count their tokens on the CPU and check that a run with the complete suites fits within the rental; if it does not, tell the user instead of dropping tasks or examples. Validation BPB on the held-out FineWeb data is recorded as a reference. Never change the evaluation for our own convenience: do not drop tasks or examples, change formats, move the threshold afterwards, or rerun until a better number appears. Only the user changes the evaluation.
 - **Training:** 30 minutes per run, from scratch to the end. Never continue an earlier run.
 - **Other models:** Do not use other models in training: no distillation, and no other model's weights or outputs.
