@@ -61,7 +61,7 @@ wandb_run_name = 'gpt2' # 'run' + str(time.time())
 dataset = 'fineweb' # frame.py's allowed data
 decay_dataset = '' # with Muon's schedule, the dataset that training reads once the learning rate begins to fall
 gradient_accumulation_steps = 4 # used to simulate larger batch sizes
-batch_size = 128 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
 time_budget = TIME_BUDGET # seconds of training, frame.py's; at or below zero, max_iters updates instead
 # model
@@ -88,11 +88,11 @@ attention_gate = True # is each head's output scaled by a gate read from the fir
 key_offset = True # do half of each head's channel pairs stay unturned, the keys taking them from the token before?
 dense_connections = True # do the last two blocks add mixtures of earlier outputs, weighted per position (MUDD)?
 backout = True # is a share of the stream after two thirds of the layers taken out before the prediction?
-bigram_rows_per_token = 5 # the rows of the tables of pairs and of triples, per token of the vocabulary
-trigram_table = False # does a table looked up by each token and the two before it add to every block's input?
-stem = False # do half of the MLPs scale their widened values by a table looked up by each token (STEM)?
-xielu = False # is xIELU the MLP's activation, in the place of ReLU squared or GELU?
-document_attention = False # does attention stay within each document, which begins with the tokenizer's BOS?
+bigram_rows_per_token = 32 # the rows of the tables of pairs and of triples, per token of the vocabulary
+trigram_table = True # does a table looked up by each token and the two before it add to every block's input?
+stem = True # do half of the MLPs scale their widened values by a table looked up by each token (STEM)?
+xielu = True # is xIELU the MLP's activation, in the place of ReLU squared or GELU?
+document_attention = True # does attention stay within each document, which begins with the tokenizer's BOS?
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations; with a time budget, only a bound
@@ -116,8 +116,8 @@ muon_weight_decay = 0.2 # at the start of training, falling to zero at the end
 muon_polar_express = True
 muon_neuron_normalization = True
 muon_cautious_decay = True
-muon_cautious_adamw = False # does AdamW skip each step that points against the gradient (Cautious AdamW)?
-muon_warmdown_share = 0.5 # the last share of training over which the learning rate falls to zero
+muon_cautious_adamw = True # does AdamW skip each step that points against the gradient (Cautious AdamW)?
+muon_warmdown_share = 0.75 # the last share of training over which the learning rate falls to zero
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 seed = 1337
