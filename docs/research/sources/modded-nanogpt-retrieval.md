@@ -1,23 +1,23 @@
-# modded-nanogpt の検索のヒント（PR #367、#380）
+# modded-nanogpt's retrieval hints (PRs #367 and #380)
 
-`KellerJordan/modded-nanogpt` の PR で、2026-11-03 時点ではどちらも未マージ。CPU で学習データの完全一致や n-gram を数え、ヒントとして使う。目標の検証損失（約3.28）に届く時間を競う記録で、正解率は測っていない。
+PRs to `KellerJordan/modded-nanogpt`, both unmerged as of 2026-11-03. They count exact matches and n-grams of the training data on the CPU and use them as hints. The records compete on the time to reach a target validation loss (about 3.28), and accuracy is not measured.
 
 ## PR #367
 
-- 8枚の GPU で、同じ機械の記録 #92 の 40.475 ± 0.046 秒、検証損失 3.28188 を、6.702 ± 0.018 秒、3.27406 にした。
-- CPU で 6、10、20 トークンの完全一致の索引を作り、一致した次のトークンを本体に渡す。
-- **学習と検証で索引を分ける：**
-  - 学習の行は「そのステップより前のステップの文書」だけから作る（`StreamIndex`）。
-  - 検証の行は最初の370シャード（370億トークン）から作る（`SlotIndex`）。
-  - 候補の数は、1位置あたり学習で平均0.2、最大0.7、検証で最大4.9（コードのコメント）。
-- 一致の長さ、回数、上位のトークンの割合を組にして本体に渡す。
-- メンテナのコメント：この案は前年にも話に出たが、汎化と規模の面で魅力が弱いので実装されなかった。この PR は IID の perplexity と汎化の差を見せるものだとしている。CPU の規則は未定。
+- On eight GPUs, it took record #92's 40.475 ± 0.046 seconds and validation loss of 3.28188 on the same machine to 6.702 ± 0.018 seconds and 3.27406.
+- It builds exact-match indexes of 6, 10 and 20 tokens on the CPU and passes the token that followed each match to the main model.
+- **Separate indexes for training and validation:**
+  - Training rows are built only from "documents of steps before that step" (`StreamIndex`).
+  - Validation rows are built from the first 370 shards (37 billion tokens) (`SlotIndex`).
+  - The number of candidates per position is 0.2 on average and 0.7 at most in training, and 4.9 at most in validation (from a code comment).
+- The match length, the count and the share of the top tokens are passed together to the main model.
+- The maintainer's comment: the idea came up the year before too, but was not implemented because it is less appealing in terms of generalization and scale. The comment says this PR shows the gap between IID perplexity and generalization. The rules for using the CPU are undecided.
 
 ## PR #380
 
-- #367 の上に、モデルを小さくする、短い文脈の索引を足す、CPLM などを重ねた。同じ機械の #367 の 21.749 秒、3.27460 に対して、9.653 ± 0.041 秒、3.27588。
-- **学習が読まないシャードで数える：** 次数2〜8の正確な回数を「ローダーが読まない学習シャード」で数え、学習のあとでモデルの確率に混ぜる。混ぜる割合は次数と回数の区分ごとに、学習の位置とは別の位置で合わせる（"weights never fit on training positions"）。
-- 1つずつ足した損失と時間（著者の表）：モデルを小さくして短くすると 3.4493、10.89 秒。ヒントを増やすと 3.4021。回数の連鎖で 3.3491。文書内のキャッシュで 3.3316。隠れ状態のゲートで 3.3167。CPLM で 3.2778。
-- 著者も、CPU の使い方はルールの上で灰色だとしている。
+- On top of #367, it stacks a smaller model, added short-context indexes, CPLM and more. Against #367's 21.749 seconds and 3.27460 on the same machine: 9.653 ± 0.041 seconds and 3.27588.
+- **Counting on shards that training does not read:** exact counts of orders 2 to 8 are taken on "training shards the loader does not read" and mixed into the model's probabilities after training. The mixing weights are fitted per order and count bucket on positions other than the training positions ("weights never fit on training positions").
+- Loss and time as each piece is added (the author's table): making the model smaller and shorter gives 3.4493 and 10.89 seconds. More hints give 3.4021. Chained counts give 3.3491. An in-document cache gives 3.3316. A hidden-state gate gives 3.3167. CPLM gives 3.2778.
+- The author also says the use of the CPU is a gray area under the rules.
 
-読んだのは2つの PR の説明、コメント、`retrieval.py` と `stream.rs` と `exact_counts.py` の冒頭、`config.py` の索引に関わる行。実装の全体は読んでいないし、動かしていない。
+The two PRs' descriptions and comments, the beginnings of `retrieval.py`, `stream.rs` and `exact_counts.py`, and the lines of `config.py` related to the indexes were read. The full implementation was neither read nor run.

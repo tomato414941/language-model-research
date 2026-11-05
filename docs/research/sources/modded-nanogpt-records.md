@@ -1,33 +1,33 @@
-# modded-nanogpt の記録の歴史
+# The history of modded-nanogpt's records
 
-`KellerJordan/modded-nanogpt` の README の記録の表と、一部の記録のコードとログ（コミット `4ea6b93`、2026-11-01 に読んだ）。H100 8枚で FineWeb の検証損失3.28に届く時間を競う。出発点は llm.c の GPT-2 の再現（45分、100億トークン）で、nanoGPT の流れを汲む。README によると、今は40秒未満、3.3億トークン未満で届く。
+The table of records in the README of `KellerJordan/modded-nanogpt`, and the code and logs of some records (commit `4ea6b93`, read on 2026-11-01). It is a race for the time to reach a FineWeb validation loss of 3.28 on 8 H100s. The starting point is llm.c's reproduction of GPT-2 (45 minutes, 10 billion tokens), in the line of nanoGPT. According to the README, it now gets there in under 40 seconds and under 330 million tokens.
 
-| 記録 | 時間 | 変更（表の説明） |
+| Record | Time | Change (as the table describes it) |
 |---|---|---|
-| 1 | 45分 | llm.c の基準 |
-| 2 | 31.4分 | 学習率の調整と RoPE |
-| 3 | 24.9分 | Muon |
-| 4 | 22.3分 | Muon の改良 |
-| 5 | 15.2分 | 語彙の詰め物、ReLU²、出力のゼロ初期化、QK-norm |
-| 6、7 | 13.1分、12.0分 | Muon の分散、PyTorch 2.5 |
-| 8 | 10.8分 | 入力と出力の埋め込みの分離 |
-| 9 | 8.2分 | value と埋め込みの近道、momentum の warmup、logit の softcap |
-| 10 | 7.8分 | 活性を bf16 に |
-| 11 | 7.2分 | U 字の近道、学習率を2倍 |
-| 12 | 5.03分 | 文脈1,024の密な注意を、FlexAttention の文脈64K に |
-| 18 | 3.4分 | softcap を30から15に |
-| 26 | 2.863分 | 文書の頭に揃えて読む（前は2.896分） |
-| 49 | 2.146分 | Partial Key Offset |
-| 51 | 2.075分 | 埋め込みを再び共有 |
-| 53 | 1.988分 | 学習の2/3で埋め込みを分離、複数トークンの予測 |
+| 1 | 45 minutes | llm.c's baseline |
+| 2 | 31.4 minutes | Learning-rate tuning and RoPE |
+| 3 | 24.9 minutes | Muon |
+| 4 | 22.3 minutes | Improvements to Muon |
+| 5 | 15.2 minutes | Vocabulary padding, ReLU², zero initialization of the outputs, QK-norm |
+| 6, 7 | 13.1 minutes, 12.0 minutes | Distributing Muon, PyTorch 2.5 |
+| 8 | 10.8 minutes | Separate input and output embeddings |
+| 9 | 8.2 minutes | Value and embedding shortcuts, momentum warmup, logit softcap |
+| 10 | 7.8 minutes | Activations in bf16 |
+| 11 | 7.2 minutes | U-shaped shortcuts, doubled learning rate |
+| 12 | 5.03 minutes | Dense attention with a context of 1,024 replaced by FlexAttention with a context of 64K |
+| 18 | 3.4 minutes | Softcap from 30 to 15 |
+| 26 | 2.863 minutes | Reading aligned to the starts of documents (2.896 minutes before) |
+| 49 | 2.146 minutes | Partial Key Offset |
+| 51 | 2.075 minutes | Embeddings shared again |
+| 53 | 1.988 minutes | Embeddings separated at 2/3 of training, multi-token prediction |
 
-読んだコードとログ：
+Code and logs read:
 
-- **記録4から5（`train_gpt2.py` の差分）：** 1,339秒、6,200回、1回216ミリ秒から、910秒、5,100回、1回179ミリ秒へ。変更は、注意と MLP の出力のゼロ初期化、Q と K の RMSNorm、GELU から ReLU²（コードのコメントに「GELU より約1〜2%良い」）、ヘッド12から6（ヘッド128次元）、語彙を50,304に。RoPE と学習する重みのない RMSNorm は記録4で既に入っている。ゼロ初期化だけの数字はなく、README は「μP に近い」とだけ書く。記録5は埋め込みを共有したままで、学習の損失は最初が16.0、2回目が9.5、5回目が7.6（ログ）。
-- **記録8（README）：** 埋め込みの分離、埋め込みのあとの RMSNorm、`lm_head` のゼロ初期化。動くパラメータは変わらず、3,900万増える。学習の損失は最初が10.8、2回目が10.4、6回目が7.5（ログ）。
-- **記録7と8（ログ）：** どちらも12層、幅768、1回524,288トークン、Muon で、Value embeddings はまだない。共有の表の学習率は0.0036。記録8は入力0.3、出力0.002で、入力の表のあとに RMSNorm。3.28 に届く更新は5,100回から4,578回。同じ更新回数の検証損失（差は自分たちの計算。3,000回まではどちらも学習率が一定）：
+- **Records 4 to 5 (the diff of `train_gpt2.py`):** from 1,339 seconds, 6,200 updates and 216 milliseconds per update to 910 seconds, 5,100 updates and 179 milliseconds per update. The changes: zero initialization of the attention and MLP outputs, RMSNorm on Q and K, GELU to ReLU² (a code comment says "about 1–2% better than GELU"), heads from 12 to 6 (128 dimensions per head), and the vocabulary to 50,304. RoPE and RMSNorm without learned weights were already in record 4. There is no number for zero initialization alone, and the README only says it is "close to μP". Record 5 still shares the embeddings, and its training loss is 16.0 at the first update, 9.5 at the second and 7.6 at the fifth (log).
+- **Record 8 (README):** separate embeddings, RMSNorm after the embedding, and zero initialization of `lm_head`. The active parameters stay the same, and 39 million are added. The training loss is 10.8 at the first update, 10.4 at the second and 7.5 at the sixth (log).
+- **Records 7 and 8 (logs):** both have 12 layers, width 768, 524,288 tokens per update and Muon, and no Value embeddings yet. The shared table's learning rate is 0.0036. Record 8 uses 0.3 for the input and 0.002 for the output, with RMSNorm after the input table. The updates needed to reach 3.28 went from 5,100 to 4,578. Validation loss at the same number of updates (the differences are our own calculation; both keep the learning rate constant up to 3,000 updates):
 
-| 更新 | 共有（記録7） | 分離（記録8） | 差 |
+| Update | Shared (record 7) | Separate (record 8) | Difference |
 |---|---|---|---|
 | 125 | 4.952 | 4.831 | −2.45% |
 | 250 | 4.336 | 4.210 | −2.89% |
@@ -37,39 +37,39 @@
 | 1,500 | 3.580 | 3.560 | −0.56% |
 | 3,000 | 3.444 | 3.430 | −0.42% |
 
-- **記録51（README）：** 分離と `lm_head` の0をやめて共有に戻す（入力の表のあとの RMSNorm は残す）。共有の表の学習率0.008、標準偏差0.005で、Value embeddings がある。FP8 の係数の調整も一緒で、更新が55回減り、127.1秒から123.9秒。著者は、共有で回数が大きく減ったとしている。
-- **記録53（README）：** 学習の2/3で分離する。複数トークンの予測なども一緒で、2,035回から1,920回。分離した入力の表に学習率の倍率の利点はなかったとしている。
-- **あとの記録（README の該当行）：** 2026-06-11 はずっと共有に戻し、2026-08-30 は最後の段階で分離する。
-- **最適化の部門の `train_gpt_simple.py`：** 分離。入力は標準偏差1.0のあと RMSNorm で学習率0.7、出力は0から始めて学習率0.004、Muon は0.025。
-- **記録9（ログ）：** 更新を3,200回に固定して1つずつ足した検証損失。
+- **Record 51 (README):** drops the separation and the zero `lm_head` and goes back to sharing (keeping the RMSNorm after the input table). The shared table's learning rate is 0.008 and its standard deviation 0.005, and there are Value embeddings. Together with a tuning of the FP8 coefficients, it cut 55 updates, from 127.1 seconds to 123.9 seconds. The author says sharing cut the number of updates substantially.
+- **Record 53 (README):** separates the embeddings at 2/3 of training. Together with multi-token prediction and other changes, from 2,035 updates to 1,920. It says a learning-rate multiplier on the separated input table brought no benefit.
+- **Later records (the relevant rows of the README):** 2026-06-11 goes back to sharing throughout, and 2026-08-30 separates them in the final stage.
+- **`train_gpt_simple.py` of the optimization track:** separate. The input has standard deviation 1.0 followed by RMSNorm, with learning rate 0.7; the output starts from 0, with learning rate 0.004; Muon uses 0.025.
+- **Record 9 (logs):** validation loss with the updates fixed at 3,200, adding one change at a time.
 
-| 足したもの | 検証損失 | 1回の更新 |
+| Added | Validation loss | Time per update |
 |---|---|---|
-| 短くしただけ | 3.3274 | 142ミリ秒 |
-| value residual | 3.3151 | 145ミリ秒 |
-| 学習する重み | 3.3065 | 146ミリ秒 |
-| 埋め込みの近道 | 3.2972 | 152ミリ秒 |
-| momentum の warmup | 3.2844 | 152ミリ秒 |
-| tanh の softcap | 3.2791 | 155ミリ秒 |
+| Shortened only | 3.3274 | 142 ms |
+| value residual | 3.3151 | 145 ms |
+| Learned weights | 3.3065 | 146 ms |
+| Embedding shortcut | 3.2972 | 152 ms |
+| Momentum warmup | 3.2844 | 152 ms |
+| tanh softcap | 3.2791 | 155 ms |
 
-  「学習する重み」は value residual の重みで、「埋め込みの近道」はブロックごとの `x = lambdas[0] * x + lambdas[1] * x0`（`[1., 0.]` から、Adam の学習率0.02）。
-  tanh の softcap は `logits = 30 * torch.tanh(logits / 30)` の1行。
-- **記録18（README）：** softcap を30から15にして、更新を1,490回から1,390回に減らした。著者は、小さい規模で効く構造の押しつけと見ている。
-- **最適化の部門の README：** 簡単にするために、普通でない部品として Value embeddings と近道の重みを外している。`train_gpt_simple.py` のロジットは `15 * logits * (logits.square() + 15**2).rsqrt()` で、softcap は tanh でない形で残っている。
-- **あとの記録（README の該当部分）：** `23 * sigmoid((logits + 5) / 7.5)` にして更新が40回減る（FP8 の `lm_head` を使う時期）。さらにあとで、softcap と損失を1つの Triton の計算にまとめて0.9秒縮めている。
-- **記録10（ログ）：** `model.cuda().bfloat16()` で線形層以外の重みと活性を bf16 にし、線形層の重みは fp32 のまま計算のときに `F.linear(x, self.weight.to(x.dtype))` で合わせて、autocast をやめた。1回の更新は154.76ミリ秒から144.67ミリ秒（−6.5%）。3.28 に届く更新は3,200回（3.2791）から3,242回（3.2781）で、全体は493.7秒から467.6秒（−5.3%）。
-- **記録26（README）：** 学習の行の頭を文書の頭に揃える。途中から始まる文脈で学ぶのは無駄が多いという理由。更新を1,770回から1,750回に減らし、学習率の下げ方の変更と、別の人の高速化も一緒。
-- **記録49（README）：** Partial Key Offset は、RoPE をかけない次元の key を1トークン前にずらす。長い窓の層だけに使う。5つの変更を合わせて131.2秒から128.9秒。
-- **記録12（README）：** 時間の短縮の中身は読んでいない。実行ごとのばらつきが増えたとある。
+  "Learned weights" are the value residual's weights, and "embedding shortcut" is the per-block `x = lambdas[0] * x + lambdas[1] * x0` (from `[1., 0.]`, with an Adam learning rate of 0.02).
+  The tanh softcap is the single line `logits = 30 * torch.tanh(logits / 30)`.
+- **Record 18 (README):** lowering the softcap from 30 to 15 cut the updates from 1,490 to 1,390. The author sees it as imposing a structure that pays off at small scale.
+- **The optimization track's README:** for simplicity, it removes Value embeddings and the shortcut weights as unusual components. The logits in `train_gpt_simple.py` are `15 * logits * (logits.square() + 15**2).rsqrt()`, so a softcap remains in a form other than tanh.
+- **Later records (the relevant parts of the README):** switching to `23 * sigmoid((logits + 5) / 7.5)` cuts 40 updates (in the period that uses an FP8 `lm_head`). Later still, fusing the softcap and the loss into one Triton kernel saves 0.9 seconds.
+- **Record 10 (logs):** `model.cuda().bfloat16()` puts the weights outside the linear layers and the activations in bf16; the linear layers' weights stay in fp32 and are cast at compute time with `F.linear(x, self.weight.to(x.dtype))`; autocast is dropped. An update went from 154.76 milliseconds to 144.67 milliseconds (−6.5%). The updates needed to reach 3.28 went from 3,200 (3.2791) to 3,242 (3.2781), and the total from 493.7 seconds to 467.6 seconds (−5.3%).
+- **Record 26 (README):** aligns the start of each training row with the start of a document, on the grounds that learning from contexts that start partway through is wasteful. It cut the updates from 1,770 to 1,750, together with a change to the learning-rate decay and someone else's speedup.
+- **Record 49 (README):** Partial Key Offset shifts the key in the dimensions without RoPE back by one token. It is used only in the long-window layers. With 5 changes combined, from 131.2 seconds to 128.9 seconds.
+- **Record 12 (README):** the details of the time saving were not read. It says the noise between runs grew.
 
-2026-11-04 に、README の記録の表のあとの部分と、次の PR の説明を読んだ。
+On 2026-11-04, the part of the README after the table of records and the descriptions of the following PRs were read.
 
-- **記録28（PR #117、sparse attention gate）：** 注意の出力に、残差の最初の12次元から作るゲートを掛け、文脈によっては何もしないことを選べるようにした。3.28に届く更新は1,750回から1,695回で、著者はゲートの分を約50回と見積もる。1回の時間は少し増える。著者のブログでは、ゲートがあると BOS を注意の向け先（attention sink）に使う必要が減るとしている。
-- **記録34（PR #130、smear）：** 1つ前のトークンの埋め込みを、ゲートを掛けて今のトークンに足す。更新は15回減ったが、著者は損失を揃えると約5回分としている。
-- **記録40（PR #140、backout）：** 8層目までの残差の寄与を、予測の前に学習する係数で引く。ほかの調整と一緒で、効果は分けていない。
-- **記録49（PR #169、Partial Key Offset）：** 回転しない次元（128次元のうち32〜64と96〜128）の key を1トークン前にずらし、1つの層で induction ができるようにする。全部の次元にかけるより良く、一部のヘッドだけにかけると悪い。全部の層にかけると損失が一番低いが、速さとの兼ね合いで長い窓の層だけにしている。5つの変更で131.2秒から128.8秒で、大半はこれによる更新の減り（50回）としている。
-- **中くらいの部門の記録（PR #139、backout）：** 12層目の出力を、学習する係数で最後の層の出力に足してから予測する。目標の損失に届く更新が5,590回から5,550回で、22回の平均は2.9194（標準偏差0.00069）。
-- **記録62（PR #201、bigram hash embedding）：** 1つ前と今のトークンの組をハッシュして、語彙の5倍の行の表を引き、各層の入力に足す。表は0から、層ごとの係数は0.1から始める。表だけで約5.1秒（約4.9%）短く、更新は1,765回から1,600回（ほかの変更を含む）。ゲート、3トークン、複数のハッシュより、そのまま足す形が良かったとしている。
-- **記録81（PR #259、MUDD）：** 最後の2層だけが、前の層の隠れ状態を、位置ごとに小さい MLP で決めた重みで混ぜ、V と残差に足す（0から始まる）。同じ1,430回で、損失は3.2867から3.2783（10回ずつの平均）。1回の時間は約1.8%増え、全体では約1.5秒短い。著者は MUDDFormer の著者の1人。
+- **Record 28 (PR #117, sparse attention gate):** multiplies the attention output by a gate computed from the first 12 dimensions of the residual, so that attention can choose to do nothing depending on the context. The updates needed to reach 3.28 went from 1,750 to 1,695, and the author estimates the gate's share at about 50. The time per update rises slightly. The author's blog says that with the gate, there is less need to use BOS as a place to send attention (attention sink).
+- **Record 34 (PR #130, smear):** adds the previous token's embedding, through a gate, to the current token's. The updates fell by 15, but the author says it is worth about 5 at matched loss.
+- **Record 40 (PR #140, backout):** before the prediction, subtracts the residual's contribution up to layer 8, scaled by a learned coefficient. It came with other tuning, and its effect was not separated.
+- **Record 49 (PR #169, Partial Key Offset):** shifts the key in the unrotated dimensions (32–64 and 96–128 of the 128) back by one token, so that a single layer can do induction. It is better than applying it to all dimensions, and worse when applied to only some heads. Applying it to every layer gives the lowest loss, but for speed it is used only in the long-window layers. The 5 changes went from 131.2 seconds to 128.8 seconds, and most of that is attributed to the drop in updates (50) that this brings.
+- **A record of the medium track (PR #139, backout):** adds the output of layer 12, scaled by a learned coefficient, to the output of the final layer before the prediction. The updates needed to reach the target loss went from 5,590 to 5,550, and the mean over 22 runs is 2.9194 (standard deviation 0.00069).
+- **Record 62 (PR #201, bigram hash embedding):** hashes the pair of the previous and current tokens, looks it up in a table with 5× as many rows as the vocabulary, and adds the result to each layer's input. The table starts from 0 and the per-layer coefficients from 0.1. The table alone saves about 5.1 seconds (about 4.9%), and the updates went from 1,765 to 1,600 (including other changes). It says adding the result as is worked better than a gate, 3 tokens or several hashes.
+- **Record 81 (PR #259, MUDD):** only the last 2 layers mix the hidden states of earlier layers, with weights set per position by a small MLP, and add the result to V and to the residual (starting from 0). At the same 1,430 updates, the loss went from 3.2867 to 3.2783 (each the mean of 10 runs). The time per update rises by about 1.8%, and the total is about 1.5 seconds shorter. The author is one of the authors of MUDDFormer.
 
-X の投稿は読んでいない。記録44の [Profiling 101](https://blog.underfit.ai/profiling-101-nanogpt) は 403 で読めなかった。
+The posts on X were not read. Record 44's [Profiling 101](https://blog.underfit.ai/profiling-101-nanogpt) returned 403 and could not be read.

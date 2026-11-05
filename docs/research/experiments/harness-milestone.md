@@ -1,98 +1,98 @@
-# 基準と2つの束を全問の正解率で測った
+# Measuring the baseline and two bundles by accuracy on all questions
 
-2026-11-02 に、基準、最初の束、2番目の束を lm-evaluation-harness の全問で測り、`language-model` の v5 の8k版の事前学習の後と並べた。6課題の正解率の平均は、2番目の束が .452、v5 が .461 で、同じ問題どうしの差は −.009 ± .003（± は標準誤差。以下同じ）。最初の束から2番目の束への差は +.003 ± .003 で、誤差の範囲だった。
+On 2026-11-02, the baseline, the first bundle and the second bundle were measured on all questions of lm-evaluation-harness and set beside `language-model`'s v5, 8k version, after pretraining. The mean accuracy over the 6 tasks was .452 for the second bundle and .461 for v5, a difference on the same questions of −.009 ± .003 (± is the standard error, here and below). The difference from the first bundle to the second was +.003 ± .003, within the error.
 
-## 条件
+## Setup
 
-- モデル：基準の2つの種（baseline.md）、最初の束（first-bundle.md）、2番目の束（second-bundle.md）の保存した重み。学習し直していない。
-- 道具：lm-evaluation-harness 0.4.13 の既定の問い方（`harness.py`）。全問の30,470問で、bf16。指標は SciQ が `acc`、ほかの5つが `acc_norm`。
-- 機械：Vast.ai のブラジルの RTX 4090 を1枚、$0.368/時。ドライバ 595.71.05。イメージは基準と同じ（torch 2.15.0+cu132）。費用を比べる測定ではないので H100 にしなかった。
-- 比較の相手：`language-model` の `docs/results.md` の「8k 事前学習の後」。同じ版のハーネスで全問を測り、bf16、指標の読み方も同じ。問題ごとの記録から平均を計算し直すと、記録の値と一致した。MMLU は57科目の単純な平均でなく全問の平均で、`harness.py` と同じ。
-- 採点の確かめ：正解の BPB の課題ごとの平均は、H100 で測った `scoring.py` の値と最大 .0005 の差で一致した。機械を替えた影響は見えない。
+- Models: the saved weights of the baseline's two seeds (baseline.md), the first bundle (first-bundle.md) and the second bundle (second-bundle.md). Not retrained.
+- Tool: lm-evaluation-harness 0.4.13's default prompting (`harness.py`). All 30,470 questions, in bf16. The metric is `acc` for SciQ and `acc_norm` for the other five.
+- Machine: one RTX 4090 on Vast.ai in Brazil, $0.368/hour. Driver 595.71.05. The image is the same as the baseline's (torch 2.15.0+cu132). The measurement does not compare costs, so an H100 was not used.
+- Compared with: the "8k 事前学習の後" (after 8k pretraining) column of `docs/results.md` in `language-model`. It was measured on all questions with the same version of the harness, in bf16, with the same reading of the metrics. Recomputing the means from the per-question records matched the recorded values. MMLU is the mean over all questions, not the plain mean of the 57 subjects, the same as in `harness.py`.
+- Checking the scoring: the per-task means of correct-answer BPB matched the values `scoring.py` measured on the H100, with a difference of at most .0005. No effect of changing the machine is visible.
 
-## 点
+## Scores
 
-6課題の正解率。「v5 との差」は2番目の束から v5 を引いた、同じ問題どうしの差。
+Accuracy on the 6 tasks. "Difference from v5" is the second bundle minus v5, on the same questions.
 
-| 課題 | 基準の種1 | 基準の種2 | 最初の束 | 2番目の束 | v5 | v5 との差 |
+| Task | Baseline seed 1 | Baseline seed 2 | First bundle | Second bundle | v5 | Difference from v5 |
 |---|---|---|---|---|---|---|
-| MMLU（続きの形） | .257 | .256 | .264 | .264 | .274 | −.010 ± .003 |
+| MMLU (continuation form) | .257 | .256 | .264 | .264 | .274 | −.010 ± .003 |
 | ARC-Easy | .353 | .350 | .430 | .439 | .454 | −.015 ± .009 |
 | ARC-Challenge | .213 | .221 | .251 | .247 | .263 | −.016 ± .011 |
 | HellaSwag | .268 | .276 | .297 | .308 | .347 | −.039 ± .004 |
 | PIQA | .567 | .562 | .627 | .635 | .611 | +.024 ± .009 |
 | SciQ | .675 | .679 | .827 | .820 | .818 | +.002 ± .011 |
-| 平均 | .389 | .391 | .449 | .452 | .461 | −.009 ± .003 |
+| Mean | .389 | .391 | .449 | .452 | .461 | −.009 ± .003 |
 
-同じ問題どうしの、6課題の平均の差：
+Differences in the mean over the 6 tasks, on the same questions:
 
-| 比べるもの | 正解率の差 | 正解の BPB の平均 |
+| Compared | Accuracy difference | Mean correct-answer BPB |
 |---|---|---|
-| 基準の種1 → 種2 | +.002 ± .003 | 1.692 → 1.670 |
-| 基準の種1 → 最初の束 | +.060 ± .004 | 1.692 → 1.404 |
-| 基準の種2 → 最初の束 | +.059 ± .004 | 1.670 → 1.404 |
-| 最初の束 → 2番目の束 | +.003 ± .003 | 1.404 → 1.342 |
-| v5 → 2番目の束 | −.009 ± .003 | 1.336 → 1.342 |
+| Baseline seed 1 → seed 2 | +.002 ± .003 | 1.692 → 1.670 |
+| Baseline seed 1 → first bundle | +.060 ± .004 | 1.692 → 1.404 |
+| Baseline seed 2 → first bundle | +.059 ± .004 | 1.670 → 1.404 |
+| First bundle → second bundle | +.003 ± .003 | 1.404 → 1.342 |
+| v5 → second bundle | −.009 ± .003 | 1.336 → 1.342 |
 
-最初の束から2番目の束では、はっきり上がったのは HellaSwag（+.011 ± .003）だけで、ほかの5つは誤差の範囲だった。
+From the first bundle to the second, only HellaSwag clearly rose (+.011 ± .003); the other five were within the error.
 
-正解の BPB と正解率は、v5 との比較で揃わない課題がある。
+On some tasks, correct-answer BPB and accuracy do not agree in the comparison with v5.
 
-| 課題 | 正解の BPB（2番目の束、v5） | BPB の差 | 正解率の差 |
+| Task | Correct-answer BPB (second bundle, v5) | BPB difference | Accuracy difference |
 |---|---|---|---|
-| MMLU（続きの形） | 1.628、1.470 | +10.7% | −.010 |
-| ARC-Easy | 1.384、1.434 | −3.5% | −.015 |
-| ARC-Challenge | 1.392、1.409 | −1.2% | −.016 |
-| HellaSwag | 1.026、0.992 | +3.4% | −.039 |
-| PIQA | 1.311、1.317 | −0.5% | +.024 |
-| SciQ | 1.311、1.394 | −6.0% | +.002 |
+| MMLU (continuation form) | 1.628, 1.470 | +10.7% | −.010 |
+| ARC-Easy | 1.384, 1.434 | −3.5% | −.015 |
+| ARC-Challenge | 1.392, 1.409 | −1.2% | −.016 |
+| HellaSwag | 1.026, 0.992 | +3.4% | −.039 |
+| PIQA | 1.311, 1.317 | −0.5% | +.024 |
+| SciQ | 1.311, 1.394 | −6.0% | +.002 |
 
-## MMLU の作者の形式
+## MMLU in its authors' format
 
-5例を付けて記号で答える形（`harness.py --authors-mmlu`）。上の平均には入れない。v5 の同じ段階の記録はないので、比較はしていない。
+The form that gives 5 examples and answers with a letter (`harness.py --authors-mmlu`). Not included in the means above. There is no record of v5 at the same stage, so no comparison was made.
 
-| | 基準の種1 | 基準の種2 | 最初の束 | 2番目の束 |
+| | Baseline seed 1 | Baseline seed 2 | First bundle | Second bundle |
 |---|---|---|---|---|
-| 正解率（14,042問） | .255 ± .004 | .250 ± .004 | .248 ± .004 | .252 ± .004 |
+| Accuracy (14,042 questions) | .255 ± .004 | .250 ± .004 | .248 ± .004 | .252 ± .004 |
 
-どれも当てずっぽうの .25 と区別できない。この形式で記号を選ぶ力は、4つのモデルのどれにも見えない。
+None can be told apart from the .25 of random guessing. None of the four models shows an ability to pick the letter in this format.
 
-文脈の1,024トークンに収まらない問題が2,725問（19%）あり、前の側が切れて例が減る。高校の歴史や法律の科目に多く、たとえばヨーロッパ史は165問すべて収まらない。
+2,725 questions (19%) do not fit in the 1,024-token context, so their front is cut off and examples are lost. They are common in the high school history and law subjects; for example, none of the 165 European history questions fit.
 
-## v5 と比べるときの違い
+## Differences when comparing with v5
 
-- 評価の問題：v5 は、評価の問題の文を含む文書を学習データから除いている（6課題すべてが対象）。英語で除いた文書は、6課題以外の評価の課題も含めて、stable の段階で12,298（残した文書の0.29%）、decay の段階で1,514（同0.19%）。この研究は ClimbMix をそのまま使い、除く処理をしていない。入っている数は数えていない。効くとすれば、この研究の点を高くする向き。
-- データの選び方：ClimbMix の混ぜ方は、6課題のうち PIQA、ARC-Easy、HellaSwag の検証用の問題の成績で選ばれている（`language-model` の climbmix.md）。
-- 学習の量：v5 は日英で117億トークン、うち英語は約59億。2番目の束は英語だけで約6.7億。
-- 大きさ：v5 は3.0億パラメータ。2番目の束は計算に使うものが5,440万、全体で8,585万。
-- 学習の費用：v5 は日英で $28.71（A100）。2番目の束は約 $0.53（H100）。
-- 種：束は1つ。基準の2つの種の差は、平均で +.002 ± .003。
+- Evaluation questions: v5 removes documents containing the text of evaluation questions from its training data (all 6 tasks are covered). The English documents removed, including those for evaluation tasks other than the 6, were 12,298 in the stable phase (0.29% of the documents kept) and 1,514 in the decay phase (likewise 0.19%). This research uses ClimbMix as is, without removal. How many are in it was not counted. If it has an effect, it raises this research's scores.
+- How the data was chosen: ClimbMix's mixture was chosen by results on the validation questions of PIQA, ARC-Easy and HellaSwag, three of the 6 tasks (climbmix.md in `language-model`).
+- Amount of training: v5 trained on 11.7 billion tokens of Japanese and English, about 5.9 billion of them English. The second bundle trained on about 670 million, English only.
+- Size: v5 has 300 million parameters. The second bundle has 54.4 million used in computation and 85.85 million in total.
+- Training cost: v5 cost $28.71 for Japanese and English (A100). The second bundle cost about $0.53 (H100).
+- Seeds: one for each bundle. The difference between the baseline's two seeds is +.002 ± .003 on the mean.
 
-## 時間と費用
+## Time and cost
 
-| 段階 | 実測 |
+| Stage | Measured |
 |---|---|
-| 借りてから使えるまで | 4分30秒 |
-| コードとデータの転送（894MB、Vast のプロキシ経由） | 32秒、211秒 |
-| パッケージの追加 | 1分7秒 |
-| 6課題（1モデル、約1,050万トークン） | 約3分55秒 |
-| 作者の形式（1モデル、約3,600万トークン） | 約7分 |
-| 結果の取得 | 33秒 |
+| From renting to ready | 4 min 30 s |
+| Transferring code and data (894MB, through Vast's proxy) | 32 s, 211 s |
+| Adding packages | 1 min 7 s |
+| 6 tasks (1 model, about 10.5 million tokens) | About 3 min 55 s |
+| Authors' format (1 model, about 36 million tokens) | About 7 min |
+| Fetching the results | 33 s |
 
-借りていた約62分で約 $0.38（時間と料金からの計算）。GPU のメモリは、バッチ65,536トークンで14GB ほど使った。処理用の機械の CPU では、作者の形式だけで1モデル約14時間と見積もった（未実測）。
+About $0.38 for the roughly 62 minutes of the rental (calculated from time and price). With batches of 65,536 tokens, about 14GB of GPU memory was used. On the processing machine's CPU, the authors' format alone was estimated at about 14 hours per model (not measured).
 
-## 分かったこと
+## Findings
 
-- 基準から束への伸びは、正解率でもはっきり見えた。
-- 2番目の束の変更は、正解の BPB を4.4%下げたが、正解率の平均は誤差の範囲だった。BPB の数%の差は、正解率の上がりとしては見えないことがある。
-- 2番目の束は、6課題の平均で v5 に届いていない。課題によって向きが分かれ、HellaSwag と MMLU では下、PIQA では上だった。
+- The gain from the baseline to the bundles was clearly visible in accuracy too.
+- The second bundle's changes lowered correct-answer BPB by 4.4%, but the mean accuracy moved within the error. A difference of a few percent in BPB may not show up as a rise in accuracy.
+- The second bundle does not reach v5 on the mean over the 6 tasks. The direction differs by task: below on HellaSwag and MMLU, above on PIQA.
 
-## 起きたこと
+## What happened
 
-- 機械の SSH のポートに直接は届かず、データの転送が1度失敗した。`rental.py` は直接の経路とプロキシを順に試すようにした。
+- The machine's SSH port could not be reached directly, and the data transfer failed once. `rental.py` was changed to try the direct route and then the proxy.
 
-## 確かめていないこと
+## Not verified
 
-- ClimbMix に評価の問題がどれだけ入っていて、それが点をどれだけ動かすか。
-- 束の種によるばらつき。
-- 作者の形式での、v5 の同じ段階の点。
+- How many evaluation questions ClimbMix contains, and how much they move the scores.
+- The bundles' noise across seeds.
+- v5's score at the same stage in the authors' format.

@@ -1,42 +1,42 @@
-# 学習の行の切り出し方
+# How training rows are cut
 
-学習の1行（文脈の長さのトークンの並び）を、データのどこから取るか。基準と最初の束は nanoGPT のまま、`train.bin` のランダムな位置から取るので、多くの行は文書の途中から始まる。採点の問題は BOS から始まる。
+Where in the data each training row (a sequence of tokens as long as the context) is taken from. The baseline and the first bundle keep nanoGPT's way and take rows from random positions in `train.bin`, so most rows start in the middle of a document. The scored questions start from BOS.
 
-2番目の束は、行の頭を文書の頭（BOS）に揃えた。
+The second bundle aligned the start of each row with the start of a document (BOS).
 
-## 分かっていること
+## What is known
 
-- **測った結果：** [2番目の束](../experiments/second-bundle.md)は BOS から始まる行だけで学習し、文書の途中から始まる行の最初の64トークンで損失が +47%になった（行の残りは −1.9%）。文書の頭から始まる行では全体で −4.2%。`scoring.py` の検証の BPB は途中から始まる行を読むので +2.2%になり、BOS から始まる正解の BPB は −4.4%になった。ほかの項目と分けて測ってはいない。
+- **Measured result:** [The second bundle](../experiments/second-bundle.md) trained only on rows that start from BOS, and on rows that start in the middle of a document its loss over the first 64 tokens became +47% (−1.9% over the rest of the row). On rows that start at the start of a document it was −4.2% overall. `scoring.py`'s validation BPB reads rows that start midway, so it became +2.2%, while the correct-answer BPB, which starts from BOS, became −4.4%. This was not measured separately from the other items.
 
-- **[modded-nanogpt の記録26](../sources/modded-nanogpt-records.md)：** 更新が1,770回から1,750回（−1.1%）で、換算で約 −0.06%。ほかの変更も一緒。
-- **[nanochat](../sources/nanochat-log.md)（01-13）：** 揃えたうえで文書を詰める形を標準にした。効果の数字はなく、検証の損失の下がりの一部は見かけだとしている。
-- **autoresearch：** nanochat と同じ読み方。
-- **直接の比較：** 行の途中から始めるか文書の頭から始めるかを、損失で比べた論文は見つけていない。
+- **[modded-nanogpt's record 26](../sources/modded-nanogpt-records.md):** updates went from 1,770 to 1,750 (−1.1%), which converts to about −0.06%. Other changes came with it.
+- **[nanochat](../sources/nanochat-log.md) (01-13):** made aligning rows and then packing documents the standard form. It gives no figure for the effect and says part of the drop in validation loss is only apparent.
+- **autoresearch:** reads the data the same way as nanochat.
+- **Direct comparison:** no paper has been found that compares by loss whether rows start mid-document or at the start of a document.
 
-**今のデータ（自分たちの計算）：** 20億トークンに文書が268万。長さは平均745、中央値617で、行（1,025トークン）より長い文書は11.3%。頭から読むと、最初の行に入らないトークン23.1%は読まない。文書を同じ確率で選ぶので短い文書が前より多く読まれ、1行に始まる文書の数の平均は1.37から2.4に増える（[確認の記録](../experiments/second-bundle-code-check.md)）。BOS の位置を探すのは処理用の機械で9秒で、一度作ってファイルに残せば学習の費用には入らない。
+**The current data (our own calculation):** 2.68 million documents in 2 billion tokens. Their length averages 745 with a median of 617, and 11.3% of documents are longer than a row (1,025 tokens). Reading from the start, the 23.1% of tokens that do not fit in the first row are not read. Documents are chosen with equal probability, so short documents are read more than before, and the mean number of documents starting in a row rises from 1.37 to 2.4 ([the check's record](../experiments/second-bundle-code-check.md)). Finding the BOS positions takes 9 seconds on the processing machine; made once and kept in a file, it does not count toward the training cost.
 
-**物差し：** `scoring.py` の検証の BPB は決まった位置から切った行を読むので、この切り方で学習したモデルに不利になる（scoring.md）。`train.py` の検証の損失も、ランダムな位置から切る。
+**Yardstick:** `scoring.py`'s validation BPB reads rows cut from fixed positions, so it is unfavorable to a model trained with this way of cutting (scoring.md). `train.py`'s validation loss also cuts from random positions.
 
-**近い考えの別の形：**
+**Other forms of a similar idea:**
 
-- 文書を詰める（nanochat の best-fit）：行の中で文書が切れにくいが、文書を捨てる分とコードが増える。
-- [文書の中だけで注意を計算する](../sources/sequence-composition.md)：13億で約 −3.9%、nanochat の16層で BPB 0.85427 から 0.85407。割れていて、計算も増える。
-- [似た文書を同じ行に詰める](../sources/sequence-composition.md)：13億で −3.2〜−4.1%。注意の計算は変わらないが、前処理が要る。1つの研究だけで、今の規模の結果はない。
+- Packing documents (nanochat's best-fit): documents are less often cut within a row, but the share of discarded documents and the code both grow.
+- [Computing attention only within documents](../sources/sequence-composition.md): about −3.9% at 1.3 billion, and BPB from 0.85427 to 0.85407 for nanochat's 16 layers. The evidence is split, and it also adds computation.
+- [Packing similar documents into the same row](../sources/sequence-composition.md): −3.2 to −4.1% at 1.3 billion. The attention computation is unchanged, but it needs preprocessing. There is only one study, with no results at the current scale.
 
-## 今の見方
+## Current view
 
-2026-11時点の見方では、残す。ランダムな BOS から読み始め、行が終わるまで次の文書へ読み進める。詰める処理はしない。測る前は効果を0〜0.2%と見ていたが、副作用が見込みより大きかった。効果そのものは分けて測っていない。残す理由は次の通り。
+The view as of 2026-11 is to keep it. Reading starts from a random BOS and continues into the next document until the row ends. No packing is done. Before measuring, we put the effect at 0–0.2%, but the side effects were larger than expected. The effect itself was not measured separately. The reasons to keep it are these.
 
-- 実際の使い方は文脈が文書の頭から始まり、正解の BPB はその形で良くなった。
-- 手間が小さく、データは400B のうち少ししか使っていないので、読まない部分があっても足りる。
-- autoresearch の学習率の組は、頭から読む形で動いている。
+- In actual use the context starts at the start of a document, and the correct-answer BPB improved in that form.
+- It takes little effort, and only a little of the 400B of data is used, so there is enough even with parts left unread.
+- autoresearch's set of learning rates runs with rows read from the start of documents.
 
-弱いのは文脈が文書の途中から始まるときで、長い文章を文脈の長さで切って読む使い方では影響が出るかもしれない。ただ、測る課題はどれも BOS から始まるので、文書の途中から始まる行を学習に混ぜても、測る点は良くならない。混ぜる形は「効果が小さそうな候補」に移した（candidates.md）。
+It is weak when the context starts in the middle of a document, and uses that read a long text cut to the context length may be affected. However, every measured task starts from BOS, so mixing rows that start mid-document into training does not improve the measured scores. The mixed form was moved to "Candidates likely to have small effects" (candidates.md).
 
-途中から読む使い方を重く見るときは、まず読むときに先頭に BOS を置く。モデルは最初のトークンに注意を集める（[StreamingLLM](https://arxiv.org/abs/2309.17453) の attention sink。要旨のみ読んだ）ので、+47%の多くは、先頭に BOS がないことから来ている可能性がある。保存した2番目の束の重みで、決まった位置の行の先頭に BOS を付けて測り直せば、処理用の機械で確かめられる。まだ測っていない。
+If uses that read from the middle of a document are weighed heavily, first put a BOS at the front when reading. Models concentrate attention on the first token ([StreamingLLM](https://arxiv.org/abs/2309.17453)'s attention sink; only the abstract was read), so much of the +47% may come from the missing BOS at the front. Measuring again with the saved weights of the second bundle, with a BOS added at the front of rows cut at fixed positions, would check this on the processing machine. This has not been measured yet.
 
-## 見方が変わりそうな条件
+## Conditions likely to change the view
 
-- 文脈が文書の途中から始まる使い方を重く見る場合。
-- 効果を項目ごとに測った場合。
-- データを使い切るくらい学習量を増やす場合。読まない23.1%が惜しくなる。
+- When uses in which the context starts mid-document are weighed heavily.
+- When the effect is measured item by item.
+- When training grows enough to use up the data. The unread 23.1% becomes a waste.

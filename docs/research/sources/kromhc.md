@@ -1,16 +1,16 @@
 # KromHC
 
-KromHC: Manifold-Constrained Hyper-Connections with Kronecker-Product Residual Matrices（arXiv 2601.21579）。残差の流れを複数に分けて混ぜる mHC の、パラメータを減らした形。
+KromHC: Manifold-Constrained Hyper-Connections with Kronecker-Product Residual Matrices (arXiv 2601.21579). A reduced-parameter form of mHC, which splits the residual stream into several streams and mixes them.
 
-nanochat の残差を置き換えて比べている（行列は Muon、残差の流れ、埋め込み、出力は AdamW）。元の nanochat の形は x0 と resid の重みを持ち、mHC の形ではこれを置き換える（付録 G）。FineWeb-Edu、1パラメータ約20トークン、流れは4本。
+It replaces nanochat's residual and compares the forms (Muon for matrices; AdamW for the residual streams, the embedding and the output). The original nanochat form has weights on x0 and resid, and the mHC forms replace them (Appendix G). FineWeb-Edu, about 20 tokens per parameter, 4 streams.
 
-| 形 | 増えるパラメータ（6層） | 6層（約6,000万）の検証 BPB | 12層（約1.86億）の検証 BPB |
+| Form | Added parameters (6 layers) | Validation BPB, 6 layers (about 60 million) | Validation BPB, 12 layers (about 186 million) |
 |---|---|---|---|
-| 元の残差 | | 1.047 | 0.864 |
-| mHC | 46万 | 1.042 | 0.861 |
-| mHC-lite | 61万 | 1.045 | 0.864 |
-| KromHC | 24万 | 1.047 | 0.862 |
+| Original residual | | 1.047 | 0.864 |
+| mHC | 460,000 | 1.042 | 0.861 |
+| mHC-lite | 610,000 | 1.045 | 0.864 |
+| KromHC | 240,000 | 1.047 | 0.862 |
 
-CORE スコアは 6.477、7.971、8.208、9.018（6層）、14.774、16.023、13.217、16.872（12層）で、BPB より差が大きい。計算量と時間の比較は読んでいない。
+The CORE scores are 6.477, 7.971, 8.208 and 9.018 (6 layers) and 14.774, 16.023, 13.217 and 16.872 (12 layers), with larger differences than BPB. The comparison of compute and time was not read.
 
-読んだのは要旨、4節の結果、付録 G と H の始め。
+Read: the abstract, the results in Section 4, and the beginnings of Appendices G and H.

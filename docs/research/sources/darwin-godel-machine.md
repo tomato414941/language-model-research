@@ -1,9 +1,9 @@
 # Darwin Gödel Machine
 
-Zhang ら（arXiv 2505.22954、2025）。コーディングのエージェントが自分のコードを書き換え、ベンチマークで確かめ、過去のエージェントをすべて保存して枝分かれする。
+Zhang et al. (arXiv 2505.22954, 2025). A coding agent rewrites its own code, checks it on benchmarks, and keeps every past agent so that it can branch from any of them.
 
-- 80回の繰り返しで SWE-bench が20.0%から50.0%、Polyglot（50問）が14.0%から38.0%。
-- 最新のものだけを残す形は、悪い変更の後で改善しにくくなり、保存する形に負けた。
-- 一時的に親より下がった枝から、後で最高のエージェントが出た。
+- Over 80 iterations, SWE-bench goes from 20.0% to 50.0% and Polyglot (50 problems) from 14.0% to 38.0%.
+- A variant that keeps only the latest agent struggled to improve after a bad change and lost to the variant that keeps them all.
+- The best agent later came from a branch that had temporarily fallen below its parent.
 
-読んだのは導入と実験の主要部。付録は読んでいない。
+The introduction and the main part of the experiments were read. The appendix was not read.

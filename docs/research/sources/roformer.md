@@ -1,9 +1,9 @@
 # RoFormer
 
-Su ら、RoFormer: Enhanced Transformer with Rotary Position Embedding（arXiv 2104.09864）。
+Su et al., RoFormer: Enhanced Transformer with Rotary Position Embedding (arXiv 2104.09864).
 
-- query と key の次元の組を、位置に比例する角度で回す。スコアは相対的な距離だけで決まり、学習するパラメータはない。
-- 機械翻訳（WMT）の BLEU は27.3から27.5。GLUE は3勝3敗で、QQP 71.2から86.4、MNLI 84.6から80.2。中国語の長文は BERT-512 67.77、RoFormer-512 68.29、RoFormer-1024 69.79。
-- GPT の形で、学習する位置埋め込みと直接比べた結果はない。ばらつきと費用も示していない。著者は、なぜ効くかは説明できないとしている。
+- It rotates pairs of query and key dimensions by an angle proportional to the position. The score depends only on the relative distance, and there are no learned parameters.
+- Machine translation (WMT) BLEU goes from 27.3 to 27.5. On GLUE it wins 3 and loses 3, with QQP from 71.2 to 86.4 and MNLI from 84.6 to 80.2. On long Chinese texts: BERT-512 67.77, RoFormer-512 68.29, RoFormer-1024 69.79.
+- There is no direct comparison with learned position embeddings in a GPT architecture. Neither the variance nor the cost is shown. The authors say they cannot explain why it works.
 
-読んだのは本文と実験の表。
+The main text and the experiment tables were read.

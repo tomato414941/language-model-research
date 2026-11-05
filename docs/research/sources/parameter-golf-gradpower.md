@@ -1,28 +1,28 @@
-# Parameter Golf の GradPower（PR #1682）
+# Parameter Golf's GradPower (PR #1682)
 
-`openai/parameter-golf` の PR #1682（2026-04-16、記録ではない枠、2026-11-04 時点で未マージ）。GradPower を Muon にかけて p を比べた。
+PR #1682 of `openai/parameter-golf` (2026-04-16, in the non-record track, unmerged as of 2026-11-04). It applies GradPower to Muon and compares values of p.
 
-## 条件
+## Settings
 
-- 1,700万パラメータ（既定の形は9層、幅512、語彙1,024で、埋め込みと出力は共有）。FineWeb、文脈1,024、1回の更新524,288トークン。
-- 隠れ層の行列は Muon（学習率0.04）で、勾配をモーメントの前に `sign(g)·|g|^p` にする。埋め込みとスカラーは Adam のままで、累乗はかけない。
-- 1枚の H100 で1,200秒（約2,400回の更新）。p を広く比べたのは1枚の RTX 4080 で、1,200秒と600秒。
+- 17 million parameters (the default architecture is 9 layers, width 512 and vocabulary 1,024, with shared embedding and output). FineWeb, context 1,024, 524,288 tokens per update.
+- The hidden layers' matrices use Muon (learning rate 0.04), with the gradient turned into `sign(g)·|g|^p` before the momentum. The embeddings and scalars stay on Adam, without the power.
+- 1,200 seconds on one H100 (about 2,400 updates). The wide comparison of p ran on one RTX 4080, at 1,200 and 600 seconds.
 
-## 結果
+## Results
 
-| 条件 | p | BPB | p=1.0 との差 |
+| Setting | p | BPB | Difference from p=1.0 |
 |---|---|---|---|
-| H100、1,200秒、種1つ | 0.9 | 1.28338 | −0.00353（−0.27%） |
-| 同上 | 1.0 | 1.28691 | |
-| RTX 4080、1,200秒、種3つの平均 | 0.9 | 1.36673 | −0.00191（−0.14%） |
-| 同上 | 1.0 | 1.36864 | |
-| RTX 4080、600秒（種2〜3つ） | 1.05 | 1.51246 | +0.00632 |
-| 同上 | 1.1 | 1.51651 | +0.01037 |
-| 同上 | 1.2 | 1.52744 | +0.02129（+1.4%） |
-| 同上 | 1.0 | 1.50615 | |
+| H100, 1,200 seconds, 1 seed | 0.9 | 1.28338 | −0.00353 (−0.27%) |
+| Same | 1.0 | 1.28691 | |
+| RTX 4080, 1,200 seconds, mean of 3 seeds | 0.9 | 1.36673 | −0.00191 (−0.14%) |
+| Same | 1.0 | 1.36864 | |
+| RTX 4080, 600 seconds (2–3 seeds) | 1.05 | 1.51246 | +0.00632 |
+| Same | 1.1 | 1.51651 | +0.01037 |
+| Same | 1.2 | 1.52744 | +0.02129 (+1.4%) |
+| Same | 1.0 | 1.50615 | |
 
-- RTX 4080 の1,200秒では、0.85〜0.975のどれも1.0より低く、0.85〜0.925はほぼ同じ。0.9の種ごとの差は −0.0028、−0.0025、−0.0005 で、1つの p の中の種による標準偏差は0.0016〜0.0030。
-- H100 の2回は同じ時間で、更新の回数が2,391回と2,355回と違う。
-- 著者は、論文の p=1.2 はこの設定では逆向きで、p はオプティマイザと勾配の揺れに合わせる必要があるとしている。
+- At 1,200 seconds on the RTX 4080, every p from 0.85 to 0.975 is lower than 1.0, and 0.85 to 0.925 are nearly the same. The per-seed differences at 0.9 are −0.0028, −0.0025 and −0.0005, and the standard deviation across seeds within one p is 0.0016–0.0030.
+- The two H100 runs had the same time but different numbers of updates: 2,391 and 2,355.
+- The author says the paper's p=1.2 goes the wrong way in this setting, and that p needs to be matched to the optimizer and the gradient noise.
 
-読んだのは PR の説明と README、`train_gpt.py` の Muon と設定の部分。ログは読んでいない。
+The PR's description and README, and the Muon and settings parts of `train_gpt.py`, were read. The logs were not read.

@@ -1,14 +1,14 @@
 # Fast Catch-up, Late Switching
 
-Wang ら、Fast Catch-up, Late Switching: Optimal Batch Size Scheduling via Functional Scaling Laws（arXiv 2602.14208、ICLR 2026）。
+Wang et al., Fast Catch-up, Late Switching: Optimal Batch Size Scheduling via Functional Scaling Laws (arXiv 2602.14208, ICLR 2026).
 
-データの総量を固定して、バッチの増やし方を理論と実験で調べた。
+With the total amount of data fixed, it studies in theory and in experiments how to grow the batch.
 
-- 難しい課題では、学習の大半を小さいバッチで進めて遅く切り替えるのが良い。易しい課題では増やし続けるのが良く、段階が少ないなら最初から大きいバッチが良い。難しいか易しいかは理論のモデル（線形回帰やカーネル回帰）の指数で決まり、言語モデルの事前学習がどちらかは書かれていない。
-- 切り替えのあと、損失はすぐに大きいバッチの線に追いつく。cosine で学習率を下げても、この形と遅く切り替えるほうが良いことは変わらない（付録 B.6）。
-- 5,000万パラメータの LLaMA では、最適な切り替えはトークンの約70%の所。予算を13億〜50億トークンで変えた最適点は、べき乗でよく当てはまる（R²=0.990）。
-- 大きい実験は MoE の10億と11億（0.4兆、1兆トークン）で、640→1280、1024→2048 など。
+- On hard tasks, it is best to run most of training with a small batch and switch late. On easy tasks, it is best to keep growing the batch, and with few stages a large batch from the start is best. Whether a task is hard or easy is set by an exponent of the theoretical model (linear or kernel regression), and it is not stated which one language-model pretraining is.
+- After the switch, the loss quickly catches up with the large-batch curve. Decaying the learning rate with cosine does not change this shape or the advantage of switching late (Appendix B.6).
+- For a 50 million parameter LLaMA, the best switch is at about 70% of the tokens. The optimal points over budgets of 1.3 billion to 5 billion tokens fit a power law well (R²=0.990).
+- The large experiments are MoE models of 1 billion and 1.1 billion (0.4 trillion and 1 trillion tokens), with batches such as 640→1280 and 1024→2048.
 
-小さい規模の条件（付録 B）：NanoGPT のコードで LLaMA 型、C4、文脈256。AdamW（β 0.9、0.95、weight decay 0.1、勾配のクリップ1.0）、準備1,000更新、学習率は5,000万と2億で1e-3、5億で5e-4。トークンはパラメータの約20倍。5,000万は1回128本から256本（3.3万から6.6万トークン、自分たちの計算）。バッチを変えたときに学習率を変えたかは書かれていない。
+Small-scale settings (Appendix B): a LLaMA-style model in NanoGPT's code, C4, context 256. AdamW (β 0.9, 0.95, weight decay 0.1, gradient clipping 1.0), 1,000 warmup updates, and a learning rate of 1e-3 at 50 million and 200 million and 5e-4 at 500 million. Tokens are about 20× the parameters. The 50 million model goes from 128 to 256 sequences per update (33,000 to 66,000 tokens, our own calculation). Whether the learning rate was changed when the batch changed is not stated.
 
-損失の数字は図の中だけで、本文と表にはない。読んだのは HTML の本文と付録 B を、要約を通したもの。
+The loss numbers are only in the figures, not in the text or tables. The HTML main text and Appendix B were read through a summary.

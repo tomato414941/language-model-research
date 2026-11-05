@@ -1,19 +1,19 @@
 # Optimal Scaling Needs Optimal Norm
 
-Optimal Scaling Needs Optimal Norm（arXiv 2510.03871）。Scion（更新の大きさを行列の大きさで決める最適化で、Muon に近い）で、モデルやデータの規模を変えても一番良い大きさが変わらないことを調べた論文。
+Optimal Scaling Needs Optimal Norm (arXiv 2510.03871). A paper that studied, with Scion (an optimizer that sets the size of an update by the matrix's norm, close to Muon), how the best norm does not change as the scale of the model or the data changes.
 
-付録 A.10 に、注意と SwiGLU の出力の重みの初期の大きさの比較がある。半直交の初期値に 1/√(2×層の数) を掛けるか、掛けないか。幅256、RMSNorm、RoPE、入力と出力の埋め込みは分離。32本×4,096トークンで2,048回（2.7億トークン）。
+Appendix A.10 has a comparison of the initial size of the output weights of attention and SwiGLU: whether or not the semi-orthogonal initialization is multiplied by 1/√(2×number of layers). Width 256, RMSNorm, RoPE, separate input and output embeddings. 2,048 updates of 32 sequences × 4,096 tokens (270 million tokens).
 
-一番良い学習率での最後の損失。差は自分たちの計算。
+The final loss at the best learning rate. The differences are our own calculation.
 
-| 層 | 掛けない | 1/√(2×層の数) | 差 |
+| Layers | Not multiplied | 1/√(2×number of layers) | Difference |
 |---|---|---|---|
 | 2 | 4.10 | 4.09 | −0.24% |
 | 16 | 3.74 | 3.73 | −0.27% |
 | 64 | 3.62 | 3.60 | −0.55% |
 
-- 著者は、差は無視できるくらいとしている。数字は小数2桁までなので、±0.3%ほどの丸めがある。
-- 残差に係数を掛ける CompleteP の形は、掛けないより悪い（2層 4.15、16層 3.82、64層 3.67）。
-- 0は比べていない。
+- The authors call the difference negligible. The numbers have only two decimal places, so there is rounding of about ±0.3%.
+- The CompleteP form, which multiplies the residuals by a factor, is worse than not multiplying (2 layers 4.15, 16 layers 3.82, 64 layers 3.67).
+- It does not compare 0.
 
-読んだのは付録 A.10 と、モデルの条件の部分。本文は導入と要点だけ。
+Appendix A.10 and the part on the model's conditions were read. Of the main text, only the introduction and the key points were read.

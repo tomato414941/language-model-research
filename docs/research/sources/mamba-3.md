@@ -1,15 +1,15 @@
 # Mamba-3
 
-Mamba-3: Improved Sequence Modeling using State Space Principles（arXiv 2603.15569、ICLR 2026 の口頭発表）。
+Mamba-3: Improved Sequence Modeling using State Space Principles (arXiv 2603.15569, an oral presentation at ICLR 2026).
 
-| 大きさ | Transformer | GDN | Mamba-2 | Mamba-3 MIMO |
+| Size | Transformer | GDN | Mamba-2 | Mamba-3 MIMO |
 |---|---|---|---|---|
-| 1.8億の perplexity | 16.89 | 16.52 | 16.76 | 16.46 |
-| 1.8億の点の平均 | 42.8 | 43.2 | 42.9 | 43.5 |
-| 4.4億の点の平均 | 49.6 | 49.7 | 49.6 | 51.0 |
-| 8.8億の点の平均 | 52.8 | 53.7 | 53.4 | 55.3 |
-| 15億の点の平均 | 55.4 | 55.8 | 55.7 | 57.6 |
+| Perplexity at 180 million | 16.89 | 16.52 | 16.76 | 16.46 |
+| Mean score at 180 million | 42.8 | 43.2 | 42.9 | 43.5 |
+| Mean score at 440 million | 49.6 | 49.7 | 49.6 | 51.0 |
+| Mean score at 880 million | 52.8 | 53.7 | 53.4 | 55.3 |
+| Mean score at 1.5 billion | 55.4 | 55.8 | 55.7 | 57.6 |
 
-1,000億トークン、FineWeb-Edu、文脈2,000で、パラメータを揃えた比較。FLOPs や時間を揃えたかは読んだ範囲に書かれていない。
+A comparison at matched parameters, with 100 billion tokens of FineWeb-Edu and a context of 2,000. Whether FLOPs or time were matched is not stated in the part read.
 
-読んだのは HTML の本文の前の約半分を要約を通したもの。学習の速さは読んだ範囲にない。
+Read: about the first half of the HTML body through a summary. Training speed is not in the part read.

@@ -1,29 +1,29 @@
 # T-Muon
 
-Li ら、T-MUON: Tensorizing Muon via t-SVD for Large Language Model Pre-training（arXiv 2610.24938、2026-10）。
+Li et al., T-MUON: Tensorizing Muon via t-SVD for Large Language Model Pre-training (arXiv 2610.24938, 2026-10).
 
-いくつかの勾配の行列を重ねてテンソルにし、重ねた向きに変換をかけてから1枚ずつ直交化する。重ね方は、隣の2層、Q・K・V、ヘッド、Q・K・V のヘッド全部の4つ。変換は恒等、DFT、DCT、DST。恒等変換でヘッドごとに重ねる形（Head-I）は、Q、K、V をヘッドごとの行の塊に分けて、別々に直交化するのと同じ。ヘッドごとの直交化そのものは Group Muon（arXiv 2605.08933）が先に調べていて、この論文の貢献はテンソルとしての定式化と比較だとしている。
+It stacks several gradient matrices into a tensor, applies a transform along the stacking direction, and then orthogonalizes each slice. There are four ways of stacking: two adjacent layers, Q/K/V, heads, and all the heads of Q/K/V. The transforms are identity, DFT, DCT and DST. Stacking per head with the identity transform (Head-I) is the same as splitting Q, K and V into blocks of rows per head and orthogonalizing them separately. Per-head orthogonalization itself was studied earlier by Group Muon (arXiv 2605.08933), and the paper says its contribution is the formulation as tensors and the comparison.
 
-## 条件
+## Conditions
 
-- 分け方を変えるのは Q、K、V だけ。注意の出力と MLP は普通の Muon、埋め込みや出力などは AdamW。
-- 文脈1,024、1回の更新512本（524,288トークン）、cosine、準備10%、weight decay 0.1、Polar Express 5回。FineWeb 10億トークン（約1,900回の更新）。
-- 学習率は Muon と T-Muon で同じ格子（LLaMA 型は0.005〜0.08）を探し、3つの種の平均で選ぶ。
-- LLaMA 型は Q、K、V が別の行列で、基準の Muon も別々に直交化する。GPT-2 型は Q、K、V が1つの行列で、基準の Muon はまとめて直交化し、T-Muon はどの形でも先に分ける。
+- Only Q, K and V have their split changed. The attention output and the MLP use ordinary Muon, and the embeddings, the output and the like use AdamW.
+- Context 1,024, 512 sequences per update (524,288 tokens), cosine, 10% warmup, weight decay 0.1, 5 Polar Express iterations. 1 billion tokens of FineWeb (about 1,900 updates).
+- The learning rate is searched over the same grid for Muon and T-Muon (0.005–0.08 for the LLaMA type) and chosen by the mean over 3 seeds.
+- In the LLaMA type, Q, K and V are separate matrices, and the baseline Muon also orthogonalizes them separately. In the GPT-2 type, Q, K and V are one matrix; the baseline Muon orthogonalizes it as a whole, while T-Muon splits it first in every form.
 
-## 結果（LLaMA 型、FineWeb 10億トークン、種3つ）
+## Results (LLaMA type, FineWeb 1 billion tokens, 3 seeds)
 
-| 大きさ | AdamW | Muon | Head-I | Muon との差（loss） |
+| Size | AdamW | Muon | Head-I | Difference from Muon (loss) |
 |---|---|---|---|---|
-| 6,000万（8層、幅512、8ヘッド） | 32.17 | 26.56 ± 0.02 | 25.95 ± 0.03 | −0.71% |
-| 1.3億（12層、幅768、12ヘッド） | 28.15 | 22.36 ± 0.01 | 21.92 ± 0.00 | −0.65% |
-| 3.5億（24層、幅1,024、16ヘッド） | 24.03 | 19.39 ± 0.00 | 19.06 ± 0.00 | −0.58% |
+| 60 million (8 layers, width 512, 8 heads) | 32.17 | 26.56 ± 0.02 | 25.95 ± 0.03 | −0.71% |
+| 130 million (12 layers, width 768, 12 heads) | 28.15 | 22.36 ± 0.01 | 21.92 ± 0.00 | −0.65% |
+| 350 million (24 layers, width 1,024, 16 heads) | 24.03 | 19.39 ± 0.00 | 19.06 ± 0.00 | −0.58% |
 
-- 数字は検証の perplexity。差は loss に直したもの（自分たちの計算）。
-- 恒等変換で隣の層や Q・K・V を重ねる形は、LLaMA 型では普通の Muon と同じ更新になり、値もほぼ同じ（6,000万で26.59、26.57）。主な比較では、恒等以外の変換はどれも恒等より悪い。
-- 1.3億を22億トークンにすると19.35→19.00（−0.62%）。FineWeb-Edu（種1つ、学習率は小さい規模で決めて持ち上げる）では、6,000万〜13億で −0.5〜−0.7%。
-- GPT-2 型では Muon との差が −1.1〜−1.3% と大きいが、著者は、一部は Q、K、V を分けた分だとしている。分けるだけの形（QKV-I）でも、5,000万で42.24→40.60。
-- 長い文脈（種1つ）では、一番良い形がモデルで変わる（Head-I、Layer-F、Head-stack-I）。長い文脈の GPT-Base では DFT の形が一番良い。
-- 1回の更新の時間と、下流の課題の点は報告がない。
+- The numbers are validation perplexity. The differences are converted to loss (our own calculation).
+- Stacking adjacent layers or Q/K/V with the identity transform gives the same update as ordinary Muon in the LLaMA type, and nearly the same values (26.59 and 26.57 at 60 million). In the main comparison, every transform other than identity is worse than identity.
+- Taking 130 million to 2.2 billion tokens gives 19.35→19.00 (−0.62%). On FineWeb-Edu (1 seed, with the learning rate set at a small scale and carried up), −0.5 to −0.7% at 60 million–1.3 billion.
+- In the GPT-2 type the difference from Muon is larger, at −1.1 to −1.3%, but the authors say part of it comes from splitting Q, K and V. Even the form that only splits them (QKV-I) gives 42.24→40.60 at 50 million.
+- With long contexts (1 seed), the best form changes with the model (Head-I, Layer-F, Head-stack-I). For GPT-Base with long contexts, the DFT form is the best.
+- The time per update and the scores on downstream tasks are not reported.
 
-読んだのは HTML の本文と付録 D、E（表は HTML から直接）。証明（付録 B、C）は読んでいない。
+The HTML main text and Appendices D and E were read (the tables directly from the HTML). The proofs (Appendices B, C) were not read.

@@ -1,9 +1,9 @@
 # Optimal Embedding Learning Rate and Vocabulary Size
 
-Hayou、Liu、Optimal Embedding Learning Rate in LLMs: The Effect of Vocabulary Size（arXiv 2506.15025）。
+Hayou and Liu, Optimal Embedding Learning Rate in LLMs: The Effect of Vocabulary Size (arXiv 2506.15025).
 
-- μP は語彙の大きさを固定して考えるが、実際は語彙が幅より大きい。語彙も大きくなる場合、埋め込みの学習率は隠れ層の √幅 倍が良いと導いている。
-- 小さい実験（2層、Wikitext2、語彙32,768、幅256〜4,096、Adam、1万回）で、一番良い埋め込みの学習率は幅とともに下がる。ばらつきは大きい。隠れ層と出力は同じ学習率と初期値が良い。
-- 10億のモデル（24層、幅2,048、RoPE、SwiGLU）を1.75兆トークンで学習し、同じ学習率と √幅 倍（約45倍）を比べた。√幅 倍は最初から最後まで速く、最後の学習の損失も Wikitext のテストも良い。それより大きくしても差はわずか。
+- μP treats the vocabulary size as fixed, but in practice the vocabulary is larger than the width. For the case where the vocabulary also grows, the paper derives that the best embedding learning rate is √width times that of the hidden layers.
+- In a small experiment (2 layers, Wikitext2, vocabulary 32,768, width 256 to 4,096, Adam, 10,000 updates), the best embedding learning rate falls as the width grows. The spread is large. For the hidden layers and the output, the same learning rate and initialization work best.
+- A 1-billion model (24 layers, width 2,048, RoPE, SwiGLU) was trained on 1.75 trillion tokens, comparing the same learning rate with √width times (about 45×). √width times is faster from start to finish, and better in both the final training loss and the Wikitext test. Going larger than that makes little difference.
 
-読んだのは要旨、導入、3節の実験の部分、4節。図の数字は読んでいない。
+Read: the abstract, the introduction, the experimental part of Section 3, and Section 4. The numbers in the figures were not read.

@@ -1,17 +1,17 @@
 # Towards Robust Scaling Laws for Optimizers
 
-Volkova ら（arXiv 2602.07712、2026-02）。
+Volkova et al. (arXiv 2602.07712, 2026-02).
 
-- OLMo 形（ClimbMix）と Llama 形（FineWeb）の2系統で、AdamW、Muon、Scion、Shampoo、SOAP を比べる。5,000万〜15億パラメータ、1パラメータ30、50、100、200トークン。バッチ512、文脈1,024（更新1回524,288トークン）。warmup 5%、減衰20%の WSD。5,000万で設定を調整し、他の大きさでは学習率を調整する。250回以上の学習。
-- 手法ごとに別々の Chinchilla の式を当てはめると不安定になる。指数を共有し、手法ごとの係数 ρN（モデルの大きさへの効き）と ρD（トークンへの効き）だけを変える形にすると、外挿の誤差が半分以下になる。
+- Compares AdamW, Muon, Scion, Shampoo and SOAP in two families: OLMo-shaped (ClimbMix) and Llama-shaped (FineWeb). 50 million to 1.5 billion parameters, at 30, 50, 100 and 200 tokens per parameter. Batch 512, context 1,024 (524,288 tokens per update). WSD with 5% warmup and 20% decay. The settings are tuned at 50 million, and at the other sizes the learning rate is tuned. More than 250 training runs.
+- Fitting a separate Chinchilla formula for each method is unstable. Sharing the exponents and varying only the per-method coefficients ρN (the effect on model size) and ρD (the effect on tokens) more than halves the extrapolation error.
 
-AdamW を1としたときの係数。
+The coefficients, with AdamW as 1.
 
-| 手法 | OLMo ρN | OLMo ρD | Llama ρN | Llama ρD |
+| Method | OLMo ρN | OLMo ρD | Llama ρN | Llama ρD |
 |---|---|---|---|---|
 | Muon | 0.96 | 2.08 | 1.02 | 1.41 |
 | Scion | 0.95 | 1.99 | 0.95 | 1.73 |
 | Shampoo | 0.95 | 1.55 | 0.99 | 1.16 |
 | SOAP | 0.95 | 2.57 | 0.98 | 1.75 |
 
-読んだのは要旨、導入、実験の設定、表3と表4、結論。理論の節と付録は読んでいない。
+Read: the abstract, the introduction, the experimental setup, Tables 3 and 4, and the conclusion. The theory sections and the appendices were not read.

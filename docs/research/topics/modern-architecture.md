@@ -1,42 +1,42 @@
-# モデルの形
+# The model's shape
 
-[最初の束](../experiments/first-bundle.md)は学習法を今の手法にしたが、モデルの形の多くは nanoGPT のまま。[nanochat](../sources/nanochat-log.md)、[autoresearch](../sources/autoresearch.md)、[modded-nanogpt](../sources/modded-nanogpt-records.md) はどれも形を変えている。この3つは同じ流れのコードで、手法を受け継いでいるので、3つが同じ形でも独立した3つの確認ではない。「今の見方」は2026-11時点で読んだものからの仮のもので、自分たちでは測っていない。
+[The first bundle](../experiments/first-bundle.md) brought the training method up to current methods, but much of the model's shape is still nanoGPT's. [nanochat](../sources/nanochat-log.md), [autoresearch](../sources/autoresearch.md) and [modded-nanogpt](../sources/modded-nanogpt-records.md) all change the shape. The three are code of the same lineage and inherit methods from one another, so even when all three share a shape, that is not three independent confirmations. "Current view" is provisional, based on what was read as of 2026-11, and not measured ourselves.
 
-| 部分 | 最初の束 | autoresearch | 効果の報告 |
+| Part | First bundle | autoresearch | Reported effect |
 |---|---|---|---|
-| 位置 | 学習する表 | RoPE | rope.md |
-| 正規化 | LayerNorm（学習する重み） | RMSNorm（重みなし） | normalization.md |
-| Q と K の正規化 | なし | あり | qk-norm.md |
-| 活性化関数 | GELU | ReLU² | activation.md |
-| 出力の初期値 | 小さい値 | 0 | output-init.md |
-| 埋め込み | 入力と出力で共有 | 分離、大きい学習率 | embeddings.md |
-| x0、resid の重み | なし | あり | residual-weights.md |
-| logit の softcap | なし | 15 | logit-softcap.md |
-| 層を流れる値の精度 | fp32 | 埋め込みの表だけ bf16 | stream-precision.md |
-| 読み方 | 途中から切り出す | 文書の頭から詰める | document-rows.md |
-| 注意の窓 | 全部 | 4層中3層を半分に | 計算の約7%減の見積もり。attention-kernel.md |
-| 文脈 | 1,024 | 2,048 | 1回の更新が7.5%遅い。検証の BPB は直接比べられない |
+| Position | Learned table | RoPE | rope.md |
+| Normalization | LayerNorm (learned weights) | RMSNorm (no weights) | normalization.md |
+| Normalizing Q and K | No | Yes | qk-norm.md |
+| Activation function | GELU | ReLU² | activation.md |
+| Output initialization | Small values | 0 | output-init.md |
+| Embeddings | Shared between input and output | Separate, large learning rate | embeddings.md |
+| x0 and resid weights | No | Yes | residual-weights.md |
+| Logit softcap | No | 15 | logit-softcap.md |
+| Precision of the values flowing through the layers | fp32 | Only the embedding table in bf16 | stream-precision.md |
+| How data is read | Cut out from the middle | Packed from the start of documents | document-rows.md |
+| Attention window | Full | Half in 3 of 4 layers | Estimated to cut compute by about 7%. attention-kernel.md |
+| Context | 1,024 | 2,048 | An update is 7.5% slower. Validation BPB cannot be compared directly |
 
-記録5は、ヘッド128次元（束に入れた）を含めて、時間で1.47倍分。記録9は、value residual と momentum の warmup（束に入れた）を含めて1.32倍分。
+Record 5 is worth 1.47× in time, including 128-dimensional heads (put into the bundle). Record 9 is worth 1.32×, including value residual and momentum warmup (put into the bundle).
 
-autoresearch の標準は学習300秒で BPB 0.998 で、最初の束は810秒で 1.024。ただし検証の量、文脈、行の切り方が違い、そのままは比べられない。GPU の使用率は autoresearch も最初の束も約39%で、1トークンの計算は約2.4億と4.1億（自分たちの計算）。
+autoresearch's standard reaches BPB 0.998 with 300 seconds of training, and the first bundle 1.024 with 810 seconds. But the amount of validation data, the context and how rows are cut differ, so they cannot be compared as is. GPU utilization is about 39% for both autoresearch and the first bundle, and the compute per token is about 240 million and 410 million (our own calculation).
 
-## 今の見方
+## Current view
 
-2番目の束は、形を今の標準に揃えることを中心にした。[2番目の束](../experiments/second-bundle.md)の結果は、最初の束より正解の BPB が −4.4%、文書の頭から読む検証の BPB が −4.2%（今の測り方の検証の BPB は +2.2%で、理由は document-rows.md）。項目ごとの効果は分けて測っていない。
+The second bundle centered on bringing the shape up to the current standard. [The second bundle](../experiments/second-bundle.md)'s result against the first bundle: correct-answer BPB −4.4%, and validation BPB read from the start of documents −4.2% (validation BPB as currently measured is +2.2%; the reason is in document-rows.md). The effect of each change was not measured separately.
 
-- nanoGPT に近いモデルから、同じくらいの規模で1つずつ足した記録があり、今の条件に一番近い根拠。
-- ほとんどが計算を増やさないか減らす。
-- どれも特定のモデルや課題に頼らない手法。ただし大規模でも標準と言えるのは RoPE、RMSNorm（重みありの形）、埋め込みの分離までで、重みなしの RMSNorm、ReLU²、出力のゼロ初期化は主に上の3つの流れのもの。大規模でも効くかは確かめていない。
-- autoresearch が、この形と学習率の組で動かしている。
+- There are records of adding them one at a time, at a similar scale, starting from a model close to nanoGPT; this is the evidence closest to our conditions.
+- Most add no compute or reduce it.
+- All are methods that do not depend on a particular model or task. But only RoPE, RMSNorm (the form with weights) and separate embeddings can be called standard at large scale too; RMSNorm without weights, ReLU² and zero-initialized outputs come mainly from the three lineages above. Whether they also help at large scale has not been checked.
+- autoresearch runs with this combination of shape and learning rates.
 
-粗い見積もりは、読み方までの10項目で BPB が2〜6%下がる（それぞれのメモの見込みから）。計算量2倍で −3.9% の換算と、別々の条件の数字からのもので、記録の効果の一部は最初の束に含まれている。足し算にもならない。順番を決めるための目安にすぎない。
+A rough estimate is that the ten changes down to how data is read lower BPB by 2–6% (from each note's expectations). It comes from the conversion of 2× compute to −3.9% and from numbers under different conditions, and part of the records' effects is already included in the first bundle. Nor do the effects add up. It is only a guide for setting the order.
 
-窓と文脈は、測り方も変わるので後に回す。
+The window and the context are postponed, since they also change how things are measured.
 
-## 見方が変わりそうな条件
+## What would change the view
 
-- 測って、見積もりより大きく外れた場合。
-- 形を変えたあとで、学習率が合わなくなった場合。nanochat は、ある規模で調整した値が別の規模で悪くなるとしている。
-- 埋め込みの分離が、語彙を増やしたときに表の大きさで不利になる場合。
-- 課題を変えて、推論の費用も数える場合。
+- Measurements far off the estimate.
+- The learning rates no longer fitting after the shape changes. nanochat says values tuned at one scale get worse at another.
+- Separate embeddings becoming a disadvantage through table size when the vocabulary grows.
+- Changing the task so that inference cost counts too.

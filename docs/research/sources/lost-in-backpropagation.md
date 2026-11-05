@@ -1,13 +1,13 @@
 # Lost in Backpropagation
 
-Godey、Artzi、Lost in Backpropagation: The LM Head is a Gradient Bottleneck（arXiv 2603.10145、2026-03）。
+Godey, Artzi, Lost in Backpropagation: The LM Head is a Gradient Bottleneck (arXiv 2603.10145, 2026-03).
 
-語彙の次元から隠れ状態の次元へ勾配を絞るところで、勾配の大きさの95〜99%が失われるとする。
+It says 95–99% of the gradient's magnitude is lost where the gradient is squeezed from the vocabulary dimension down to the hidden-state dimension.
 
-20億の実験：6層、幅4,096、語彙49,152、約110億トークン。出力の表を W=AB と分け、幅 D を32〜4,096で変えた。
+Experiments at 2 billion: 6 layers, width 4,096, vocabulary 49,152, about 11 billion tokens. The output embedding table was factored as W=AB, and the width D was varied from 32 to 4,096.
 
-- D=4096 は、D=32 の最後の損失に7億トークンで届く（16倍速い）。
-- 110億トークンの点の平均は D=32 で 42.03、D=256 で 49.07、D=4096 で 50.77。D=1024 より上では伸びが鈍る。
-- 語彙が幅に比べて大きいほど難しくなる（D=576 で語彙1,024〜131,072）。解き方としては、語彙を小さく保つことを暗に勧めるだけで、小さいモデルの実験はない。
+- D=4096 reaches D=32's final loss in 700 million tokens (16× faster).
+- The mean score at 11 billion tokens is 42.03 at D=32, 49.07 at D=256 and 50.77 at D=4096. Above D=1024 the gains slow down.
+- The larger the vocabulary relative to the width, the harder it gets (vocabulary 1,024 to 131,072 at D=576). As a remedy, it only implicitly suggests keeping the vocabulary small, and there are no experiments with small models.
 
-読んだのは v1 の HTML の本文を要約を通したもの。
+The main text of v1's HTML was read through a summary.

@@ -1,22 +1,22 @@
 # Dispersion Loss
 
-同じ文のトークンのベクトルどうしの向きが離れるように、損失を1つ足す方法（[出典](../sources/dispersion-loss.md)）。2026-11-03 に3番目の束へ入れた。束は2026-11-04 に2番目の束より文書の頭から読む検証の BPB で約1%良かった（[3番目の束](../experiments/third-bundle.md)）が、この項目だけの効果は分けていない。
+A method that adds one loss term so that the directions of the token vectors within the same text spread apart ([source](../sources/dispersion-loss.md)). It was put into the third bundle on 2026-11-03. On 2026-11-04 the bundle was about 1% better than the second bundle on validation BPB read from the start of documents ([the third bundle](../experiments/third-bundle.md)), but this item's own effect was not separated.
 
-## 入れた理由と弱いところ
+## Why it was included, and its weak points
 
-- 小さいモデルほどトークンの向きが1か所に集まるという報告で、今のモデル（5,440万）は小さい。報告では選択式の点の平均が +0.7〜1.5。
-- 研究は1つだけで、BPB は報告していない。今のモデルで向きが集まっているかは測っていない。保存したモデルで測る無料の確認を提案したが、確認をせずに入れた。
-- 論文のゼロからの学習は、読む量が今の約200倍。QK-norm など今の束の正規化との関係は分からない。
+- A report says that the smaller the model, the more its token directions gather in one place, and the current model (54.4 million) is small. In the report, the mean multiple-choice score is +0.7 to 1.5.
+- There is only one study, and it does not report BPB. Whether the directions gather in the current model was not measured. A free check on a saved model was proposed, but the item was included without the check.
+- The paper's training from scratch has an amount read about 200× ours. How it relates to the current bundle's normalization, such as QK-norm, is unknown.
 
-## 3番目の束での形
+## Its form in the third bundle
 
-設定は `configs/bundle3.py`。
+The settings are in `configs/bundle3.py`.
 
-- 10層それぞれの出力の、8つおきの位置（1行128か所）で、行の中の全部の組の角度から損失を計算し、層と行で平均する。重み0.1、τ=1 は論文の既定の値。
-- 論文は組の和の対数だが、組の数の対数を引いて平均の対数にした。勾配は同じで、損失の値が −1 から 0 に収まる。
-- 学習の時だけ足し、検証の損失には入らない。学習の損失の表示には入る。
+- At every eighth position (128 positions per row) of each of the 10 layers' outputs, the loss is computed from the angles of all pairs within the row and averaged over layers and rows. The weight 0.1 and τ=1 are the paper's default values.
+- The paper takes the log of the sum over pairs, but here the log of the number of pairs is subtracted, making it the log of the mean. The gradient is the same, and the loss value falls between −1 and 0.
+- It is added only in training and is not part of the validation loss. It is part of the training loss that is displayed.
 
-## 見方が変わりそうな条件
+## Conditions likely to change the view
 
-- 束を測って点が下がった場合。
-- 今のモデルで向きが集まっていないと分かった場合。
+- When the bundle is measured and its scores drop.
+- When the directions turn out not to gather in the current model.

@@ -1,23 +1,23 @@
-# 最初の束を H100 で学習した
+# Training the first bundle on an H100
 
-2026-11-01 に、基準（baseline.md）と同じコストで、変更をまとめた束を1回学習した。検証の BPB は18.5%、正解の BPB の平均は16.5%下がった。
+On 2026-11-01, a bundle of changes was trained once at the same cost as the baseline (baseline.md). Validation BPB fell by 18.5% and the mean correct-answer BPB by 16.5%.
 
-## 条件
+## Setup
 
-- 機械：Vast.ai の日本の H100 SXM 80GB を1枚、$2.41/時。ドライバ 615.71.09。
-- イメージ：基準と同じ（torch 2.15.0+cu132）。cuDNN は 9.26。
-- モデル：10層、幅640、5ヘッド（ヘッド128次元）、文脈1,024、語彙8,192、Value embeddings。計算に使うパラメータは5,441万、全体は8,130万。
-- 学習：Muon と AdamW の併用（Polar Express、NorMuon、cautious weight decay）。学習率は未調整。1,441回の更新、1回524,288トークン（1回128本を4回足す）、計約7.6億トークン。bf16、torch.compile、注意の計算は PyTorch の既定。種は1つ（1337）。設定は `configs/bundle.py`。
-- 同じコスト：同じ機械で基準を短く動かし、更新の時間とその外の時間から、更新の回数を決めた（`speed.py`）。学習の実時間は810秒で、基準は830秒と808秒。
-- データと採点：基準と同じ。全問（30,470問）を採点した。
+- Machine: one H100 SXM 80GB on Vast.ai in Japan, $2.41/hour. Driver 615.71.09.
+- Image: the same as the baseline's (torch 2.15.0+cu132). cuDNN 9.26.
+- Model: 10 layers, width 640, 5 heads (128 dimensions per head), context 1,024, vocabulary 8,192, Value embeddings. 54.41 million parameters used in computation, 81.3 million in total.
+- Training: Muon and AdamW together (Polar Express, NorMuon, cautious weight decay). Learning rates untuned. 1,441 updates of 524,288 tokens each (4 passes of 128 rows added up), about 760 million tokens in total. bf16, torch.compile, attention computed with PyTorch's default. One seed (1337). Settings in `configs/bundle.py`.
+- The same cost: the baseline was run briefly on the same machine, and the number of updates was set from the time per update and the time outside updates (`speed.py`). Training took 810 seconds of wall-clock time; the baseline took 830 and 808 seconds.
+- Data and scoring: the same as the baseline's. All questions (30,470) were scored.
 
-## 点
+## Scores
 
-| | 基準の種1 | 基準の種2 | 束 | 基準の平均からの変化 |
+| | Baseline seed 1 | Baseline seed 2 | Bundle | Change from the baseline mean |
 |---|---|---|---|---|
-| 検証データの BPB | 1.2536 | 1.2571 | 1.0237 | −18.5% |
-| 検証の損失（`train.py`、20回の抜き出し） | 3.4646 | 3.4834 | 2.8410 | −18.0% |
-| 正解の BPB（6つの平均） | 1.6921 | 1.6700 | 1.4037 | −16.5% |
+| Validation BPB | 1.2536 | 1.2571 | 1.0237 | −18.5% |
+| Validation loss (`train.py`, 20 draws) | 3.4646 | 3.4834 | 2.8410 | −18.0% |
+| Correct-answer BPB (mean of 6) | 1.6921 | 1.6700 | 1.4037 | −16.5% |
 | MMLU | 1.953 | 1.990 | 1.662 | −15.7% |
 | ARC-Easy | 1.769 | 1.716 | 1.463 | −16.1% |
 | ARC-Challenge | 1.736 | 1.705 | 1.452 | −15.6% |
@@ -25,76 +25,76 @@
 | PIQA | 1.615 | 1.636 | 1.339 | −17.7% |
 | SciQ | 1.787 | 1.676 | 1.441 | −16.7% |
 
-学習の最後の損失は学習データで2.8437、検証データで2.8410で、差はほとんどない。
+The final loss of training was 2.8437 on the training data and 2.8410 on the validation data, with almost no gap.
 
-参考に、OpenAI の GPT-2（1.2億パラメータ）を測ったのと同じ問題（5つのベンチマークの最初の200問ずつ。MMLU は問題を揃えられなかったので除く）で比べた。
+For reference, we compared on the same questions that OpenAI's GPT-2 (120 million parameters) was measured on (the first 200 questions of each of 5 benchmarks; MMLU is left out because its questions could not be aligned).
 
-| | GPT-2 | 基準の種1 | 基準の種2 | 束 |
+| | GPT-2 | Baseline seed 1 | Baseline seed 2 | Bundle |
 |---|---|---|---|---|
 | ARC-Easy | 1.704 | 1.750 | 1.691 | 1.473 |
 | ARC-Challenge | 1.518 | 1.710 | 1.681 | 1.431 |
 | HellaSwag | 0.996 | 1.341 | 1.352 | 1.124 |
 | PIQA | 1.328 | 1.585 | 1.601 | 1.302 |
 | SciQ | 1.511 | 1.756 | 1.613 | 1.377 |
-| 平均 | 1.411 | 1.629 | 1.588 | 1.341 |
+| Mean | 1.411 | 1.629 | 1.588 | 1.341 |
 
-ClimbMix は一部のベンチマークの成績で混ぜ方が選ばれている（climbmix.md）ので、この比較は束に有利な可能性がある。
+ClimbMix's mixture was chosen by results on some benchmarks (climbmix.md), so this comparison may favor the bundle.
 
-## 速度
+## Speed
 
-同じ機械で、1回の更新の時間と、その外の時間（Python の起動、最初の評価、compile など）を測った。更新の時間は26回のうち最初の5回を除いた中央値。
+On the same machine, we measured the time per update and the time outside updates (Python startup, the first evaluation, compile and so on). The update time is the median of 26 updates, excluding the first 5.
 
-| 形と方式 | 1回に流す本数 | 1回の更新 | 更新の外 |
+| Shape and method | Rows per pass | One update | Outside updates |
 |---|---|---|---|
-| 基準（12層・幅768）、PyTorch の既定 | 64×8 | 0.822秒 | 34秒 |
-| 束、PyTorch の既定 | 64×8 | 0.557秒 | 34秒 |
-| 束、FlashAttention-2 | 64×8 | 0.558秒 | 11秒 |
-| 束、FlashAttention-3 | 64×8 | 0.566秒 | 33秒 |
-| 束、FlashAttention-4 | 64×8 | 0.558秒 | 11秒 |
-| 束、PyTorch の既定 | 32×16 | 0.594秒 | 36秒 |
-| 束、PyTorch の既定 | 128×4 | 0.544秒 | 35秒 |
-| 束、PyTorch の既定 | 256×2 | メモリ不足 | |
-| 束、PyTorch の既定、compile なし | 64×8 | 0.733秒 | 5秒 |
-| 束、PyTorch の既定、文脈2,048 | 32×8 | 0.599秒 | 29秒 |
+| Baseline (12 layers, width 768), PyTorch's default | 64×8 | 0.822 s | 34 s |
+| Bundle, PyTorch's default | 64×8 | 0.557 s | 34 s |
+| Bundle, FlashAttention-2 | 64×8 | 0.558 s | 11 s |
+| Bundle, FlashAttention-3 | 64×8 | 0.566 s | 33 s |
+| Bundle, FlashAttention-4 | 64×8 | 0.558 s | 11 s |
+| Bundle, PyTorch's default | 32×16 | 0.594 s | 36 s |
+| Bundle, PyTorch's default | 128×4 | 0.544 s | 35 s |
+| Bundle, PyTorch's default | 256×2 | Out of memory | |
+| Bundle, PyTorch's default, no compile | 64×8 | 0.733 s | 5 s |
+| Bundle, PyTorch's default, context 2,048 | 32×8 | 0.599 s | 29 s |
 
-更新の外の時間には、形が新しいときに最初の1回だけかかる準備が含まれる。既定の方式は本数や文脈を変えるたびに最初の更新が約27秒かかり、FlashAttention-2 と 4 は約4秒だった。同じ形の2回目は短く、本番の学習は `128×4` の計測と同じ形で、最初の更新は28.3秒ではなく6.3秒だった。compile なしの計測も `64×8` の2回目で1.5秒。キャッシュと見ているが、確かめていない。
+The time outside updates includes preparation that happens only on the first update of a new shape. With the default method, the first update took about 27 seconds every time the rows or the context changed; with FlashAttention-2 and 4 it took about 4 seconds. The second time with the same shape is short: the real training had the same shape as the `128×4` measurement, and its first update took 6.3 seconds rather than 28.3. The measurement without compile, also the second at `64×8`, took 1.5 seconds. We think this is caching, but it is unverified.
 
-FlashAttention-2、3、4 は、小さいモデルの出力と勾配が PyTorch の既定と合った（`attention_check.py`）。
+FlashAttention-2, 3 and 4 matched PyTorch's default in the outputs and gradients of a small model (`attention_check.py`).
 
-学習中の使用率の見積もりは、`train.py` の表示（A100 の312 TFLOPs に対して123.6%）から H100 のピークの約39%で、基準とほぼ同じ。
+The estimated utilization during training, from what `train.py` displays (123.6% of the A100's 312 TFLOPs), is about 39% of the H100's peak, about the same as the baseline.
 
-## 時間と費用
+## Time and cost
 
-| 段階 | 実測 |
+| Stage | Measured |
 |---|---|
-| 借りてから使えるまで | 38秒 |
-| コードとデータの転送（3.9GB、処理用の機械から中継） | 4秒、181秒 |
-| パッケージの追加と FlashAttention-3 の取得（手で実行） | 21秒、23秒 |
-| 速度の計測（10本と確認） | 427秒 |
-| 学習 | 810秒 |
-| 採点 | 18秒 |
-| 重みの保存 | 2秒 |
-| 結果の取得 | 12秒 |
+| From renting to ready | 38 s |
+| Transferring code and data (3.9GB, relayed from the processing machine) | 4 s, 181 s |
+| Adding packages and fetching FlashAttention-3 (run by hand) | 21 s, 23 s |
+| Speed measurement (10 runs and the check) | 427 s |
+| Training | 810 s |
+| Scoring | 18 s |
+| Saving the weights | 2 s |
+| Fetching the results | 12 s |
 
-借りていた約29分で約$1.2（時間と料金からの計算）。うち学習は約$0.54で、基準と同じ。
+About $1.2 for the roughly 29 minutes of the rental (calculated from time and price). Training was about $0.54 of it, the same as the baseline.
 
-## 分かったこと
+## Findings
 
-- 束全体の効果は、項目ごとの見込みを足した量より大きい。どの項目が効いたかは分けて測っていない。基準の AdamW の学習率は弱い設定とされている（fantastic-pretraining-optimizers.md）ので、AdamW を調整するだけで取れる分も含まれている。新しい手法だけの効果ではない。
-- 種によるばらつき（検証の BPB で約0.3%）より十分に大きい。束の種は1つだけ。
-- 注意の計算の方式は、1回の更新で1.6%以内の差しかなく、FlashAttention-3 が一番遅かった。FlashAttention-2 と 4 には、形が新しいときの準備の約23秒がない。
-- 1回に流す本数は、64本より128本が2.4%速く、32本は6.6%遅い。256本はメモリに入らなかった（75.9GB を使ったところで4GB を確保できなかった）。
-- compile は1回の更新を24%縮める。compile 自体の時間は、FlashAttention-2 の最初の更新が約4秒なので、それ以下。基準の記録の「compile など約31秒」の大半は、形が新しいときの準備と見られる。
-- 文脈2,048は、同じトークン数で1,024より1回の更新が7.5%遅い。
+- The effect of the whole bundle is larger than the sum of the expected effects of its items. Which items worked was not measured separately. The baseline's AdamW learning rates are considered a weak setting (fantastic-pretraining-optimizers.md), so the gain includes what tuning AdamW alone would give. It is not the effect of the new methods alone.
+- It is well above the noise across seeds (about 0.3% in validation BPB). The bundle had only one seed.
+- The attention methods differed by at most 1.6% per update, and FlashAttention-3 was the slowest. FlashAttention-2 and 4 do not have the roughly 23 seconds of preparation for a new shape.
+- For rows per pass, 128 was 2.4% faster than 64, and 32 was 6.6% slower. 256 did not fit in memory (with 75.9GB in use, 4GB could not be allocated).
+- Compile shortens each update by 24%. The compile itself takes no more than about 4 seconds, since that is FlashAttention-2's first update. Most of the "about 31 seconds for compile and so on" in the baseline's record is likely the preparation for a new shape.
+- Context 2,048 is 7.5% slower per update than 1,024 at the same number of tokens.
 
-## 起きたこと
+## What happened
 
-- `kernels` が要る `cryptography` が、イメージの Debian のパッケージと差し替えられず、1回目は最初のインストールで止まった。SSH で確かめて気づき、`--ignore-installed` で直して約2分で再開した。
-- スクリプトの起動のコマンドが、スクリプトが終わるまで SSH の接続をつかんでいた。動作に影響はなく、あとで直した。
-- `speed.py` は更新の時間だけで方式を選び、既定の方式を選んだ。FlashAttention-2 との差は誤差の範囲で、準備の時間は計測のあとの本番では消えていたので、この回の損はほとんどない。新しい機械で計測なしに学習すると準備の分だけ差が出るので、更新の外も数えて選ぶようにあとで直した。
+- The `cryptography` that `kernels` needs could not replace the image's Debian package, so the first attempt stopped at the first install. We noticed it by checking over SSH, fixed it with `--ignore-installed` and resumed in about 2 minutes.
+- The command that started the script held the SSH connection until the script finished. It did not affect the run and was fixed later.
+- `speed.py` chose the method by the update time alone and picked the default. The gap with FlashAttention-2 was within the error, and the preparation time was gone in the real run after the measurement, so this run lost almost nothing. Training on a new machine without the measurement would differ by the preparation time, so it was later changed to also count the time outside updates when choosing.
 
-## 確かめていないこと
+## Not verified
 
-- 項目ごとの効果。学習率は未調整で、もっと良い値がある可能性がある。
-- FlashAttention-3 が速くならなかった理由。読み込んだビルド、CUDA 13.2、文脈の短さ、compile との相性のどれかは調べていない。
-- 違う種での束のばらつき。
+- The effect of each item. The learning rates are untuned, and better values may exist.
+- Why FlashAttention-3 was not faster. Whether it is the build loaded, CUDA 13.2, the short context or the interaction with compile was not investigated.
+- The bundle's noise with other seeds.

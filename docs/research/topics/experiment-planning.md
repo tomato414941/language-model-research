@@ -1,50 +1,50 @@
-# 実験の進め方
+# How to run experiments
 
-候補がたくさんあるときに、何をどの順で測るか。これも限られた予算での最適化の問題。ここの見方は2026-11時点の仮のもので、自分たちで回したのは[最初の1回](../experiments/first-bundle.md)だけ。
+What to measure, and in what order, when there are many candidates. This too is a problem of optimizing on a limited budget. The views here are provisional as of 2026-11, and the only round we have run ourselves is [the first one](../experiments/first-bundle.md).
 
-## 今の案
+## Current plan
 
-候補も物差しも増えていくので、全体の計画を先に立てず、毎回の選び方を決めておく。一番良いモデルと、増え続ける候補の一覧（candidates.md）を持って、次を繰り返す。
+Candidates and yardsticks both keep growing, so instead of making an overall plan up front, we fix how each round chooses. Holding the best model and the growing list of candidates (candidates.md), repeat the following.
 
-1. 読んでふるう。論文を読むのは、学習より安い実験。
-2. 費用あたりの期待効果が高いものから、次の束を選ぶ。
-3. 束ごと1回、同じコストで測る。
-4. 勝てば基準を更新し、負けたら半分に分けて原因を探す。どれが効いたかは、知る必要があるときだけ調べる。
-5. 負けた束も、記録と重みを残す。
-6. 記録して、深掘りするか範囲を広げるかを決める。
+1. Read and filter. Reading a paper is an experiment cheaper than training.
+2. Choose the next bundle, starting from the highest expected effect per cost.
+3. Measure each bundle once as a whole, at the same cost.
+4. If it wins, update the baseline; if it loses, split it in half to find the cause. Look into which change worked only when it needs to be known.
+5. Keep the records and the weights of losing bundles too.
+6. Record, then decide whether to dig deeper or widen the scope.
 
-## 目安
+## Rules of thumb
 
-- **ノイズより小さい差は測らない：** 種を変えると検証の BPB が約0.3%動く（scoring.md）。それより小さい効果は1回の比較で見分けられないので、論文の根拠で決める。
-- **束の大きさ：** 各項目が悪さをする確率を q とすると、1回で通る確率が五分になるのは約 0.7/q 個（自分たちの計算）。よく調べた項目で q が10%なら約7個。読まずに試す候補は当たりが少ない（[Auto Research](../sources/auto-research.md) は全試行の約3.8%、有効な試行の約7%）ので、大きな束には読んでふるうことが前提になる。最初の束は読んでふるった9項目で、1回で大きく勝った。2番目の束は10項目で、正解の BPB は勝ち、検証の BPB は1項目の副作用で負けて見えた。
-- **候補を絞る：** 予算 T 回なら、候補は √T 個の規模にする（[Bayati ら](../sources/greedy-many-arms.md)、[Carpentier ら](../sources/simple-regret-infinite-arms.md)）。増え方の理論で正確な個数ではなく、候補どうしの相性も考えていない。絞った中では、一番良く見えるものを使う素直な方法が実験では良かった。
-- **記録は探索の効率に効く：** Auto Research では、過去の試行の記録を使うと改善が16回、消すと3回だった。試行ごとに仮説、変更点、結果、失敗の理由を残す。
-- **踏み台を残す：** [Darwin Gödel Machine](../sources/darwin-godel-machine.md) では、一時的に下がった枝から後で最高の結果が出て、最新のものだけを残す形は負けた。[Lehman ら](../sources/novelty-search.md)と [POET](../sources/poet.md) も、目標だけを追うと行き止まりに入ると示している。迷路、ロボット、コーディングでの結果で、言語モデルで確かめたものではない。
-- **方向は人が決める：** Auto Research は既存の手法の組み合わせまでで、[好みの判断役](../sources/ai-scientist-no-drift.md)が変えたのも探す方向だった。[Rzhetsky ら](../sources/choosing-experiments.md)は、成熟した分野ではより冒険することを勧めている（要約のみ）。
-- **途中で打ち切って比べない：** [Fantastic](../sources/fantastic-pretraining-optimizers.md) によると、途中の loss の順位は最後に入れ替わることがある。
-- **最後に束で確かめる：** 効果は掛け算にならない。[Marin](../sources/marin-moe.md) では単独の効果の積は約2.27倍で、重ねた結果は2.1倍だった（比べた計算量は別々）。
-- **物差しが変わっても比べられるようにする：** 基準の重みを残し、新しい物差しで採点し直す。
-- **物差しは1つで決めない：** 2番目の束は、検証の BPB だけなら負け、正解の BPB なら勝ちだった。割れたら、重みを残しておけば費用をかけずに分けて調べられる。
+- **Do not measure differences smaller than the noise:** Changing the seed moves validation BPB by about 0.3% (scoring.md). Smaller effects cannot be told apart in one comparison, so decide them on the papers' evidence.
+- **Bundle size:** If each change does harm with probability q, the chance of passing in one run falls to even at about 0.7/q changes (our own calculation). For well-researched changes with q at 10%, that is about 7. Candidates tried without reading rarely hit ([Auto Research](../sources/auto-research.md): about 3.8% of all trials, about 7% of valid trials), so large bundles presuppose reading and filtering. The first bundle was nine changes, read and filtered, and won big in one run. The second bundle was ten changes; it won on correct-answer BPB, and on validation BPB it appeared to lose because of one change's side effect.
+- **Narrow the candidates:** With a budget of T runs, keep the candidates on the order of √T ([Bayati et al.](../sources/greedy-many-arms.md), [Carpentier et al.](../sources/simple-regret-infinite-arms.md)). This is a theory of how the number scales, not an exact count, and it does not consider how candidates interact. Within the narrowed set, the simple method of using whichever looks best did well in experiments.
+- **Records make the search more efficient:** In Auto Research, using the records of past trials gave 16 improvements, and removing them gave 3. For each trial, keep the hypothesis, the changes, the result and the reason for failure.
+- **Keep stepping stones:** In [Darwin Gödel Machine](../sources/darwin-godel-machine.md), the best result later came from a branch that had temporarily declined, and the variant keeping only the latest lost. [Lehman et al.](../sources/novelty-search.md) and [POET](../sources/poet.md) also show that chasing only the objective leads into dead ends. These are results in mazes, robots and coding, not confirmed with language models.
+- **People set the direction:** Auto Research went only as far as combining existing methods, and what [the preference judge](../sources/ai-scientist-no-drift.md) changed was also the direction of the search. [Rzhetsky et al.](../sources/choosing-experiments.md) recommend taking more risks in mature fields (summary only).
+- **Do not compare runs cut short:** According to [Fantastic](../sources/fantastic-pretraining-optimizers.md), the ranking by loss partway through can flip by the end.
+- **Confirm with a bundle at the end:** Effects do not multiply. In [Marin](../sources/marin-moe.md), the product of the individual effects was about 2.27×, and the stacked result was 2.1× (the compared compute differed).
+- **Stay comparable when the yardstick changes:** Keep the baseline's weights and rescore them with the new yardstick.
+- **Do not decide by a single yardstick:** The second bundle lost on validation BPB alone, and won on correct-answer BPB. When they split, keeping the weights makes it possible to break the result down at no cost.
 
-## 閉じた候補を比べるとき
+## Comparing a closed set of candidates
 
-どれが効いたかを知る必要があるときの道具。8項目、1回 $0.56 として、準備の時間は含めていない。誤差は1組の種の差（0.3%）から出した粗い値。
+Tools for when it is necessary to know which change worked. They assume eight changes at $0.56 per run, not counting the preparation time. The errors are rough values derived from the difference between one pair of seeds (0.3%).
 
-| 方法 | 学習回数 | 費用 | 分かること | 1項目の効果の誤差 |
+| Method | Training runs | Cost | What it tells | Error in one change's effect |
 |---|---|---|---|---|
-| 全部入り | 1 | 約$0.6 | 束全体の効果だけ | 束全体で約0.3% |
-| 1つずつ足す、外す | 9 | 約$5 | 各項目の効果 | 約0.3% |
-| 毎回半分オン（Plackett-Burman） | 12 | 約$7 | 各項目の平均の効果 | 約0.12% |
-| 全組み合わせ | 256 | 約$142 | 組み合わせの効果まで | 約0.03% |
+| All in | 1 | About $0.6 | Only the whole bundle's effect | About 0.3% for the whole bundle |
+| Add or remove one at a time | 9 | About $5 | Each change's effect | About 0.3% |
+| Half on each time (Plackett-Burman) | 12 | About $7 | Each change's average effect | About 0.12% |
+| All combinations | 256 | About $142 | Down to the effects of combinations | About 0.03% |
 
-毎回半分オンの方法には、項目ごとに切り替えられるコードが要る。2項目の相性の効果は、他の項目の効果と混ざって見える。AdamW 側の学習率も合わせておかないと、Muon の効果を過大に見積もる。
+The half-on method needs code that can switch each change on and off. Interaction effects between two changes appear mixed with other changes' effects. Unless the learning rate on the AdamW side is matched too, Muon's effect is overestimated.
 
-## 分かっていないこと
+## What is not known
 
-- 有望なものと当たりの読めないものへの予算の割合。8割と2割を仮に置いているが、支持する研究は見つけていない。
-- 同じコストで言語モデルを比べる条件を直接扱った研究は Auto Research くらいで、査読前の1チームの結果。
+- How to split the budget between promising candidates and those whose payoff cannot be predicted. We provisionally use 80% and 20%, but have found no studies supporting it.
+- Auto Research is about the only study that directly addresses the conditions for comparing language models at the same cost, and it is one team's result, not yet peer-reviewed.
 
-## 見方が変わりそうな条件
+## What would change the view
 
-- 実際に回して、束が頻繁に負けるか、当たりの割合が見込みと違った場合。
-- 効果がノイズに埋もれる束が続いた場合。同じ種類の候補を掘り続けず、モデルの種類や課題設定まで範囲を広げる。
+- Bundles losing often in actual runs, or the hit rate differing from what was expected.
+- A run of bundles whose effects are buried in the noise. Then stop digging into the same kind of candidate, and widen the scope to the kind of model and the task setup.

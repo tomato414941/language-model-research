@@ -1,8 +1,8 @@
 # Rethinking Embedding Coupling
 
-Chung ら、Rethinking embedding coupling in pre-trained language models（arXiv 2010.12821）。多言語の事前学習モデル（BERT の形）で、入力と出力の表を分ける比較。
+Chung et al., Rethinking embedding coupling in pre-trained language models (arXiv 2010.12821). A comparison of separating the input and output tables in multilingual pretrained models (BERT-shaped).
 
-- 形を変えずに分けるだけだと、下流の課題の平均は 62.3 から 62.7（パラメータは1.77億から2.69億）。課題によって勝ち負けがあり、著者は大きな差ではないとしている。
-- 利点は形を別々にできること。入力の表は小さくしても良く、出力の表を大きくすると事前学習の課題と下流が良くなる。
+- Just separating them without changing their shapes takes the downstream task average from 62.3 to 62.7 (with the parameters going from 177 million to 269 million). It wins on some tasks and loses on others, and the authors say the difference is not large.
+- The advantage is that the shapes can be set separately. The input table can be made smaller, and a larger output table improves both the pretraining task and downstream results.
 
-事前学習の損失の比較ではなく、微調整のあとの評価。読んだのは要旨、導入、4節の始めと表2。
+The comparison is of evaluations after fine-tuning, not of pretraining loss. Read: the abstract, the introduction, the start of Section 4, and Table 2.

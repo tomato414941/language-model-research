@@ -1,7 +1,7 @@
 # Train-to-Test
 
-Test-Time Scaling Makes Overtraining Compute-Optimal（arXiv 2604.01411、2026-04）。
+Test-Time Scaling Makes Overtraining Compute-Optimal (arXiv 2604.01411, 2026-04).
 
-推論の費用はモデルの大きさとサンプル数で増えるので、モデルの大きさ、学習トークン、推論のサンプル数を、学習と推論を合わせた予算のもとで同時に決める法則を提案している。題のとおり、この条件では長めに学習するほうが得になるとしている。
+Since the cost of inference grows with the model size and the number of samples, it proposes a law that sets the model size, the training tokens and the number of inference samples together, under a budget that covers both training and inference. As the title says, it finds that under this condition training longer pays off.
 
-読んだのは要旨の冒頭だけ。
+Only the beginning of the abstract was read.

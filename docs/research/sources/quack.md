@@ -1,10 +1,10 @@
 # QuacK
 
-Controlling changes to attention logits（arXiv 2511.21377）。
+Controlling changes to attention logits (arXiv 2511.21377).
 
-- Q と K の重みが大きくなるのが不安定の原因とし、QK-norm の代わりに、重みの大きさに応じて Q と K の学習率を下げる。
-- 普通の注意（MHA）では、QK-norm が全体で一番良く、QuacK はわずかに下。学習率が小さい（3e-4）と、どの方法も差がほとんどない。何もしないと学習率3e-3で不安定だった。
-- QK-norm の2回の RMSNorm をなくすと、学習が約10%速くなった。
-- Multi Latent Attention には QK-norm を使いにくいので、QuacK が一番良い。
+- Taking the growth of the Q and K weights as the cause of instability, it lowers the learning rates of Q and K according to the size of their weights, instead of using QK-norm.
+- In ordinary attention (MHA), QK-norm is the best overall, with QuacK slightly below it. At a small learning rate (3e-4), the methods hardly differ. With nothing, training was unstable at a learning rate of 3e-3.
+- Removing QK-norm's two RMSNorms made training about 10% faster.
+- QK-norm is hard to use with Multi Latent Attention, so QuacK is the best there.
 
-実験は AdamW 系の学習率で、Muon のように更新の大きさを揃える手法での比較ではない（自分たちの読み）。読んだのは要旨、導入、結果の本文で、図の数字は読んでいない。モデルの大きさは確かめていない。
+The experiments use AdamW-style learning rates; they are not comparisons under a method that evens out the size of updates, as Muon does (our own reading). The abstract, the introduction and the main text of the results were read; the numbers in the figures were not read. The model sizes were not checked.

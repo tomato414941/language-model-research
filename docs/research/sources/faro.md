@@ -1,10 +1,10 @@
 # FARO
 
-Wu ら、FARO: Function-Space Adaptive Return-to-Risk Optimization（arXiv 2610.40858、2026-10）。
+Wu et al., FARO: Function-Space Adaptive Return-to-Risk Optimization (arXiv 2610.40858, 2026-10).
 
-層ごとの更新の予算を学習中に配り直すオプティマイザ。11層、幅768、語彙50,257、FineWeb。
+An optimizer that redistributes the per-layer update budget during training. 11 layers, width 768, vocabulary 50,257, FineWeb.
 
-- 全部の学習で FARO-Adaptive は3.2780、手で組んだ中で一番良い NorMuonAndAdam は3.2794。
-- 800ステップの比較で、等しいリスクに配る ERC を足すと3.6017から3.5881（−0.0136）。6つの種のすべてで良い。1ステップの差は約2ミリ秒で、メモリは同じ。
+- Over the full training, FARO-Adaptive reached 3.2780, and NorMuonAndAdam, the best of the hand-assembled combinations, 3.2794.
+- In an 800-step comparison, adding ERC, which allocates for equal risk, gives 3.5881 instead of 3.6017 (−0.0136). It was better on all 6 seeds. The difference per step is about 2 milliseconds, and memory is the same.
 
-読んだのは要旨と、HTML の本文の前の約75%を要約を通したもの。
+Read: the abstract, and about the first 75% of the HTML body through a summary.

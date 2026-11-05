@@ -1,91 +1,91 @@
-# 3番目の束を FineWeb で学習した
+# Training the third bundle on FineWeb
 
-2026-11-04 に、学習データを FineWeb に替えて、2番目と3番目の束を同じコストで1回ずつ学習した。3番目の束は、文書の頭から読む検証の BPB が1.05%下がり、6課題の正解率の平均は .418 から .422 に上がった。正解の BPB は0.5%上がった（悪くなった）。正解率と正解の BPB の差は、どちらも種による動きの範囲。最後の重みを平均と混ぜた重みは、最後の重みより悪かった。
+On 2026-11-04, with the training data switched to FineWeb, the second and third bundles were each trained once at the same cost. With the third bundle, validation BPB read from document starts fell by 1.05%, and the mean accuracy over the 6 tasks rose from .418 to .422. Correct-answer BPB rose by 0.5% (got worse). The differences in accuracy and in correct-answer BPB are both within the movement across seeds. The weights made by mixing the last weights with their average were worse than the last weights.
 
-## 条件
+## Setup
 
-- 機械：Vast.ai の日本の H100 80GB（HBM3）を1枚、$2.41/時。ドライバ 615.71.09。
-- イメージ：基準と同じ（torch 2.15.0+cu132）。cuDNN は 9.26。
-- データ：FineWeb の10BT の標本と、それで学習した語彙8,192のトークナイザ（training-data.md）。データとトークナイザが違うので、ClimbMix での点とは比べない。
-- 2番目の束：`configs/bundle2.py`（second-bundle.md）。計算に使うパラメータは5,440万。
-- 3番目の束：2番目の束に、COUNT、Dispersion Loss、最後の重みを平均と混ぜること（TSA）、トークンの組の表、注意のゲート、キーのずらし、MUDD、backout の8項目を足した（speedrun-parts.md）。計算に使うパラメータは5,448万。COUNT の表は学習が読まない FineWeb の20億トークンから作った。設定は `configs/bundle3.py`。
-- 同じコスト：同じ機械で基準を短く動かし、更新の時間とその外の時間から更新の回数を決めた（`speed.py`）。どちらも FlashAttention-2、層を流れる値は bf16、1回128本を4回足す。1回の更新は、基準0.816秒、2番目の束0.604秒、3番目の束0.830秒で、更新の回数は2番目の束1,275回、3番目の束910回。1回524,288トークン。
-- 3番目の束の1回の更新の遅れ（2番目の束から+37%）のうち、COUNT を外すと0.704秒、Dispersion Loss を外すと0.782秒。
-- 種は1つ（1337）。
-- 採点：6課題の全問（30,470問）の正解率と正解の BPB。混ぜた重みも採点した。
+- Machine: one H100 80GB (HBM3) on Vast.ai in Japan, $2.41/hour. Driver 615.71.09.
+- Image: the same as the baseline's (torch 2.15.0+cu132). cuDNN 9.26.
+- Data: FineWeb's 10BT sample, and a tokenizer with a vocabulary of 8,192 trained on it (training-data.md). The data and the tokenizer differ, so the scores are not compared with those on ClimbMix.
+- Second bundle: `configs/bundle2.py` (second-bundle.md). 54.4 million parameters used in computation.
+- Third bundle: the second bundle plus 8 items: COUNT, Dispersion Loss, mixing the last weights with their average (TSA), tables of token tuples, attention gates, shifting the keys, MUDD and backout (speedrun-parts.md). 54.48 million parameters used in computation. COUNT's table was built from 2 billion tokens of FineWeb that training does not read. Settings in `configs/bundle3.py`.
+- The same cost: the baseline was run briefly on the same machine, and the number of updates was set from the time per update and the time outside updates (`speed.py`). Both bundles use FlashAttention-2, values flowing through the layers in bf16, and 4 passes of 128 rows added up. One update took 0.816 seconds for the baseline, 0.604 for the second bundle and 0.830 for the third, giving 1,275 updates for the second bundle and 910 for the third. 524,288 tokens per update.
+- Of the third bundle's slower update (+37% from the second bundle), removing COUNT gives 0.704 seconds, and removing Dispersion Loss 0.782 seconds.
+- One seed (1337).
+- Scoring: accuracy and correct-answer BPB on all questions of the 6 tasks (30,470). The mixed weights were scored too.
 
-## 点
+## Scores
 
-| | 2番目の束 | 3番目の束 | 3番目の束（混ぜた重み） | 2番目から3番目 |
+| | Second bundle | Third bundle | Third bundle (mixed weights) | Second to third |
 |---|---|---|---|---|
-| 6課題の正解率の平均 | .4179 | .4223 | .4194 | +.0044 ± .0032 |
+| Mean accuracy over the 6 tasks | .4179 | .4223 | .4194 | +.0044 ± .0032 |
 | MMLU | .2551 | .2605 | .2595 | +.0054 ± .0030 |
 | ARC-Easy | .3472 | .3506 | .3451 | +.0034 ± .0081 |
 | ARC-Challenge | .2176 | .2261 | .2244 | +.0085 ± .0096 |
 | HellaSwag | .2962 | .3014 | .2996 | +.0053 ± .0030 |
 | PIQA | .6153 | .6202 | .6170 | +.0049 ± .0089 |
 | SciQ | .776 | .775 | .771 | −.0010 ± .0104 |
-| 正解の BPB（6つの平均） | 1.5576 | 1.5660 | 1.5842 | +0.54%（+.0084 ± .0022） |
+| Correct-answer BPB (mean of 6) | 1.5576 | 1.5660 | 1.5842 | +0.54% (+.0084 ± .0022) |
 | MMLU | 1.829 | 1.865 | 1.877 | +2.0% |
 | ARC-Easy | 1.769 | 1.768 | 1.797 | −0.1% |
 | ARC-Challenge | 1.758 | 1.776 | 1.790 | +1.0% |
 | HellaSwag | 1.059 | 1.075 | 1.075 | +1.5% |
 | PIQA | 1.389 | 1.381 | 1.378 | −0.6% |
 | SciQ | 1.542 | 1.532 | 1.588 | −0.7% |
-| 検証データの BPB（`scoring.py`、決まった位置の行） | 1.2146 | 1.1633 | 1.1634 | −4.2% |
-| 検証の損失（`train.py`、ランダムな位置） | 3.2442 | 3.1000 | | −4.4% |
-| 学習の最後の損失（学習データ、文書の頭から） | 2.9986 | 2.9627 | | −1.2% |
+| Validation BPB (`scoring.py`, fixed-position rows) | 1.2146 | 1.1633 | 1.1634 | −4.2% |
+| Validation loss (`train.py`, random positions) | 3.2442 | 3.1000 | | −4.4% |
+| Final training loss (training data, from document starts) | 2.9986 | 2.9627 | | −1.2% |
 
-± は同じ問題どうしの差の標準誤差。ClimbMix での基準の2つの種の差は、正解率の平均で +.002 ± .003、正解の BPB の平均で1.3%だった（harness-milestone.md）。
+± is the standard error of the differences on the same questions. On ClimbMix, the difference between the baseline's two seeds was +.002 ± .003 in mean accuracy and 1.3% in mean correct-answer BPB (harness-milestone.md).
 
-- 正解率は6つのうち5つで上がったが、平均の差は標準誤差の1.4倍で、種による動きと見分けられない。
-- 正解の BPB は、MMLU、ARC-Challenge、HellaSwag で上がり、PIQA と SciQ で下がった。平均の差は、種による動きより小さい。
-- 混ぜた重みは、最後の重みより正解率の平均で −.0029 ± .0011、正解の BPB で +1.2% 悪かった。混ぜるのは学習のあとなので、最後の重みには影響しない。
+- Accuracy rose on 5 of the 6, but the difference in the mean is 1.4× the standard error and cannot be told apart from the movement across seeds.
+- Correct-answer BPB rose on MMLU, ARC-Challenge and HellaSwag, and fell on PIQA and SciQ. The difference in the mean is smaller than the movement across seeds.
+- The mixed weights were worse than the last weights, by −.0029 ± .0011 in mean accuracy and +1.2% in correct-answer BPB. The mixing happens after training, so it does not affect the last weights.
 
-## 検証の BPB を行の切り方で分けた
+## Validation BPB split by how rows are cut
 
-学習のあとで、処理用の機械（CPU、float32）で、保存した最後の重みを検証データの128行ずつで測り直した。`scoring.py` と同じ決まった位置の行と、文書の頭から始まる重ならない行の2通り。損失は1トークンあたりの nats。
+After training, the saved last weights were measured again on 128 rows of validation data each, on the processing machine (CPU, float32), in two ways: rows at the same fixed positions as in `scoring.py`, and non-overlapping rows starting at document starts. Losses are in nats per token.
 
-| 行 | | 2番目の束 | 3番目の束 | 変化 |
+| Rows | | Second bundle | Third bundle | Change |
 |---|---|---|---|---|
-| 決まった位置 | BPB | 1.1988 | 1.1416 | −4.8% |
-| | 行の最初の64トークン（6%） | 5.136 | 4.067 | −20.8% |
-| | 行の残り | 3.090 | 2.997 | −3.0% |
-| 文書の頭から | BPB | 1.1342 | 1.1223 | −1.05% |
-| | 行の最初の64トークン | 3.343 | 3.246 | −2.9% |
-| | 行の残り | 3.021 | 2.994 | −0.9% |
+| Fixed positions | BPB | 1.1988 | 1.1416 | −4.8% |
+| | First 64 tokens of a row (6%) | 5.136 | 4.067 | −20.8% |
+| | Rest of the row | 3.090 | 2.997 | −3.0% |
+| From document starts | BPB | 1.1342 | 1.1223 | −1.05% |
+| | First 64 tokens of a row | 3.343 | 3.246 | −2.9% |
+| | Rest of the row | 3.021 | 2.994 | −0.9% |
 
-- 決まった位置の行での差の大半は、文書の途中から始まる行の最初の部分で出ている。2番目の束はこの部分をひどく外し（second-bundle.md）、3番目の束は外し方が小さい。それでも、文書の頭から始まる行より1トークンあたり0.8 nats 悪い。
-- 文書の頭から始まる行での差（−1.05%）は、学習の最後の損失の差（−1.2%）と近い。種による検証の BPB の動き（約0.3%）より大きい。行の選び方による誤差は出していない。
-- 計算量2倍で約3.9%という換算では、約1.2倍の計算に当たる（自分たちの計算）。
+- Most of the difference on the fixed-position rows comes from the beginning of rows that start mid-document. The second bundle badly mispredicts this part (second-bundle.md), and the third bundle mispredicts it less. Even so, it is 0.8 nats per token worse there than on rows starting at document starts.
+- The difference on rows starting at document starts (−1.05%) is close to the difference in the final training loss (−1.2%). It is larger than the movement of validation BPB across seeds (about 0.3%). The error from the choice of rows was not computed.
+- With the conversion of about 3.9% per doubling of compute, this corresponds to about 1.2× the compute (our own calculation).
 
-## 判断
+## Decision
 
-2026-11-04 時点では、3番目の束を、混ぜる処理を除いて次の束の土台にする。
+As of 2026-11-04, the third bundle, without the mixing, becomes the base of the next bundle.
 
-- 文書の頭から読む検証の BPB は、種による動きより大きく下がった。正解率は、差は小さいが6つのうち5つで上がった。
-- 正解の BPB は逆向きだが、差は種による動きより小さい。MMLU と HellaSwag では、同じ問題どうしの差の標準誤差よりはっきり上がっている。
-- 混ぜる処理は、決めておいた読み方（weight-averaging.md）どおり、最後の重みより悪かったので外す。
-- 差は小さく、種は1つ。次の束の結果や、種を足した測定で見直す。2番目と3番目の束の重みは残してある。
+- Validation BPB read from document starts fell by more than the movement across seeds. Accuracy rose on 5 of the 6, though by small differences.
+- Correct-answer BPB went the other way, but the difference is smaller than the movement across seeds. On MMLU and HellaSwag, it rose clearly beyond the standard error of the differences on the same questions.
+- As the reading decided beforehand (weight-averaging.md) prescribes, the mixing is removed, since it was worse than the last weights.
+- The differences are small, and there is one seed. This is to be revisited with the next bundle's results or with measurements that add seeds. The weights of the second and third bundles are kept.
 
-## 確かめていないこと
+## Not verified
 
-- どの項目が効いたか。混ぜる処理のほかは、1つずつの効果を分けていない。
-- 正解の BPB が MMLU と HellaSwag で上がった理由。
-- 種を変えたときの、FineWeb での点の動き。ClimbMix の基準の2つの種で見積もっている。
-- 文書の途中から始まる行での強さが、学習の行の読み方を変えた場合にも残るか。
+- Which items worked. Apart from the mixing, the effects were not separated one by one.
+- Why correct-answer BPB rose on MMLU and HellaSwag.
+- How the scores on FineWeb move when the seed changes. It is estimated from the baseline's two seeds on ClimbMix.
+- Whether the strength on rows starting mid-document remains when the way training reads rows is changed.
 
-## 時間と費用
+## Time and cost
 
-| 段階 | 実測 |
+| Stage | Measured |
 |---|---|
-| 借りてから使えるまで | 37秒 |
-| コードとデータの転送（表以外の4.0GB と表の5.3GB、処理用の機械から中継） | 5秒、187秒、232秒 |
-| パッケージの追加 | 49秒 |
-| 速度の計測（9本） | 10分5秒 |
-| 2番目の束の学習、採点、6課題 | 13分7秒、21秒、2分28秒 |
-| 3番目の束の学習、採点、6課題 | 13分4秒、23秒、2分31秒 |
-| 混ぜた重みの採点、6課題 | 23秒、2分32秒 |
-| 結果の取得 | 69秒 |
+| From renting to ready | 37 s |
+| Transferring code and data (4.0GB besides the table, and the table's 5.3GB, relayed from the processing machine) | 5 s, 187 s, 232 s |
+| Adding packages | 49 s |
+| Speed measurement (9 runs) | 10 min 5 s |
+| Second bundle: training, scoring, 6 tasks | 13 min 7 s, 21 s, 2 min 28 s |
+| Third bundle: training, scoring, 6 tasks | 13 min 4 s, 23 s, 2 min 31 s |
+| Mixed weights: scoring, 6 tasks | 23 s, 2 min 32 s |
+| Fetching the results | 69 s |
 
-借りていた約56分で約$2.3（時間と料金からの計算）。うち学習は2本で約$1.05。データを作るのと分析は処理用の機械で行ったので、追加の費用はない。
+About $2.3 for the roughly 56 minutes of the rental (calculated from time and price). Training was about $1.05 of it, for the two runs. Building the data and the analysis were done on the processing machine, so there was no extra cost.

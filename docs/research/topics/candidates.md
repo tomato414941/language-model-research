@@ -1,120 +1,120 @@
-# 候補
+# Candidates
 
-今の一番（`train.py` の既定。[3番目の束](../experiments/third-bundle.md)から最後の重みを混ぜる処理を除いたもの）の OLMES の3つのスイートの BPB を、30分の学習でさらに下げる候補のうち、入れるか決めていないものの一覧。上にあるものほど優先する。2026-11-02 時点の仮の順番で（[最新研究の調査](../experiments/latest-research-survey.md)、[広い範囲の調査](../experiments/broad-research-survey.md)）、ほとんどは今の規模で測っていない。順番は、選択式の点の報告があること、読む量が今に近いこと、手間が小さいことを重く見た。2026-11-04 までの数字は、基準と同じコスト（約13分）の学習での見込み。新しい候補は足し、入れると決めたものは消す。入れたものは `train.py` の既定にあり、理由はそれぞれの `topics/` とコミットの説明にある。
+Candidates not yet decided on for lowering the BPB of the current best (`train.py`'s default: [the third bundle](../experiments/third-bundle.md) without the mixing of the last weights) on the three OLMES suites further with 30 minutes of training. Higher entries take priority. The order is provisional as of 2026-11-02 ([the survey of the latest research](../experiments/latest-research-survey.md), [the broad survey](../experiments/broad-research-survey.md)), and most have not been measured at the current scale. The order gave heavy weight to having reports of multiple-choice scores, to an amount read close to ours, and to small effort. Numbers written through 2026-11-04 are expectations for training at the same cost as the baseline (about 13 minutes). New candidates are added, and those decided to go in are removed. What went in is in `train.py`'s default, with the reasons in the respective `topics/` notes and in the commit messages.
 
-- 候補は種類で外さない。モデルや学習法のほか、速度、料金、データ、課題設定も入れる。効きにくそうなものも、理由を添えて後回しにするだけで消さない。
-- 順番は、効果の見込み、根拠の強さ、手間で決める。大きくても根拠が弱いもの、実装が重いものは下にある。
-- 数字は同じコストで BPB が下がる割合の粗い見込みで、束を測る前に基準に対して見積もったもの。束の上では小さくなるものがある。重なるものもあるので足し算はできない。「不明」は数字の根拠がないもの。
-- 大半が過去のメモや要旨からの判断で、元の論文を読み切っていない。決める前に読む。
+- Candidates are not excluded by kind. Besides the model and the training method, speed, price, data and the task setup are included too. Those unlikely to work are only postponed, with reasons, not removed.
+- The order is set by the expected effect, the strength of the evidence and the effort. Those with a large effect but weak evidence, and those heavy to implement, are lower down.
+- The numbers are rough expectations of the rate by which BPB falls at the same cost, estimated against the baseline before the bundles were measured. Some shrink on top of a bundle. Some overlap, so they cannot be added up. "Unknown" marks those with no basis for a number.
+- Most are judgments from past notes or abstracts, without reading the original papers in full. Read them before deciding.
 
-## 測って小さかったもの
+## Measured and found small
 
-| 候補 | 測った結果 |
+| Candidate | Measured result |
 |---|---|
-| 注意の計算の方式（cuDNN、FlashAttention-2、3、4） | 1回の更新の差は1.6%以内。形が新しいときの準備で約0.2% |
+| How attention is computed (cuDNN, FlashAttention-2, 3, 4) | Differences per update within 1.6%. About 0.2% for the preparation when a shape is new |
 
-## 次に調べる
+## To look into next
 
-| 候補 | 効果の見込み | 根拠 | 手間 |
+| Candidate | Expected effect | Evidence | Effort |
 |---|---|---|---|
-| 注意の層を減らす（[Composer](../sources/composer.md) は注意と MLP が1対2、記録 #92 は10層のうち7つ） | 点の平均 +0.6〜2.8（3.5億〜30億、小さいほど小さい）。今の大きさで1対2にすると計算が約4%減る | Composer は1億〜2億で探すと1対1が一番良かった。記録 #92 はこれだけを外した数字がない。AIRA-Compose は要旨のみ。[調査](../experiments/broad-research-survey.md) | 中（value embeddings などの置き場所を決め直す） |
-| トークンで引く表を層の間に入れる（[L³](../sources/l3.md)。engram.md。MLP の中の表の [STEM](../sources/stem.md) は2026-11-05 に4番目の束へ入れた） | 点の平均 +0.8〜2 | 8億級で読む量は今と同じくらい（1パラメータ約12トークン）だが、表は1層あたり71万個の埋め込み、速さは約87%で、速く動かすには専用の計算が要る | 大 |
-| 学習率を下げる期間と下限（今は後半で0まで。4番目の束で最後の75%を試す。Recursive は95%で5%まで、記録 #92 は80%で20%まで） | 不明 | 割れている。下限を上げると、最後の重みを混ぜる効果が大きくなるという報告がある（weight-averaging.md）。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md) | 小 |
-| 文書の前のトークンをコピーするポインタを出力に混ぜる（[CPLM](../sources/modded-nanogpt-cplm.md)） | 約0.7%（同じ損失に届く時間 −11%）。今の形では小さくなる見込み | speedrun の PR #379 のみ。未採用で論文は未公開、損失だけの報告で、ポインタの範囲を変えた比較もない。向こうは7つの注意の層のうち5つの窓が768トークン以下で、ポインタは検証で8,192トークン前まで届く。今は全層が行の1,024トークンを全部見る。採点のコードも混ぜた分布に変える必要がある。論文が出たら読み直す | 中 |
-| 束の学習率と weight decay、1回の更新の大きさの調整（4番目の束で1回262,144トークンを試す。良い値は形で変わるので、束の形を決めたあと。大きさを変えると学習率も変わる） | 不明 | 3番目の束には入れない。測らずに決められるほどの根拠がなく、調整には何回も学習が要る。実測できる。1回の更新は、autoresearch の探索で良かった設定がどれも今の524,288より小さい（Karpathy の最良は262,144、[Recursive](../sources/recursive-first-steps.md) は147,456と、131,072から262,144に上げる形）。ただ、どれもほかの変更と一緒で、大きさだけの効果は分けていない。nanochat の法則（最適な大きさは読む量の0.383乗に比例）では、今の読む量に合うのは約43万（自分たちの計算） | 小 |
-| 埋め込みを共有したまま入力の学習率を上げる、学習の途中で分離する | 不明 | 記録の一部のみ | 中 |
-| TIDE（トークンごとの表を複数持ち、各層で混ぜて足す） | 不明 | 7.5億以上、Adam のみ。residual-weights.md | 中 |
-| 似た文書を同じ行に詰める（BM25） | 不明、大きい可能性 | 1研究のみ、13億で −3.2〜−4.1%。document-rows.md。2026-11-05 に4番目の束へ入れた文書の中だけの注意とは両立しない（文書どうしが注意で見えないので、詰め方が効かない） | 中 |
-| MLP を広げる倍率（今は4倍。Primer は約3,500万で12倍が大きく効いた） | 不明、大きい可能性 | 1研究のみ、文脈64 | 小 |
-| GPU の効率の改善（nanochat の約46%まで。autocast をやめる形など） | 約1.5% | 中 | 中 |
-| 安い H100（モデルは変わらない） | 約1.2% | 計算上 | 小 |
-| 易しい文書から読む順番 | 不明（正解率で1〜3%） | 1研究のみ、BPB では未確認 | 中 |
-| Attention Residuals | 0.3〜1.7% | 中 | 中 |
-| パッチ単位の学習 | 最大約4% | 1研究のみ、1パラメータ970トークン以上の結果 | 中 |
-| 線形注意との混成（Gated DeltaNet、Kimi Delta Attention、[Mamba-3](../sources/mamba-3.md)） | 1〜2%。Mamba-3 は1.8億で点 +0.7、8.8億で +2.5 | 中 | 大 |
-| 中の状態で引く大きな表（memory layers。[product keys](https://arxiv.org/abs/1907.05242)、[Memory Layers at Scale](https://arxiv.org/abs/2412.09764)） | 不明。12層に入れて24層に勝つ（2019）。計算が2倍以上の普通のモデルと、計算とパラメータを揃えた MoE に勝つ（2024、80億まで、1兆トークン） | 2研究、要旨のみ。今の規模の数字は未確認。事実を問う課題で特に効く | 大 |
-| 重要でないトークンを逆伝播から外す（CENTRIFUGE） | 時間 −34.7%（11億以上） | 1研究、専用の実装が要る | 大 |
-| MLP を疎か低ランクにする（Mixed Sparsity Training、CR-Net、Bi-Phase） | FLOPs 4分の1という報告。実時間は未確認 | 弱〜中 | 大 |
-| 正規化を定数で近似する（anGPT） | 収束が最大40%速い（QK-norm の GPT と比べて）。時間3%増 | 1研究 | 中 |
-| 大きいモデルの枝刈りや蒸留から始める（別の出発点） | 不明。読む量が少ないほど効くという報告 | Pruning vs. Scratch、Where to Begin。同じ計算で差がないという報告もある。[調査](../experiments/broad-research-survey.md) | 中 |
-| mHC | 1.3%まで | 弱〜中。speedrun では悪化 | 中 |
-| データの選び方（DCLM-Edu、PreSelect など。ClimbMix は nanochat が試した中で一番良く、今は400B のうち0.2%しか読まない。v6 の英語に替えると6課題の平均が .025 下がったが、原因は分けていない。v6-english-data.md） | 不明、大きい可能性 | 割れている | 中 |
-| データの繰り返し | 不明 | 中 | 小 |
-| 語彙の大きさ | 不明、大きい可能性 | 大規模のみ | 中 |
-| SOAP-Muon | 約0.9%（ステップのみ） | 中 | 中 |
-| 準備の時間の短縮（小さい規模でのみ効く） | 約1.6% | 実測から計算 | 中 |
-| EMA-Nesterov | 約0.35% | 弱 | 小 |
-| MoE | 0〜数% | 今の規模では弱い | 大 |
-| 文脈の長さ（autoresearch は2,048。2,048は1回の更新が7.5%遅い） | 不明 | 弱 | 小 |
-| 文脈を短いものから伸ばす | 不明 | 弱 | 中 |
-| 注意の窓を区切る（SSSL） | 不明（速度） | 弱 | 小 |
-| 中断ありの貸出（モデルは変わらない） | 最大約6.9% | 別のプロジェクトの試しでは止まった | 中 |
-| 他の GPU（4090、5090、B200 など。[調査](../experiments/broad-research-survey.md)） | 4090 で計算あたり約1.4倍（粗い計算）なら約1.8%。B200 は料金次第で約3倍 | サブプロジェクト。実測なし | 中 |
+| Fewer attention layers ([Composer](../sources/composer.md) has attention and MLP at 1 to 2; record #92 has 7 of 10 layers) | Mean score +0.6–2.8 (350 million to 3 billion; smaller at smaller sizes). At the current size, 1 to 2 cuts compute by about 4% | When Composer searched at 100 million to 200 million, 1 to 1 was best. Record #92 has no number for removing this alone. AIRA-Compose: abstract only. [Survey](../experiments/broad-research-survey.md) | Medium (re-decide where value embeddings and the like go) |
+| Tables looked up by token between layers ([L³](../sources/l3.md); engram.md; [STEM](../sources/stem.md), a table inside the MLP, went into the fourth bundle on 2026-11-05) | Mean score +0.8–2 | At the 800 million class the amount read is about the same as ours (about 12 tokens per parameter), but the tables hold 710,000 embeddings per layer, the speed is about 87%, and running fast needs dedicated computation | Large |
+| How long the learning rate falls and its floor (now to 0 over the second half; the fourth bundle tries the last 75%; Recursive goes to 5% over 95%, record #92 to 20% over 80%) | Unknown | Split. There is a report that a higher floor makes mixing the last weights more effective (weight-averaging.md). [Note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md) | Small |
+| Mixing into the output a pointer that copies earlier tokens of the document ([CPLM](../sources/modded-nanogpt-cplm.md)) | About 0.7% (time to reach the same loss −11%). Expected to shrink in our setup | Only the speedrun's PR #379. Not adopted, paper unpublished, a loss-only report, and no comparison varying the pointer's range. There, 5 of the 7 attention layers have windows of 768 tokens or fewer, and the pointer reaches up to 8,192 tokens back in validation. Currently, every layer sees all 1,024 tokens of the row. The scoring code would also need to change to the mixed distribution. Reread when the paper is out | Medium |
+| Tuning the bundle's learning rate and weight decay, and the size of an update (the fourth bundle tries 262,144 tokens per update; good values change with the shape, so after the bundle's shape is settled; changing the size changes the learning rate too) | Unknown | Not in the third bundle. There is not enough evidence to decide without measuring, and tuning takes many training runs. It can be measured directly. For the update, the settings that did well in autoresearch's searches are all smaller than the current 524,288 (Karpathy's best is 262,144; [Recursive](../sources/recursive-first-steps.md) uses 147,456, and a form that rises from 131,072 to 262,144). But each came with other changes, and the effect of the size alone was not separated. By nanochat's law (the best size is proportional to the amount read to the power 0.383), the size that fits the current amount read is about 430,000 (our own calculation) | Small |
+| Raising the input's learning rate while keeping the embeddings shared, or splitting them partway through training | Unknown | Only some records | Medium |
+| TIDE (several per-token tables, mixed and added at each layer) | Unknown | 750 million and up, Adam only. residual-weights.md | Medium |
+| Packing similar documents into the same row (BM25) | Unknown, possibly large | One study only, −3.2 to −4.1% at 1.3 billion. document-rows.md. Incompatible with attention within documents, which went into the fourth bundle on 2026-11-05 (documents cannot see each other through attention, so the packing has no effect) | Medium |
+| The MLP's expansion factor (now 4×; in Primer, 12× helped a lot at about 35 million) | Unknown, possibly large | One study only, context 64 | Small |
+| Better GPU efficiency (up to nanochat's level of about 46%; for example by dropping autocast) | About 1.5% | Medium | Medium |
+| A cheaper H100 (the model does not change) | About 1.2% | By calculation | Small |
+| Reading easy documents first | Unknown (1–3% in accuracy) | One study only, unverified on BPB | Medium |
+| Attention Residuals | 0.3–1.7% | Medium | Medium |
+| Training on patches | Up to about 4% | One study only, results at 970 tokens per parameter or more | Medium |
+| Hybrids with linear attention (Gated DeltaNet, Kimi Delta Attention, [Mamba-3](../sources/mamba-3.md)) | 1–2%. Mamba-3: score +0.7 at 180 million, +2.5 at 880 million | Medium | Large |
+| Large tables looked up by the hidden state (memory layers; [product keys](https://arxiv.org/abs/1907.05242), [Memory Layers at Scale](https://arxiv.org/abs/2412.09764)) | Unknown. Put into 12 layers, beats 24 layers (2019). Beats ordinary models with twice the compute or more, and MoE matched in compute and parameters (2024, up to 8 billion, 1 trillion tokens) | Two studies, abstracts only. Numbers at the current scale unverified. Especially effective on tasks that ask about facts | Large |
+| Leaving unimportant tokens out of backpropagation (CENTRIFUGE) | Time −34.7% (1.1 billion and up) | One study; needs a dedicated implementation | Large |
+| Sparse or low-rank MLPs (Mixed Sparsity Training, CR-Net, Bi-Phase) | Reports of a quarter of the FLOPs. Wall-clock time unverified | Weak to medium | Large |
+| Approximating normalization with constants (anGPT) | Up to 40% faster convergence (against a GPT with QK-norm). 3% more time | One study | Medium |
+| Starting from a pruned or distilled larger model (a different starting point) | Unknown. Reported to help more the less is read | Pruning vs. Scratch, Where to Begin. There are also reports of no difference at the same compute. [Survey](../experiments/broad-research-survey.md) | Medium |
+| mHC | Up to 1.3% | Weak to medium. Worse in the speedrun | Medium |
+| Data selection (DCLM-Edu, PreSelect and others. ClimbMix was the best of those nanochat tried, and only 0.2% of its 400B is read now. Switching to v6's English lowered the mean over six tasks by .025, but the cause was not isolated. v6-english-data.md) | Unknown, possibly large | Split | Medium |
+| Repeating data | Unknown | Medium | Small |
+| Vocabulary size | Unknown, possibly large | Large scale only | Medium |
+| SOAP-Muon | About 0.9% (steps only) | Medium | Medium |
+| Shorter preparation time (helps only at small scale) | About 1.6% | Calculated from measurements | Medium |
+| EMA-Nesterov | About 0.35% | Weak | Small |
+| MoE | 0 to a few % | Weak at the current scale | Large |
+| Context length (autoresearch uses 2,048; 2,048 makes an update 7.5% slower) | Unknown | Weak | Small |
+| Growing the context from short | Unknown | Weak | Medium |
+| Splitting attention into windows (SSSL) | Unknown (speed) | Weak | Small |
+| Interruptible rental (the model does not change) | Up to about 6.9% | Stopped in another project's trial | Medium |
+| Other GPUs (4090, 5090, B200 and others. [Survey](../experiments/broad-research-survey.md)) | About 1.8% if the 4090 gives about 1.4× in compute terms (a rough calculation). B200 about 3×, depending on price | A subproject. Not measured | Medium |
 
-## 効果が小さそうな候補
+## Candidates likely to have small effects
 
-| 候補 | 効果の見込み | 根拠 |
+| Candidate | Expected effect | Evidence |
 |---|---|---|
-| Value residual（Value embeddings と重なる） | 約0.4% | 弱 |
-| Layernorm scaling | 0〜0.4% | 割れている |
-| z-loss | 不明 | 弱 |
-| Muon+、MuonEq | ごく小さい | 弱 |
-| Anvil の更新則（記録 #92 で約0.15%）、FARO、Newton-Muon、radial brake、u/w floor、PowerCool | 小さいか不明 | 弱 |
-| Scion、Kron | 学習量が多いと有利 | 中 |
-| MuonH | 不明（Adam 系との比較のみ） | 中 |
-| NAdamW、Mars、AdEMAMix、Schedule-Free AdamW | 今の条件では小さそう | 割れている |
-| 別のデータ（Ultra-FineWeb、Essential-Web、FinePhrase など） | 不明 | 未検討 |
-| 数字を1桁ずつに分ける、区切りの正規表現 | 不明 | 弱 |
-| Narrow QK（速度と引き換えに損失が悪化。記録 #92 は7つの注意の層のうち5つで QK を64次元にし、直した FlashAttention-3 を使う） | 記録 #92 では時間 −11%、損失 +0.2%（ほかの注意の変更を含む）。同じコストに直すと約0.4% | 弱（今の規模の数字は記録 #92 のみ） |
-| Liger、compile の時間の短縮 | 小さい | 弱 |
-| 勾配を要素ごとに累乗する（[GradPower](../sources/gradpower.md)） | 論文の p=1.2 は悪化しそう。逆の p=0.9 で0.1〜0.3%（種による揺れの約0.3%以下） | 論文は1回131,072トークンで、AdamW で0.4〜0.9%、Muon で約0.5%。最適な p は更新が大きいほど下がるとし、524,288トークンでは AdamW でも約0.3%。今と同じ大きさの更新と Muon の [Parameter Golf](../sources/parameter-golf-gradpower.md)（1,700万）では、p=1.2 で約1.4%悪化し、0.9 で −0.14〜−0.27%。[Marin](../sources/marin-belay.md)（MoE、MuonH）では0.9で差がない。NorMuon での数字はない。1回の更新の大きさを変えたら見直す |
-| Q、K、V をヘッドごとに直交化する（[T-Muon](../sources/t-muon.md)、[Group Muon](../sources/group-muon.md)。今は Q、K、V を別々に直交化している） | NorMuon では小さそう（speedrun で約0.04%）。普通の Muon では0.6〜0.7% | T-Muon は今と同じ1回524,288トークン、文脈1,024、種3つで、6,000万〜3.5億の LLaMA 型で loss が0.6〜0.7%低い。ただし普通の Muon。NorMuon の [speedrun](../sources/modded-nanogpt-paired-head-muon.md) では、K と V を2ヘッドずつに分けて −0.0012（ステップ −0.7%）。Group Muon（普通の Muon、weight decay なし）では、ヘッドごとに全部分けると最後は少し悪い（+0.06%）。NorMuon の著者は Q、K、V を分けても改善がなかったとしていて、細かく分ける得は NorMuon と重なると見ている（自分たちの見方）。NorMuon をやめるときに見直す |
-| 行の大きさを別に Adam で更新する（[Muown](../sources/muown.md)） | 今の NorMuon と比べると約0.1%（1.24億） | 普通の Muon より0.6〜1.1%低い（1.24億〜27億、10億以上は種1つ）。NorMuon との比較は1.24億の図だけで、どちらも weight decay なし。今は NorMuon と cautious weight decay の組で、Muown は NorMuon と置き換える形。今の束は出力の射影を0から始めるので、そのままでは使えない（初期化を変えるか、対象から外す）。NorMuon をやめるときに見直す |
-| 文書の途中から始まる行を少し混ぜる | 測る点では0か少し悪い | 弱さは、BOS のない途中から始まる行の最初の64トークンだけ（2番目の束で +47%）。測る課題と正解の BPB は、どれも BOS から始まる。混ぜる形を比べた研究は見つけていない。nanochat と modded-nanogpt は学習の行を BOS から始める。途中から読むときは、学習を変えるより先に、先頭に BOS を置く形を試す（document-rows.md） |
-| 1回の更新を小さく始めて大きくする（記録 #92 は約5.7万から59万） | 小さい。nanochat は小さな得しかなく入れなかった（試した形の大きさは書かれていない）。speedrun の記録 #46 は、同じ損失に届く時間が −1.4%（今の規模に粗く直すと約0.1%） | nanochat の LOG、記録 #46、[Fast Catch-up](../sources/fast-catch-up.md)（AdamW で1回3.3万〜6.6万トークン、数字は図のみ）。[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/batch-size-schedule.md) |
+| Value residual (overlaps with value embeddings) | About 0.4% | Weak |
+| Layernorm scaling | 0–0.4% | Split |
+| z-loss | Unknown | Weak |
+| Muon+, MuonEq | Very small | Weak |
+| Anvil's update rule (about 0.15% in record #92), FARO, Newton-Muon, radial brake, u/w floor, PowerCool | Small or unknown | Weak |
+| Scion, Kron | Favored with more training | Medium |
+| MuonH | Unknown (compared only with Adam-type optimizers) | Medium |
+| NAdamW, Mars, AdEMAMix, Schedule-Free AdamW | Likely small under the current conditions | Split |
+| Other data (Ultra-FineWeb, Essential-Web, FinePhrase and others) | Unknown | Not examined |
+| Splitting numbers into single digits; the splitting regex | Unknown | Weak |
+| Narrow QK (loss worsens in exchange for speed; record #92 makes QK 64-dimensional in 5 of its 7 attention layers and uses a modified FlashAttention-3) | In record #92, time −11%, loss +0.2% (including other attention changes). About 0.4% when converted to the same cost | Weak (record #92 is the only number at the current scale) |
+| Liger, shorter compile time | Small | Weak |
+| Raising the gradient to a power element by element ([GradPower](../sources/gradpower.md)) | The paper's p=1.2 likely makes things worse. The opposite, p=0.9, gives 0.1–0.3% (no larger than the seed noise of about 0.3%) | The paper used 131,072 tokens per update: 0.4–0.9% with AdamW, about 0.5% with Muon. It says the best p falls as updates grow, and at 524,288 tokens even AdamW gets about 0.3%. In [Parameter Golf](../sources/parameter-golf-gradpower.md) (17 million), with updates the same size as ours and Muon, p=1.2 was about 1.4% worse and 0.9 gave −0.14 to −0.27%. In [Marin](../sources/marin-belay.md) (MoE, MuonH), 0.9 made no difference. There are no numbers with NorMuon. Revisit if the update size changes |
+| Orthogonalizing Q, K and V per head ([T-Muon](../sources/t-muon.md), [Group Muon](../sources/group-muon.md); currently Q, K and V are orthogonalized separately) | Likely small with NorMuon (about 0.04% in the speedrun). 0.6–0.7% with plain Muon | T-Muon, with 524,288 tokens per update as ours, context 1,024 and three seeds, gets 0.6–0.7% lower loss on LLaMA-type models of 60 million to 350 million. But with plain Muon. In NorMuon's [speedrun](../sources/modded-nanogpt-paired-head-muon.md), splitting K and V into groups of two heads gave −0.0012 (steps −0.7%). In Group Muon (plain Muon, no weight decay), splitting fully per head was slightly worse at the end (+0.06%). NorMuon's authors say splitting Q, K and V gave no improvement, and we think the gain from finer splitting overlaps with NorMuon (our own view). Revisit when dropping NorMuon |
+| Updating the rows' norms separately with Adam ([Muown](../sources/muown.md)) | About 0.1% against the current NorMuon (124 million) | 0.6–1.1% lower than plain Muon (124 million to 2.7 billion; one seed at 1 billion and up). The comparison with NorMuon is only a figure at 124 million, both without weight decay. We now pair NorMuon with cautious weight decay, and Muown would replace NorMuon. The current bundle starts the output projections at 0, so it cannot be used as is (change the initialization, or exclude them). Revisit when dropping NorMuon |
+| Mixing in a few rows that start mid-document | 0 or slightly worse on the measured scores | The weakness is only in the first 64 tokens of rows that start mid-document without BOS (+47% in the second bundle). The measured tasks and the correct-answer BPB all start from BOS. We have not found studies comparing ways of mixing. nanochat and modded-nanogpt start training rows with BOS. When reading from mid-document, try putting BOS at the start before changing training (document-rows.md) |
+| Starting updates small and growing them (record #92 goes from about 57,000 to 590,000) | Small. nanochat got only a small gain and did not put it in (the sizes of the schedule tried are not given). The speedrun's record #46 cut the time to reach the same loss by 1.4% (about 0.1% roughly converted to the current scale) | nanochat's LOG, record #46, [Fast Catch-up](../sources/fast-catch-up.md) (AdamW, 33,000 to 66,000 tokens per update; numbers only in figures). [Note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/batch-size-schedule.md) |
 
-## 2026-11-05 に4番目の束で見送ったもの
+## Passed over for the fourth bundle on 2026-11-05
 
-speedrun 以外から選んだときに読んで、入れなかったもの。
+Read when choosing from outside the speedrun, and not put in.
 
-| 候補 | 見送った理由 |
+| Candidate | Why it was passed over |
 |---|---|
-| Canon 層（短い畳み込みを層の前後に足す。Physics of Language Models 4.1、Primer の MDHA） | 13億、1,000億トークンの実データでは、RoPE に足しても差が揺れの中だった。効くのは位置の情報がない形や線形注意。今は RoPE とキーのずらしがある |
-| 出力にも正規化をかける（Peri-LN、Gemma、OLMo 2） | 出力の重みを0から始める今の形では、最初の更新で各ブロックの出力が急に1の大きさになる。注意のゲートで出力を0に近づけても、正規化が大きくしてしまう |
-| Differential Attention、Forgetting Transformer、Selective Attention | 結果は8億以上か、注意の計算を作り直す必要があり、今の FlashAttention より遅くなる |
-| 記憶の層（product keys、Memory Layers at Scale） | 実装と速さの負担が大きい。同じ流れの STEM と n-gram の表を先に測る |
-| 文書の頭に URL を付ける（MeCo） | FineWeb には URL があるが、一番小さい6億でほぼ差がない |
-| 一部の層の注意を近くだけにする（Gemma 3、gpt-oss） | 文書の中だけの注意で計算が減ったあとでは、得がさらに小さい |
+| Canon layers (short convolutions added before and after layers; Physics of Language Models 4.1, Primer's MDHA) | On real data at 1.3 billion and 100 billion tokens, adding them to RoPE gave a difference within the noise. They help in setups without position information, or with linear attention. We have RoPE and the key shift |
+| Normalizing the outputs too (Peri-LN, Gemma, OLMo 2) | With our output weights starting at 0, each block's output would suddenly jump to size 1 at the first update. Even if the attention gate brings the output close to 0, the normalization scales it back up |
+| Differential Attention, Forgetting Transformer, Selective Attention | The results are at 800 million or more, or the attention computation has to be rebuilt, which would make it slower than the current FlashAttention |
+| Memory layers (product keys, Memory Layers at Scale) | Heavy costs in implementation and speed. Measure STEM and the n-gram tables, from the same line of work, first |
+| Prepending the URL to documents (MeCo) | FineWeb has URLs, but there is almost no difference at the smallest size, 600 million |
+| Making attention local-only in some layers (Gemma 3, gpt-oss) | After attention within documents has already reduced the compute, the gain is smaller still |
 
-## 今の規模では効きにくそうな候補
+## Candidates unlikely to work at the current scale
 
-| 候補 | 後回しの理由 |
+| Candidate | Why postponed |
 |---|---|
-| Engram の完全な形 | 小さい規模では2トークンの表と差がない（nanochat の表は小さい。engram.md） |
-| Screening | 主な利点は長い文脈 |
-| H-Net | 構造が大きく変わる。比較が少ない |
-| CompleteP | 効くのは深いモデル |
-| Per-layer embeddings | 中身を未確認 |
-| Sampled softmax | 語彙が小さいので得が少ない。記録 #92 の時間 −12%は語彙50,304の場合で、損失の計算をまとめた分も含む |
-| 長い文書の分割 | ほぼ差がない |
-| MTP、SwiGLU、LeakyReLU²、XSA、直交初期化 | nanochat では効かないか、時間で負けた |
-| FP8 | 12層ではかえって遅い。記録 #92 は専用のカーネルで時間 −7% |
-| GQA | 主に推論のための手法 |
-| RETRO 型の検索 | 2〜6%悪化の見積もり（DB を巨大にしない限り） |
-| 合成データの事前学習 | 同じ計算で、自然な文章だけの学習に勝たなかった（[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/pre-pretraining.md)） |
-| 文書の頭にメタ情報を付けて学習し、最後に外す（[MeCo](../sources/meco.md)、KoCo） | MeCo は一番小さい6億で点が +0.2 とほぼ差がなく、perplexity は16億でも13.2から13.3とわずかに悪い。ClimbMix には URL がなく、話題を作るには計算が要る（論文では約1,500 GPU 時間）。KoCo、Beyond URLs は読んでいない。[調査](../experiments/broad-research-survey.md) |
-| 浅く始めて後で深くする（[Deep Progressive Training](../sources/deep-progressive-training.md)） | 広げたあと、初めから深いモデルに追いつくまで約160億トークンかかり（モデルの大きさによらないとする）、今の学習全体（約6.7億）の約24倍。結果はどれも1パラメータ50トークン以上で、点の報告はない。ほかの層を増やす研究は読んでいない。学習をずっと長くするときに見直す |
+| Engram's full form | At small scale, no different from a two-token table (nanochat's tables are small; engram.md) |
+| Screening | Its main benefit is long context |
+| H-Net | The structure changes a lot. Few comparisons |
+| CompleteP | It helps deep models |
+| Per-layer embeddings | Contents unverified |
+| Sampled softmax | Little gain because the vocabulary is small. Record #92's −12% time is with a vocabulary of 50,304, and includes fusing the loss computation |
+| Splitting long documents | Almost no difference |
+| MTP, SwiGLU, LeakyReLU², XSA, orthogonal initialization | In nanochat they did not help, or lost on time |
+| FP8 | Actually slower at 12 layers. Record #92 got −7% time with dedicated kernels |
+| GQA | Mainly a technique for inference |
+| RETRO-style retrieval | Estimated 2–6% worse (unless the database is made huge) |
+| Pretraining on synthetic data | At the same compute, it did not beat training on natural text alone ([note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/pre-pretraining.md)) |
+| Training with metadata prepended to documents and removing it at the end ([MeCo](../sources/meco.md), KoCo) | MeCo is almost no different at its smallest size, 600 million (score +0.2), and its perplexity is slightly worse even at 1.6 billion, 13.2 to 13.3. ClimbMix has no URLs, and making topics takes compute (about 1,500 GPU hours in the paper). KoCo and Beyond URLs: not read. [Survey](../experiments/broad-research-survey.md) |
+| Starting shallow and deepening later ([Deep Progressive Training](../sources/deep-progressive-training.md)) | After growing, catching up with a model deep from the start takes about 16 billion tokens (said not to depend on model size), about 24× our whole training run (about 670 million). All results are at 50 tokens per parameter or more, with no reports of scores. Other studies on adding layers: not read. Revisit when training gets much longer |
 
-## BPB では測れない候補
+## Candidates BPB cannot measure
 
-課題設定を変えるときに、改めて順番を決める。
+Order them afresh when the task setup changes.
 
-- 指示学習（SFT）、好みの学習（APO）、指示用のデータ
-- 正解で強化学習する（RLVR）
-- ツール、ハーネス、検索で事実を引く力
-- 重みにプログラムを組み込む（Qwenputer）
-- 推論の費用も数える形（Train-to-Test、小さいモデルを長く学習する）
-- 日本語、複数の言語、日本語の評価
-- 第2の規模で効果を確かめる
+- Instruction tuning (SFT), preference learning (APO), instruction data
+- Reinforcement learning on correct answers (RLVR)
+- Tools, harnesses, and the ability to look up facts by search
+- Building programs into the weights (Qwenputer)
+- Setups that also count inference cost (Train-to-Test; training small models longer)
+- Japanese, multiple languages, Japanese evaluation
+- Confirming effects at a second scale
 
-個別の見方は同じ `topics/` にあり、ほかの多くは `language-model` の [`topics/`](https://github.com/tomato414941/language-model/tree/main/docs/research/topics) にある。
+Views on individual items are in the same `topics/`, and many others are in `language-model`'s [`topics/`](https://github.com/tomato414941/language-model/tree/main/docs/research/topics).

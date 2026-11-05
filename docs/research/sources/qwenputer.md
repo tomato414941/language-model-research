@@ -1,10 +1,10 @@
 # Qwenputer
 
-Divyansh Agrawal のブログ記事（2026-10-22、https://divagr.com/blog/qwenputer）。
+Divyansh Agrawal's blog post (2026-10-22, https://divagr.com/blog/qwenputer).
 
-- Qwen 3.5 4B の前に11層と追加の次元を足し、コンパイラが重みを決めて RISC-V の CPU（RV32IM）を作る。元の重みは変えない。Gated DeltaNet の状態を、ゲート1、ベータ1、one-hot のキーで正確な RAM として使う。
-- ベンチマークは、掛け算の mul_big が55%から97.5%（Python ツールで100%）、割り算の div_big が72.5%から97.5%（ツールで95%）、NUPA が48.6%から100%（ツールで100%）。
-- 約23万の出力位置で基準の機械と不一致なし。1,800万命令を誤りなく実行。普段の文章は KL 6e-4（ノイズの水準5e-4）。
-- 重みは18.8GB で元の約2倍。起動に専用のドライバが要り、L4 で毎秒約3,200 CPU トークンと遅い。
+- It adds 11 layers and extra dimensions in front of Qwen 3.5 4B, and a compiler sets their weights to build a RISC-V CPU (RV32IM). The original weights are unchanged. It uses Gated DeltaNet's state as exact RAM, with gate 1, beta 1 and one-hot keys.
+- On the benchmarks, multiplication (mul_big) goes from 55% to 97.5% (100% with a Python tool), division (div_big) from 72.5% to 97.5% (95% with the tool), and NUPA from 48.6% to 100% (100% with the tool).
+- No mismatch with the reference machine over about 230,000 output positions. 18 million instructions were executed without error. On everyday text, the KL is 6e-4 (noise level 5e-4).
+- The weights are 18.8 GB, about twice the original. Starting it needs a dedicated driver, and it is slow, at about 3,200 CPU tokens per second on an L4.
 
-読んだのは記事の全文。
+The whole post was read.

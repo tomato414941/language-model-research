@@ -1,28 +1,28 @@
 # H-Net
 
-Hwang, Wang and Gu, Dynamic Chunking for End-to-End Hierarchical Sequence Modeling（arXiv 2507.07955）。要旨と主な数字は `language-model` の [h-net.md](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/h-net.md) にあり、ここにはそれより先に読んだことを書く。
+Hwang, Wang and Gu, Dynamic Chunking for End-to-End Hierarchical Sequence Modeling (arXiv 2507.07955). Its abstract and main numbers are in `language-model`'s [h-net.md](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/h-net.md); this note records what was read beyond that.
 
-## 仕組み
+## How it works
 
-- 区切りの確率は、隣り合う2つのバイトのベクトルを別々の行列（単位行列から始める）で写したものの余弦から、p = (1 − cos) / 2 とする。行の最初は必ず区切り。0.5 を超えた所でまとまりが始まる。
-- 本体の出力は、区切りの確率で滑らかにしてからバイトに戻す（z_t = p_t ẑ_t + (1 − p_t) z_{t−1}）。滑らかにするのを外すと、圧縮の比率が大きく揺れて点も大きく落ちた。
-- 区切りの確信度（選んだ方の確率）を、前向きは1、逆向きはそのまま勾配を通す形（STE）で掛ける。
-- 比率の損失は L = N/(N−1)·((N−1)FG + (1−F)(1−G))。F は区切った割合、G は確率の平均。重み α = 0.03 をすべての実験で固定した。
-- 学習の工夫として、各ネットワークの後の正規化、0 から始める残差の写像、外側ほど高い学習率を入れている。
+- The chunk boundary probability is p = (1 − cos) / 2, from the cosine between the vectors of two adjacent bytes, each projected by its own matrix (initialized to the identity). The start of a row is always a chunk boundary. A chunk starts wherever p exceeds 0.5.
+- The main network's output is smoothed with the chunk boundary probabilities before it goes back to bytes (z_t = p_t ẑ_t + (1 − p_t) z_{t−1}). Without the smoothing, the compression ratio fluctuated widely and the scores also fell sharply.
+- The confidence of each chunk boundary decision (the probability of the chosen side) is multiplied in as 1 in the forward pass, with the gradient passed straight through in the backward pass (STE).
+- The ratio loss is L = N/(N−1)·((N−1)FG + (1−F)(1−G)). F is the fraction of positions chosen as chunk boundaries and G is the mean probability. Its weight α = 0.03 was fixed in every experiment.
+- As training techniques, it adds a normalization after each network, residual projections that start at 0, and higher learning rates further toward the outer layers.
 
-## 実験の設定
+## Experimental settings
 
-- 1段の H-Net は区切りの目標 N = 6 で、実際のまとまりは平均4.7〜4.8バイトだった（GPT-2 のトークナイザは4.6）。
-- バイトのモデルは1列8,192バイト、BPE の Transformer は1,792トークン。バッチは256列。AdamW と WSD（10%の立ち上がり、20%の逆平方根の減衰）。データは FineWeb-Edu の1000億トークン分。
-- 1段の L は「M4 + T22 + M4」（外側は幅1,024で Mamba-2 が4層ずつ、本体は幅1,536の Transformer 22層）。
+- The one-stage H-Net targets N = 6 for its chunk boundaries, and the actual chunks averaged 4.7–4.8 bytes (4.6 with GPT-2's tokenizer).
+- The byte models use sequences of 8,192 bytes, and the BPE Transformer sequences of 1,792 tokens. The batch is 256 sequences. AdamW and WSD (10% warmup, 20% inverse-square-root decay). The data is 100 billion tokens' worth of FineWeb-Edu.
+- The one-stage L is "M4 + T22 + M4" (the outer layers are four Mamba-2 layers on each side at width 1,024, and the main network is 22 Transformer layers at width 1,536).
 
-## 外側の層の比較
+## Comparing the outer layers
 
-1段の H-Net で、エンコーダとデコーダを M4-M4、M2T1-T1M2、T1M2-M2T1、T2-T2（M は Mamba-2、T は Transformer、T は窓1,024）にして360億トークンで比べた。T2-T2 は計算量を多く使ったのに「ずば抜けて悪く」、バイトをうまくまとめられず本体の計算も増えた。Mamba の割合を増やすほど良くなり、M4-M4 が最良だった。BPE のトークンを入力にしても Mamba の外側のほうが良かった。著者は、決まった大きさの状態に圧縮する SSM の性質が、まとめる仕事に合うためと考えている。
+In the one-stage H-Net, the encoder and decoder were set to M4-M4, M2T1-T1M2, T1M2-M2T1 and T2-T2 (M is Mamba-2 and T is Transformer, with T using a window of 1,024) and compared over 36 billion tokens. T2-T2 used more compute yet was "by far the worst": it chunked the bytes poorly, and the main network's compute grew as well. The larger the share of Mamba, the better, and M4-M4 was the best. Even with BPE tokens as the input, Mamba outer layers were better. The authors think this is because the SSM's property of compressing into a fixed-size state suits the job of chunking.
 
-## 速さと伸び
+## Speed and scaling
 
-- 今の実装は、学習で通常のモデルより最大2倍ほど遅いとしている。
-- 2段の H-Net は、学習で約300億バイトを読んだ所で BPE の Transformer の perplexity を追い越し、その後は差が開いた。
+- It says the current implementation trains up to about 2× slower than standard models.
+- The two-stage H-Net overtook the BPE Transformer's perplexity after reading about 30 billion bytes in training, and the gap widened after that.
 
-読んだのは、要旨、2章の仕組みと学習の工夫、3章の設定の表、3.3節の比較の本文、推論と効率の節。図の数字は読んでいない。
+The abstract, Section 2's mechanism and training techniques, Section 3's table of settings, the text of Section 3.3's comparisons, and the section on inference and efficiency were read. The numbers in the figures were not read.

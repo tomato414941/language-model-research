@@ -1,18 +1,18 @@
 # STEM
 
-Sadhukhan ら、STEM: Scaling Transformers with Embedding Modules（arXiv 2601.10639、ICLR 2026）。
+Sadhukhan et al., STEM: Scaling Transformers with Embedding Modules (arXiv 2601.10639, ICLR 2026).
 
-ゲート付きの MLP の入口の行列を、層ごとのトークンの表に置き換える。`y = W_d · (SiLU(W_g · x) ⊙ U[t])`。U は語彙×MLP の幅。ゲートのほうを表にすると悪くなる。
+It replaces the up-projection matrix of a gated MLP with a per-layer table looked up by token. `y = W_d · (SiLU(W_g · x) ⊙ U[t])`. U is vocabulary × MLP width. Making the gate side the table instead is worse.
 
-| モデル | ARC-E | ARC-C | PIQA | HellaSwag | 8課題の平均 |
+| Model | ARC-E | ARC-C | PIQA | HellaSwag | Mean of 8 tasks |
 |---|---|---|---|---|---|
-| 3.5億の基準 | 57.66 | 30.55 | 69.42 | 49.68 | 49.72 |
-| 3.5億の STEM（層の3分の1） | 63.01 | 32.68 | 70.18 | 52.38 | 50.90 |
-| 10億の基準 | 66.98 | 41.88 | 73.44 | 59.65 | 55.82 |
-| 10億の STEM（層の3分の1） | 65.95 | 42.03 | 75.00 | 60.37 | 56.63 |
+| 350 million baseline | 57.66 | 30.55 | 69.42 | 49.68 | 49.72 |
+| 350 million STEM (a third of the layers) | 63.01 | 32.68 | 70.18 | 52.38 | 50.90 |
+| 1 billion baseline | 66.98 | 41.88 | 73.44 | 59.65 | 55.82 |
+| 1 billion STEM (a third of the layers) | 65.95 | 42.03 | 75.00 | 60.37 | 56.63 |
 
-- 事前学習は3.5億が1,000億トークン、10億が1兆トークン。このほかに中間の学習1,000億トークンと文脈の延長200億トークンがある。
-- 1トークンの FLOPs は 0.74→0.70G、3.00→2.83G。点あたりの FLOPs の得は、3分の1で1.08倍、2分の1で1.20倍、全部で1.33倍。実測の速さはない。
-- 全パラメータは3.5億の STEM で11.4億、10億の STEM で67.5億。表が GPU のメモリを超えることがあり、学習中の移し替えは実装していない。
+- Pretraining is 100 billion tokens for 350 million and 1 trillion tokens for 1 billion. On top of this there are 100 billion tokens of mid-training and 20 billion tokens of context extension.
+- FLOPs per token go 0.74→0.70G and 3.00→2.83G. The gain in FLOPs per point is 1.08× with a third of the layers, 1.20× with half and 1.33× with all. There are no measured speeds.
+- Total parameters are 1.14 billion for the 350 million STEM and 6.75 billion for the 1 billion STEM. The tables can exceed GPU memory, and moving them off the GPU during training is not implemented.
 
-読んだのは HTML の本文を要約を通したもの。語彙の大きさは読んだ範囲にない。
+The HTML main text was read through a summary. The vocabulary size was not in what was read.

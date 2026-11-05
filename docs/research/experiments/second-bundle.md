@@ -1,23 +1,23 @@
-# 2番目の束を H100 で学習した
+# Training the second bundle on an H100
 
-2026-11-01 に、基準（baseline.md）と同じコストで、モデルの形を変えた2番目の束を1回学習した。最初の束と比べて、正解の BPB の平均は4.4%下がり、今の測り方の検証の BPB は2.2%上がった。上がったのは行の切り方のためで、文書の頭から読む行で比べると4.2%下がる。
+On 2026-11-01, the second bundle, which changes the model's shape, was trained once at the same cost as the baseline (baseline.md). Compared with the first bundle, the mean correct-answer BPB fell by 4.4%, and validation BPB as currently measured rose by 2.2%. The rise comes from how rows are cut: compared on rows read from document starts, it falls by 4.2%.
 
-## 条件
+## Setup
 
-- 機械：Vast.ai の日本の H100 SXM 80GB を1枚、$2.41/時。ドライバ 615.71.09。基準とは別の機械。
-- イメージ：基準と同じ（torch 2.15.0+cu132）。cuDNN は 9.26。
-- モデル：最初の束（10層、幅640、5ヘッド、文脈1,024、語彙8,192、Value embeddings）に、RoPE、重みなしの RMSNorm、QK-norm、ReLU²、出力のゼロ初期化、埋め込みの分離、x0 と resid の重み、softcap 15 を足した。計算に使うパラメータは5,440万、全体は8,585万。設定は `configs/bundle2.py`。
-- 学習：Muon と AdamW の併用。学習率は未調整で、読む表0.66、予測する表0.0044、行列0.04、x0 の重み0.5、resid の重み0.005、Value embeddings 0.1。行は文書の頭から読む。層を流れる値は bf16、注意の計算は FlashAttention-2（どちらも `speed.py` の選択）。1,281回の更新、1回524,288トークン（1回128本を4回足す）、計約6.7億トークン（1パラメータ約12トークン）。種は1つ（1337）。
-- 同じコスト：同じ機械で基準を短く動かし、更新の時間とその外の時間から更新の回数を決めた。学習の実時間は796秒で、基準は830秒と808秒、最初の束は810秒。
-- データと採点：基準と同じ。全問（30,470問）を採点した。
+- Machine: one H100 SXM 80GB on Vast.ai in Japan, $2.41/hour. Driver 615.71.09. A different machine from the baseline's.
+- Image: the same as the baseline's (torch 2.15.0+cu132). cuDNN 9.26.
+- Model: the first bundle (10 layers, width 640, 5 heads, context 1,024, vocabulary 8,192, Value embeddings) plus RoPE, RMSNorm without weights, QK-norm, ReLU², zero initialization of the outputs, untied embeddings, x0 and resid weights, and softcap 15. 54.4 million parameters used in computation, 85.85 million in total. Settings in `configs/bundle2.py`.
+- Training: Muon and AdamW together. Learning rates untuned: 0.66 for the input table, 0.0044 for the prediction table, 0.04 for matrices, 0.5 for the x0 weights, 0.005 for the resid weights, 0.1 for Value embeddings. Rows are read from document starts. Values flowing through the layers in bf16, attention computed with FlashAttention-2 (both chosen by `speed.py`). 1,281 updates of 524,288 tokens each (4 passes of 128 rows added up), about 670 million tokens in total (about 12 tokens per parameter). One seed (1337).
+- The same cost: the baseline was run briefly on the same machine, and the number of updates was set from the time per update and the time outside updates. Training took 796 seconds of wall-clock time; the baseline took 830 and 808 seconds, the first bundle 810.
+- Data and scoring: the same as the baseline's. All questions (30,470) were scored.
 
-## 点
+## Scores
 
-| | 基準の種1 | 基準の種2 | 最初の束 | 2番目の束 | 最初の束からの変化 |
+| | Baseline seed 1 | Baseline seed 2 | First bundle | Second bundle | Change from the first bundle |
 |---|---|---|---|---|---|
-| 検証データの BPB | 1.2536 | 1.2571 | 1.0237 | 1.0461 | +2.2% |
-| 検証の損失（`train.py`、ランダムな位置） | 3.4646 | 3.4834 | 2.8410 | 2.8974 | +2.0% |
-| 正解の BPB（6つの平均） | 1.6921 | 1.6700 | 1.4037 | 1.3420 | −4.4% |
+| Validation BPB | 1.2536 | 1.2571 | 1.0237 | 1.0461 | +2.2% |
+| Validation loss (`train.py`, random positions) | 3.4646 | 3.4834 | 2.8410 | 2.8974 | +2.0% |
+| Correct-answer BPB (mean of 6) | 1.6921 | 1.6700 | 1.4037 | 1.3420 | −4.4% |
 | MMLU | 1.953 | 1.990 | 1.662 | 1.628 | −2.1% |
 | ARC-Easy | 1.769 | 1.716 | 1.463 | 1.384 | −5.3% |
 | ARC-Challenge | 1.736 | 1.705 | 1.452 | 1.392 | −4.2% |
@@ -25,94 +25,94 @@
 | PIQA | 1.615 | 1.636 | 1.339 | 1.311 | −2.1% |
 | SciQ | 1.787 | 1.676 | 1.441 | 1.311 | −9.0% |
 
-正解の BPB は同じ問題どうしの差の標準誤差（0.0006〜0.011）より十分に大きく、6つすべてで下がった。種による正解の BPB の平均の動き（約1.3%）よりも大きい。学習の最後の損失は、学習データ（文書の頭から）で2.6740。
+Correct-answer BPB fell on all 6, by well more than the standard error of the differences on the same questions (0.0006–0.011). The fall is also larger than the movement of mean correct-answer BPB across seeds (about 1.3%). The final training loss was 2.6740 on the training data (read from document starts).
 
-OpenAI の GPT-2（1.2億パラメータ）を測ったのと同じ問題（5つのベンチマークの最初の200問ずつ）で比べた。
+We compared on the same questions that OpenAI's GPT-2 (120 million parameters) was measured on (the first 200 questions of each of 5 benchmarks).
 
-| | GPT-2 | 基準の種1 | 基準の種2 | 最初の束 | 2番目の束 |
+| | GPT-2 | Baseline seed 1 | Baseline seed 2 | First bundle | Second bundle |
 |---|---|---|---|---|---|
 | ARC-Easy | 1.704 | 1.750 | 1.691 | 1.473 | 1.391 |
 | ARC-Challenge | 1.518 | 1.710 | 1.681 | 1.431 | 1.370 |
 | HellaSwag | 0.996 | 1.341 | 1.352 | 1.124 | 1.076 |
 | PIQA | 1.328 | 1.585 | 1.600 | 1.302 | 1.271 |
 | SciQ | 1.511 | 1.756 | 1.613 | 1.377 | 1.233 |
-| 平均 | 1.411 | 1.628 | 1.587 | 1.341 | 1.268 |
+| Mean | 1.411 | 1.628 | 1.587 | 1.341 | 1.268 |
 
-## 検証の BPB が上がった理由
+## Why validation BPB rose
 
-学習のあとで、処理用の機械（CPU、float32）で、保存した重みを検証データの96行で測り直した。`scoring.py` と同じ決まった位置の行と、文書の頭から始まる行の2通り。
+After training, the saved weights were measured again on 96 rows of validation data on the processing machine (CPU, float32), in two ways: rows at the same fixed positions as in `scoring.py`, and rows starting at document starts.
 
-| 行 | 基準の種1 | 基準の種2 | 最初の束 | 2番目の束 | 最初の束からの変化 |
+| Rows | Baseline seed 1 | Baseline seed 2 | First bundle | Second bundle | Change from the first bundle |
 |---|---|---|---|---|---|
-| 決まった位置（`scoring.py` と同じ読み方の最初の96行） | 1.2256 | 1.2311 | 0.9908 | 1.0090 | +1.8% |
-| 文書の頭から | 1.2157 | 1.2193 | 0.9768 | 0.9360 | −4.2% |
+| Fixed positions (the first 96 rows, read the same way as in `scoring.py`) | 1.2256 | 1.2311 | 0.9908 | 1.0090 | +1.8% |
+| From document starts | 1.2157 | 1.2193 | 0.9768 | 0.9360 | −4.2% |
 
-決まった位置の行を、トークンの場所で分けた損失（1トークンあたり、nats）：
+Loss on the fixed-position rows, split by token position (per token, nats):
 
-| トークンの場所 | トークンの割合 | 最初の束 | 2番目の束 | 変化 |
+| Token position | Share of tokens | First bundle | Second bundle | Change |
 |---|---|---|---|---|
-| 行の最初の64トークン | 6% | 3.327 | 4.901 | +47.3% |
-| 行の残り | 94% | 2.727 | 2.677 | −1.9% |
-| 文書の最初の行に入らない後ろ（行の始めも含む） | 16% | 2.562 | 2.657 | +3.7% |
+| First 64 tokens of a row | 6% | 3.327 | 4.901 | +47.3% |
+| Rest of the row | 94% | 2.727 | 2.677 | −1.9% |
+| The part of a document past its first row (row starts included) | 16% | 2.562 | 2.657 | +3.7% |
 
-文書の頭から始まる行では、どの場所でも −3.5〜−4.3%で揃っている。
+On rows starting at document starts, the change is an even −3.5 to −4.3% at every position.
 
-2番目の束は BOS から始まる行だけで学習したので、文書の途中から始まる行の最初の部分をひどく外す。この部分だけで全体の損失を約3.6%押し上げていて、検証の BPB の上がりはこれで説明できる。正解の BPB の問題はどれも BOS から始まるので、この弱さは出ない。文書の頭に揃えることの副作用で、見込み（0〜0.2%）にはなかった。
+The second bundle trained only on rows starting with BOS, so it badly mispredicts the beginning of rows that start mid-document. This part alone pushes the overall loss up by about 3.6%, which explains the rise in validation BPB. The questions for correct-answer BPB all start with BOS, so this weakness does not show there. It is a side effect of aligning rows to document starts and was not in the estimate (0–0.2%).
 
-ほかの項目がこの弱さに関わっているかは分けていない。行の途中から始まる形を学習に混ぜて測り直してはいない。
+Whether other items contribute to this weakness was not separated. Mixing rows that start partway into training and measuring again was not done.
 
-## 速度
+## Speed
 
-同じ機械で、26回の更新を動かして測った。更新の時間は最初の5回を除いた中央値。
+Measured on the same machine by running 26 updates. The update time is the median, excluding the first 5.
 
-| 形と方式 | 1回に流す本数 | 1回の更新 | 更新の外 |
+| Shape and method | Rows per pass | One update | Outside updates |
 |---|---|---|---|
-| 基準、PyTorch の既定 | 64×8 | 0.834秒 | 34秒 |
-| 束、PyTorch の既定 | 128×4 | 0.639秒 | 44秒 |
-| 束、FlashAttention-2 | 128×4 | 0.639秒 | 12秒 |
-| 束、FlashAttention-2、値は bf16 | 128×4 | 0.615秒 | 41秒 |
-| 同上 | 64×8 | 0.625秒 | 50秒 |
-| 同上 | 256×2 | メモリ不足（78GB を使ったところで8GB を確保できない） | |
-| 同上、QK-norm なし | 128×4 | 0.591秒 | 33秒 |
-| 同上、x0 と resid の重みなし | 128×4 | 0.597秒 | 39秒 |
-| 同上、softcap なし | 128×4 | 0.599秒 | 40秒 |
-| 同上、ReLU² でなく GELU | 128×4 | 0.632秒 | 39秒 |
+| Baseline, PyTorch's default | 64×8 | 0.834 s | 34 s |
+| Bundle, PyTorch's default | 128×4 | 0.639 s | 44 s |
+| Bundle, FlashAttention-2 | 128×4 | 0.639 s | 12 s |
+| Bundle, FlashAttention-2, values in bf16 | 128×4 | 0.615 s | 41 s |
+| Same as above | 64×8 | 0.625 s | 50 s |
+| Same as above | 256×2 | Out of memory (with 78GB in use, 8GB could not be allocated) | |
+| Same as above, no QK-norm | 128×4 | 0.591 s | 33 s |
+| Same as above, no x0 and resid weights | 128×4 | 0.597 s | 39 s |
+| Same as above, no softcap | 128×4 | 0.599 s | 40 s |
+| Same as above, GELU instead of ReLU² | 128×4 | 0.632 s | 39 s |
 
-- 部品ごとの費用（1回の更新）：QK-norm +4.2%、x0 と resid の重み +3.1%、softcap +2.7%、ReLU² は GELU より −2.6%、値を bf16 にすると −3.7%。外すことを考える境目（QK-norm と x0、resid の重みは5%、softcap は3%）より小さい。
-- 基準に対する1回の更新の比は、最初の束の0.662から0.738へ増えた（11.5%遅い）。そのぶん更新は1,441回から1,281回に減り、換算で約 +0.66%。上の点はこの損を含んだもの。
-- 値を bf16 にする形と既定の形は、更新の外の時間の差（新しい形の初回の compile）のため、更新の回数はほぼ同じと計算された（1,281回と1,279回）。本番の最初の更新は6.6秒で、計測の予算より実時間は短く終わった。
-- 学習中の使用率の見積もりは、`train.py` の表示（A100 に対して約111.7%）から H100 のピークの約35%。
-- FlashAttention-2 と値を bf16 にする形は、小さいモデルの出力と勾配が既定と合った（`attention_check.py`）。
+- Cost per component (per update): QK-norm +4.2%, x0 and resid weights +3.1%, softcap +2.7%, ReLU² −2.6% against GELU, values in bf16 −3.7%. All are below the thresholds for considering removal (5% for QK-norm and the x0 and resid weights, 3% for softcap).
+- The time per update relative to the baseline rose from the first bundle's 0.662 to 0.738 (11.5% slower). Updates fell accordingly from 1,441 to 1,281, worth about +0.66% by conversion. The scores above include this loss.
+- Because of the difference in time outside updates (the first compile of a new shape), the form with values in bf16 and the default form were calculated to get almost the same number of updates (1,281 and 1,279). The real run's first update took 6.6 seconds, and it finished in less wall-clock time than the measured budget.
+- The estimated utilization during training, from what `train.py` displays (about 111.7% relative to the A100), is about 35% of the H100's peak.
+- FlashAttention-2 and the form with values in bf16 matched the default in the outputs and gradients of a small model (`attention_check.py`).
 
-## 時間と費用
+## Time and cost
 
-| 段階 | 実測 |
+| Stage | Measured |
 |---|---|
-| 借りてから使えるまで | 21分（1台目が20分で起動せず、2台目はすぐ起動） |
-| コードとデータの転送（4GB、処理用の機械から中継） | 4秒、200秒 |
-| パッケージの追加 | 8秒 |
-| 速度の計測（9本と確認） | 525秒 |
-| 学習 | 796秒 |
-| 採点 | 19秒 |
-| 重みの保存 | 3秒 |
-| 結果の取得 | 12秒 |
+| From renting to ready | 21 min (the first machine did not start within 20 minutes; the second started right away) |
+| Transferring code and data (4GB, relayed from the processing machine) | 4 s, 200 s |
+| Adding packages | 8 s |
+| Speed measurement (9 runs and the check) | 525 s |
+| Training | 796 s |
+| Scoring | 19 s |
+| Saving the weights | 3 s |
+| Fetching the results | 12 s |
 
-2台目を借りていた約28分で約$1.13（時間と料金からの計算）。うち学習は約$0.53。1台目（$2.15/時）の読み込み中の料金は分けて確かめていない。
+About $1.13 for the roughly 28 minutes the second machine was rented (calculated from time and price). Training was about $0.53 of it. The charge for the first machine ($2.15/hour) while it was loading was not checked separately.
 
-## 分かったこと
+## Findings
 
-- 10項目の見込み（2〜6%）の範囲で、正解の BPB と文書の頭から読む検証の BPB が下がった。どの項目が効いたかは分けて測っていない。
-- 効果の見込みが一番小さかった「文書の頭から読む」が、物差しを動かす副作用を持っていた。検証の BPB だけを見ていたら負けと判断するところだった。正解の BPB と両方を見て、場所ごとに分けて分かった。
-- 部品の費用は見込みより大きいものがあり、合わせると更新が11%減った。
+- Correct-answer BPB and validation BPB read from document starts fell within the estimate for the 10 items (2–6%). Which items worked was not measured separately.
+- "Reading from document starts", the item with the smallest expected effect, had a side effect that moved the yardstick. Looking at validation BPB alone, the bundle would have been judged a loss. It became clear from looking at both validation BPB and correct-answer BPB, and from splitting by position.
+- Some components cost more than estimated, and together they cut updates by 11%.
 
-## 起きたこと
+## What happened
 
-- 1台目の機械はイメージの取り込みが20分で終わらず、自動で2台目に替わった。
-- 分析は機械を消したあとに処理用の機械で行ったので、追加の費用はない。
+- The first machine did not finish pulling the image within 20 minutes, and was automatically replaced by a second.
+- The analysis was done on the processing machine after the rented machine was deleted, so there was no extra cost.
 
-## 確かめていないこと
+## Not verified
 
-- 項目ごとの品質の効果。特に、文書の頭から読むことの効果と副作用だけを分けて測っていない。
-- 学習率。今の形に合っているとは限らない。
-- 違う種でのばらつき。
-- x0 と resid の重みで出た学習の初めの跳ねが、本来のバッチでも起きたか。ログは10回おきで、10回目の損失は5.56だった。
+- The quality effect of each item. In particular, the effect and side effect of reading from document starts alone were not measured separately.
+- The learning rates. They may not suit the current shape.
+- The noise with other seeds.
+- Whether the spike at the start of training caused by the x0 and resid weights also occurred with the real batch. Logs are every 10 updates, and the loss at the 10th was 5.56.

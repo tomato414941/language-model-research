@@ -1,14 +1,14 @@
-# RMSNorm の論文
+# The RMSNorm paper
 
-Zhang、Sennrich、Root Mean Square Layer Normalization（arXiv 1910.07467、NeurIPS 2019）。
+Zhang and Sennrich, Root Mean Square Layer Normalization (arXiv 1910.07467, NeurIPS 2019).
 
-- LayerNorm から平均を引く計算をなくし、2乗平均だけで割る。論文の形は学習する重みを持つ。
-- いくつかのモデルで、品質は LayerNorm と同じくらいで、時間は7〜64%短いとしている。
-- Transformer（幅512、機械翻訳、V100、TensorFlow）の表。
+- Removes the subtraction of the mean from LayerNorm and divides only by the root mean square. The paper's form has learned weights.
+- It says that on several models the quality is about the same as LayerNorm's, and the time 7–64% shorter.
+- A table for a Transformer (width 512, machine translation, V100, TensorFlow).
 
-| 正規化 | BLEU（Test14、Test17） | 1,000ステップの時間 |
+| Normalization | BLEU (Test14, Test17) | Time for 1,000 steps |
 |---|---|---|
-| LayerNorm | 26.6、27.7 | 248秒 |
-| RMSNorm | 26.8、27.7 | 231秒（−6.9%） |
+| LayerNorm | 26.6, 27.7 | 248 seconds |
+| RMSNorm | 26.8, 27.7 | 231 seconds (−6.9%) |
 
-言語モデルの事前学習の比較はない。読んだのは要旨、導入、機械翻訳の節の表。
+There is no comparison for language-model pretraining. Read: the abstract, the introduction, and the table in the machine translation section.

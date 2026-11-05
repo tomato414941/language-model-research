@@ -1,33 +1,33 @@
-# 最後の重みを混ぜる
+# Mixing the last weights
 
-学習の最後の数個の重みを平均し、最後の重みと混ぜて使う方法。学習の計算は変わらない。2026-11-03 に3番目の束へ入れ、2026-11-04 に測ると、混ぜた重みは最後の重みより悪かった（下の「測った結果」）。次の束からは外す。
+A method that averages the last few weights of training and uses the average mixed with the final weights. The training computation does not change. It was put into the third bundle on 2026-11-03, and when measured on 2026-11-04, the mixed weights were worse than the final weights (see "Measured result" below). It is dropped from the next bundle on.
 
-## 報告
+## Reports
 
-- [Terminal Shrinkage Averaging](../sources/terminal-shrinkage-averaging.md)（TSA）は、nanochat の12層で、最後の重みを含む8個（32更新おき）の平均を最後の重みと混ぜ、BPB が約0.0008（約0.1%）下がった。平均だけを使うと最後の重みより悪い。学習率の下限を上げるほど、最後の重みは悪くなり、混ぜた重みは良くなる。0まで下げる形は試していない。
-- speedrun の[記録 #92](../sources/modded-nanogpt-anvil2.md)は、最後の重みの作り方（EMA や平均を混ぜる）を外すと、損失が20.2ミリナット（約0.6%）悪くなる。学習率はピークの20%で止める。
-- IMU-1 は、最後の10個に EMA をかけて、点の平均が +0.014。nanochat の LOG では、EMA と SWA は効かなかった（[`language-model` のメモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/checkpoint-averaging.md)）。
+- [Terminal Shrinkage Averaging](../sources/terminal-shrinkage-averaging.md) (TSA), on nanochat's 12 layers, mixed the average of 8 checkpoints (every 32 updates, including the final weights) with the final weights, and BPB fell by about 0.0008 (about 0.1%). Using the average alone is worse than the final weights. The higher the learning rate's floor, the worse the final weights and the better the mixed weights. A schedule falling to 0 was not tried.
+- In the speedrun's [record #92](../sources/modded-nanogpt-anvil2.md), removing the way the final weights are made (mixing in an EMA or an average) makes the loss 20.2 millinats (about 0.6%) worse. The learning rate stops at 20% of the peak.
+- IMU-1 applied an EMA over the last 10, and the mean score was +0.014. In nanochat's LOG, EMA and SWA did not help ([`language-model`'s note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/checkpoint-averaging.md)).
 
-## 3番目の束での形
+## The form in the third bundle
 
-設定は `configs/bundle3.py`、混ぜる処理は `averaging.py`。
+The settings are in `configs/bundle3.py`, and the mixing in `averaging.py`.
 
-- **混ぜ方：** TSA の著者が実験の前に決めていた値にした。32更新おきの8個（最後の重みを含む）を平均し、平均を55%、最後の重みを45%で足す。平均するのはパラメータだけ。
-- **範囲：** 今の束は1,281更新なので、8個は最後の224更新（学習の約17%）にまたがり、その間に学習率は最大の約35%から0まで下がる。論文は3,000更新で、学習の7.5%だった。
-- **学習率は今のまま：** 後半で0まで直線で下げる。下限を上げる形は入れなかった。0まで直線で下げるのが一番良いという研究（Straight to Zero、[`language-model` のメモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md)）があり、TSA の論文でも、混ぜた重みの下限5%と15%の差は約0.0001と小さいため。
-- **測り方：** 同じ学習の最後の重みと混ぜた重みを、両方採点する（`rented.sh`）。同じ学習どうしの差なので、種による揺れ（約0.3%）より小さくても読める。論文の5本の学習では、差の揺れは ±0.00009 だった。
-- **読み方：** 2026-11-03 時点では、束の結果は混ぜた重みで読む。混ぜた重みが最後の重みより悪ければ、この束の結果は最後の重みで読み、次の束では混ぜる処理を外す。
-- **費用：** 学習の時間はほとんど変わらない（重みを8回足し、最後に1回保存する）。採点が1回分増え、前回の H100 の時間で約3分、約 $0.11。`speed.py` の短い測定は、平均する更新まで届かないので平均しない。
+- **How to mix:** Uses the values TSA's authors had fixed before their experiments. Average 8 checkpoints taken every 32 updates (including the final weights), and add the average at 55% and the final weights at 45%. Only the parameters are averaged.
+- **Span:** The current bundle makes 1,281 updates, so the 8 checkpoints span the last 224 updates (about 17% of training), over which the learning rate falls from about 35% of its maximum to 0. The paper had 3,000 updates, and the span was 7.5% of training.
+- **The learning rate stays as it is:** It falls linearly to 0 over the second half. A higher floor was not put in, because there is a study finding a linear fall to 0 best (Straight to Zero, [`language-model`'s note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/lr-schedule.md)), and in the TSA paper too, the mixed weights' difference between floors of 5% and 15% is small, about 0.0001.
+- **How to measure:** Score both the final weights and the mixed weights of the same training run (`rented.sh`). Since the difference is within the same run, it can be read even if it is smaller than the seed noise (about 0.3%). Across the paper's five training runs, the noise in the difference was ±0.00009.
+- **How to read:** As of 2026-11-03, the bundle's result is read from the mixed weights. If the mixed weights are worse than the final weights, this bundle's result is read from the final weights, and the next bundle drops the mixing.
+- **Cost:** Training time barely changes (the weights are added 8 times and saved once at the end). Scoring grows by one round: about 3 minutes at the last H100 run's timing, about $0.11. The short measurement in `speed.py` does not reach the updates that are averaged, so it does not average.
 
-## 測った結果
+## Measured result
 
-[3番目の束](../experiments/third-bundle.md)の同じ学習で、混ぜた重みは最後の重みより、6課題の正解率の平均で −.0029 ± .0011、正解の BPB の平均で +1.2% 悪く、検証の BPB は同じ（1.1633 と 1.1634）だった。同じ問題どうしの差の標準誤差より大きい。
+In the same training run of [the third bundle](../experiments/third-bundle.md), the mixed weights were worse than the final weights by −.0029 ± .0011 in mean accuracy over six tasks and by +1.2% in mean correct-answer BPB, and validation BPB was the same (1.1633 and 1.1634). This is larger than the standard error of the differences on the same questions.
 
-- 同じコストに合わせると3番目の束は910更新になり、8個は最後の224更新（学習の約25%）にまたがった。その間に学習率は最大の約49%から0まで下がる。決めたときの見込み（約17%、約35%から）や論文（7.5%）より広い。
-- 広すぎたことが原因かは分けていない。
+- Matched to the same cost, the third bundle made 910 updates, and the 8 checkpoints spanned the last 224 updates (about 25% of training). Over that span the learning rate falls from about 49% of its maximum to 0. That is wider than expected when it was decided (about 17%, from about 35%) and than in the paper (7.5%).
+- Whether the span being too wide was the cause was not isolated.
 
-## 見方が変わりそうな条件
+## What would change the view
 
-- 混ぜる範囲を学習の1割以下に縮める場合。今回は約25%だった。
-- 学習率の下限を上げる場合。混ぜる効果が大きくなるという報告がある。
-- 更新の数が大きく変わる場合。8個がまたがる学習の割合が変わる。
+- Shrinking the mixing span to 10% of training or less. This time it was about 25%.
+- Raising the learning rate's floor. There is a report that it makes mixing more effective.
+- A large change in the number of updates. The share of training that the 8 checkpoints span changes.

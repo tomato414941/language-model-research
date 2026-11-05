@@ -1,10 +1,10 @@
 # Physics of Language Models 4.1
 
-Physics of Language Models: Part 4.1, Architecture Design and the Magic of Canon Layers（arXiv 2512.17351）。本題は短い畳み込みの層を足す話。
+Physics of Language Models: Part 4.1, Architecture Design and the Magic of Canon Layers (arXiv 2512.17351). Its main subject is adding short convolution layers.
 
-付録のモデルの説明に、初期値についての短い記述がある。
+The appendix's description of the models has a short passage on initialization.
 
-- GPT-2 由来の `rescale_prenorm_residual`（出力の重みの初期値を 1/√N 倍する）を切ると、性能がわずかに良くなった。数字はない。HF の Llama と Mamba2 の既定は切ってあり、GLA の著者もこれを受けて切った。
-- GLA の実装の `initializer_range`（重み全体の初期値）を0.006にすると悪くなり、0.02に戻した。
+- Turning off `rescale_prenorm_residual` from GPT-2 (which multiplies the initial output weights by 1/√N) improved performance slightly. No numbers are given. HF's Llama and Mamba2 have it off by default, and GLA's authors also turned it off following this.
+- Setting `initializer_range` (the initial scale of all the weights) in GLA's implementation to 0.006 made things worse, and it was set back to 0.02.
 
-読んだのは付録のこの部分だけ。
+Only this part of the appendix was read.

@@ -1,8 +1,8 @@
 # SkipInit
 
-De、Smith、Batch Normalization Biases Residual Blocks Towards the Identity Function in Deep Networks（arXiv 2002.10444）。正規化のない残差の CNN の話で、言語モデルではない。
+De, Smith, Batch Normalization Biases Residual Blocks Towards the Identity Function in Deep Networks (arXiv 2002.10444). It is about residual CNNs without normalization, not language models.
 
-- 残差の出力に、学習する値 α を1つ掛ける。始めを 1/√深さ 以下にすれば深いネットワークを学習できる。深さに関係なく使えるので、実用には0を勧めている。
-- Wide-ResNet、CIFAR-10 の精度は、1/√深さ と0でほぼ同じ（16層 93.0 と 93.3、100層 94.2 と 94.2、1,000層 94.2 と 94.3）。α=1 は16層より深いと学習できない。
+- The residual branch's output is multiplied by a single learned value α. Starting it at 1/√depth or below makes deep networks trainable. Because 0 works whatever the depth, it recommends 0 in practice.
+- Wide-ResNet accuracy on CIFAR-10 is about the same with 1/√depth and with 0 (16 layers 93.0 and 93.3, 100 layers 94.2 and 94.2, 1,000 layers 94.2 and 94.3). With α=1, networks deeper than 16 layers cannot be trained.
 
-読んだのは2節と表1。
+Section 2 and Table 1 were read.

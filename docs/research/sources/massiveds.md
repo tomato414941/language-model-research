@@ -1,17 +1,17 @@
 # MassiveDS
 
-Shao ら、Scaling Retrieval-Based Language Models with a Trillion-Token Datastore（arXiv 2407.12854、2024）。
+Shao et al., Scaling Retrieval-Based Language Models with a Trillion-Token Datastore (arXiv 2407.12854, 2024).
 
-## データストア
+## The datastore
 
-- 約1.4兆トークン。一般の Web 1兆1,917億、STEM 977億、プログラム 528億、百科事典 319億、本 263億、Q&A の掲示板 202億、数学 141億、医学 65億（§3.1、Table 2）。
-- 検索器は Contriever-MSMARCO（1.77億パラメータ）。256語の塊で、上位3件を推論の時に文脈の前に置く。モデルは Llama-2、Llama-3、Pythia、OLMo。
+- About 1.4 trillion tokens. General web 1.1917 trillion, STEM 97.7 billion, code 52.8 billion, encyclopedias 31.9 billion, books 26.3 billion, Q&A forums 20.2 billion, math 14.1 billion, medicine 6.5 billion (§3.1, Table 2).
+- The retriever is Contriever-MSMARCO (177 million parameters). With chunks of 256 words, the top 3 are placed before the context at inference. The models are Llama-2, Llama-3, Pythia and OLMo.
 
-## 結果
+## Results
 
-- データストアを大きくすると、言語モデルの損失といくつかの課題が、はっきりした飽和なしに単調に良くなる。最大の規模で、検索ありの Llama-2 7B が検索なしの 13B を上回る。MMLU は単調に上がり、MedQA ははっきりしない（§4.2）。
-- 学習の計算量が同じなら、検索ありのモデルのほうが良い（§4.3、Figure 4）。
-- 分野を混ぜたデータストアは、その分野だけのデータストアと同等以上（§5.1、Table 3）。Llama-2 7B で検索なし→あり：TQA 64.1→77.0、NQ 26.6→34.6、MedQA 36.6→39.4、MMLU 45.8→49.3。
-- 評価の文章と重なる文書を除くと、言語モデルの損失は大きく変わるが、課題の点はあまり変わらない（§5.3、Figure 7）。Dolma の品質フィルタの効果は限られる。
+- Growing the datastore improves the language-model loss and several tasks monotonically, with no clear saturation. At the largest scale, Llama-2 7B with retrieval beats 13B without it. MMLU rises monotonically; MedQA is unclear (§4.2).
+- At the same training compute, the models with retrieval are better (§4.3, Figure 4).
+- A datastore that mixes domains matches or beats a datastore of that domain alone (§5.1, Table 3). Llama-2 7B without → with retrieval: TQA 64.1→77.0, NQ 26.6→34.6, MedQA 36.6→39.4, MMLU 45.8→49.3.
+- Removing documents that overlap the evaluation texts changes the language-model loss a lot but the task scores little (§5.3, Figure 7). Dolma's quality filters have a limited effect.
 
-読んだのは HTML 版の §3.1、§4.1〜4.3、§5.1、§5.3 の該当する文と表で、ツールで抜き出した引用から。本文の全体と付録の後半は読んでいない。
+The relevant sentences and tables of §3.1, §4.1–4.3, §5.1 and §5.3 of the HTML version were read, from quotations extracted by a tool. The full main text and the latter half of the appendix were not read.

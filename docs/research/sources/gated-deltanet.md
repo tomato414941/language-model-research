@@ -1,8 +1,8 @@
 # Gated DeltaNet
 
-Yang ら（arXiv 2412.06464、2024-12）。線形注意に、記憶を消すゲートと、狙って書き換える delta rule を入れる。
+Yang et al. (arXiv 2412.06464, 2024-12). It adds to linear attention a gate that erases memory and the delta rule, which rewrites memory selectively.
 
-- 1.3B、FineWeb-Edu 1,000億トークン、AdamW で、Mamba2 や DeltaNet を複数の課題で上回るとしている。
-- 学習の速さは DeltaNet とほぼ同じで、Mamba2 より少し遅い。文脈2,000トークンの範囲では、FlashAttention-2 を使う Transformer が一番速く、短い窓の注意と混ぜた形はその中間になる。
+- At 1.3B, with 100 billion tokens of FineWeb-Edu and AdamW, it says it beats Mamba2 and DeltaNet on several tasks.
+- Training speed is about the same as DeltaNet's and a little slower than Mamba2's. Within a 2,000-token context, a Transformer with FlashAttention-2 is the fastest, and hybrids with short-window attention fall in between.
 
-読んだのは要旨と学習の速さの節。実験の本体は読んでいない。
+The abstract and the section on training speed were read. The main body of the experiments was not read.

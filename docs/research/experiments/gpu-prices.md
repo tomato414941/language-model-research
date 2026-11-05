@@ -1,8 +1,8 @@
-# Vast の料金
+# Vast's prices
 
-2026-10-31 に、Vast.ai の1枚の GPU を一覧した（通常の借り方、1時間あたり）。その時点の空きで、時間帯によって変わる。
+On 2026-10-31, we listed single GPUs on Vast.ai (ordinary rental, per hour). They are the offers free at that moment, and they vary with the time of day.
 
-| GPU | 件数 | 最安 | 中央値 |
+| GPU | Offers | Lowest | Median |
 |---|---|---|---|
 | RTX 4090 | 98 | $0.14 | $0.47 |
 | RTX 5090 | 83 | $0.39 | $0.74 |
@@ -18,4 +18,4 @@
 | H100 PCIE | 3 | $2.54 | $2.85 |
 | H200 NVL | 19 | $2.67 | $4.00 |
 
-H100 SXM の最安の機械はドライバが古い（CUDA 12.2〜12.4）。CUDA 13.2 以上で借りられたのは約 $2.40 から。
+The cheapest H100 SXM machines have old drivers (CUDA 12.2–12.4). Machines that could be rented with CUDA 13.2 or later started at about $2.40.

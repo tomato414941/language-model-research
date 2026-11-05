@@ -1,27 +1,27 @@
 # Fantastic Pretraining Optimizers
 
-Wen ら、Fantastic Pretraining Optimizers and Where to Find Them（arXiv 2509.02046、v3 は 2026-10）。Marin の一部。
+Wen et al., Fantastic Pretraining Optimizers and Where to Find Them (arXiv 2509.02046, v3 in 2026-10). Part of Marin.
 
-- 11手法（AdamW、NAdamW、Mars、Cautious、Lion、Adam-mini、Muon、Scion、Kron、SOAP、Sophia）を、手法ごとに調整して比べる。最後のチェックポイントの C4/EN の検証 loss で比べる。
-- Llama 形の32層、1.3億、3億、5.2億、12億パラメータ、文脈4,096。学習量は1パラメータ20トークンを1倍として1〜8倍。更新1回のトークン数は40万以上。128 TPU-v5lite。比較はトークン数で、計算の増分は10%未満にできるとしている。
-- 調整した AdamW に対して、速くなるのは最大1.4倍。行列を使う手法は5億パラメータ以下で約1.3倍、重みごとの手法は平均で1.2倍未満。
-- 差はモデルが大きいほど小さい。12億では NAdamW、Muon、SOAP が約1.1倍で、ベンチマークの平均も改善しない（学習量8倍で AdamW 67.15、Muon 66.98、NAdamW 66.70）。スケーリング則から、70億の学習量1倍では Muon のほうが loss が少し高いと予測している。
-- 1倍では Muon が一番良く、8倍以上では SOAP と Kron が追いつくか上回る。
-- GPT-3 のレシピ（ピーク学習率6e-4）は学習率の調整だけで1億で約2倍速くなるので、基準として弱いとしている。
-- AdamW の調整例（表の見出しは1.3億の1倍、本文は3億としている）：学習率0.008、weight decay 0.1、最小学習率0、warmup 2,000、勾配のクリップ2、バッチ128（文脈4,096で524,288トークン）、β1 0.9、β2 0.98、ε 1e-10。loss は3.298から3.263。
-- 最良の weight decay は手法で違う（AdamW 約0.1、Lion 約0.6、Kron 約0.5）。設定を手法の間で流用すると公平にならない。途中の loss で比べると順位が入れ替わる。Sophia は5億以下で AdamW より大きく速くはならない。
-- Semenov ら（benchmarking-optimizers.md）と結果が違う点は、バッチの大きさと学習率の調整の差が原因としている。
+- It compares 11 methods (AdamW, NAdamW, Mars, Cautious, Lion, Adam-mini, Muon, Scion, Kron, SOAP, Sophia), each tuned on its own. They are compared by the validation loss on C4/EN at the last checkpoint.
+- Llama-shaped, 32 layers, 130 million, 300 million, 520 million and 1.2 billion parameters, context 4,096. The amount of training is 1–8×, where 1× is 20 tokens per parameter. Each update takes 400,000 tokens or more. 128 TPU-v5lite. The comparison is by tokens, and it says the added compute can be kept under 10%.
+- Against a tuned AdamW, the speedup is at most 1.4×. Matrix-based methods give about 1.3× at 500 million parameters or fewer, and per-weight methods under 1.2× on average.
+- The larger the model, the smaller the difference. At 1.2 billion, NAdamW, Muon and SOAP give about 1.1×, and the benchmark mean does not improve either (at 8× training, AdamW 67.15, Muon 66.98, NAdamW 66.70). From scaling laws, it predicts that at 7 billion with 1× training, Muon's loss is slightly higher.
+- At 1×, Muon is the best; at 8× and above, SOAP and Kron catch up with it or exceed it.
+- It says GPT-3's recipe (peak learning rate 6e-4) is a weak baseline, since tuning only the learning rate makes it about 2× faster at 100 million.
+- An example of tuning AdamW (the table's heading says 130 million at 1×, the text says 300 million): learning rate 0.008, weight decay 0.1, minimum learning rate 0, warmup 2,000, gradient clipping 2, batch 128 (524,288 tokens at context 4,096), β1 0.9, β2 0.98, ε 1e-10. The loss falls from 3.298 to 3.263.
+- The best weight decay differs by method (AdamW about 0.1, Lion about 0.6, Kron about 0.5). Reusing settings across methods makes the comparison unfair. Comparing by intermediate losses changes the ranking. Sophia is not much faster than AdamW at 500 million or below.
+- It attributes the points where its results differ from Semenov et al. (benchmarking-optimizers.md) to differences in batch size and learning-rate tuning.
 
-1.3億の図から読んだ、AdamW の何倍速いかの値。
+How many times faster than AdamW each method is, read from the 130 million figure.
 
-| 手法 | 学習量1倍 | 学習量8倍 |
+| Method | 1× training | 8× training |
 |---|---|---|
-| Muon | 約1.4 | 約1.38 |
-| SOAP | 約1.25 | 約1.40 |
-| Kron | 約1.2 | 約1.38 |
-| Mars | 約1 | 約1.22 |
-| NAdamW | 約1 | 約1.18 |
-| Cautious、Lion | 約1 | 約1.15 |
-| Adam-mini | 約1 | 約0.96 |
+| Muon | about 1.4 | about 1.38 |
+| SOAP | about 1.25 | about 1.40 |
+| Kron | about 1.2 | about 1.38 |
+| Mars | about 1 | about 1.22 |
+| NAdamW | about 1 | about 1.18 |
+| Cautious, Lion | about 1 | about 1.15 |
+| Adam-mini | about 1 | about 0.96 |
 
-読んだのは要旨、導入、関連研究、実験の方法の一部、結果、結論。付録の個別の表は読んでいない。図は上の1枚だけ目盛りから読んだ。
+The abstract, the introduction, the related work, part of the experimental method, the results and the conclusion were read. The appendix's individual tables were not read. Of the figures, only the one above was read, off its axis ticks.

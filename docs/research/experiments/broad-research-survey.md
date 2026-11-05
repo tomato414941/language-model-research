@@ -1,130 +1,130 @@
-# 広い範囲の調査
+# Broad survey
 
-2026-11-02 に、同じ日の latest-research-survey.md が事前学習の工夫に偏っていたので、分野を広げて探し直した。候補の順番を決める材料にした。
+On 2026-11-02, because latest-research-survey.md from the same day leaned toward pretraining techniques, we searched again across more fields. It served as material for ordering the candidates.
 
-## 探し方と限界
+## How we searched, and the limits
 
-- **学会ごとの分野別の一覧（papernotes.org）：** ICLR 2026 の Pretraining 79本、ICML 2026 の Pretraining 27本、NeurIPS 2025 の Pretraining 51本、ACL 2026 の Pretraining 12本、ICML 2025 の Pretraining。ICLR 2026 と ICML 2026 の LLM Efficiency、Optimization、ICML 2026 の Model Compression は、学習に関わるものだけを要約で拾った。
-- **分野ごとの検索：** 蒸留、逆伝播を減らす方法、合成データ、Transformer 以外の構造、圧縮、BabyLM、再帰、JEPA、料金、ハードウェア、学習中の重み付け、脳に着想を得た方法、推論時の学習、中国語と日本語の文献。
+- **Per-conference lists by field (papernotes.org):** 79 papers in ICLR 2026's Pretraining, 27 in ICML 2026's Pretraining, 51 in NeurIPS 2025's Pretraining, 12 in ACL 2026's Pretraining, and ICML 2025's Pretraining. From ICLR 2026's and ICML 2026's LLM Efficiency and Optimization and ICML 2026's Model Compression, only the papers related to training were picked up, from their summaries.
+- **Searches by field:** distillation, ways to reduce backpropagation, synthetic data, architectures other than the Transformer, compression, BabyLM, recursion, JEPA, prices, hardware, weighting during training, brain-inspired methods, test-time training, and Chinese and Japanese literature.
 
-限界。
+Limits:
 
-- 下の表の「一覧」は、一覧の機械の要約を読んだだけで、原文で確かめていない。「検索」は検索の要約だけを読んだ。
-- NeurIPS 2026 はこのサイトにほとんど載っていない。ICML と NeurIPS の公式の一覧は取得できなかった。EMNLP と COLM、ICLR の Optimization の後半は見ていない。
-- 中国語と日本語の検索では、ほとんど見つからなかった。MiniMind（約6,400万を約2時間）の費用の根拠は見つけていない。NLP2026 の一覧は見ていない。
-- 今の束は1パラメータ12トークン。下の報告の多くは、読む量がそれより桁違いに多い。
+- "List" in the tables below means only the list's machine summary was read, without checking the original. "Search" means only the search summary was read.
+- NeurIPS 2026 is barely listed on this site. The official lists of ICML and NeurIPS could not be fetched. EMNLP, COLM and the second half of ICLR's Optimization were not looked at.
+- The Chinese and Japanese searches found almost nothing. The basis for MiniMind's cost (about 64 million in about 2 hours) was not found. The NLP2026 list was not looked at.
+- The current bundle reads 12 tokens per parameter. In most reports below, the amount read is orders of magnitude larger.
 
-## 計算を表に置き換える
+## Replacing computation with tables
 
-| 研究 | 報告 | 読んだ深さ |
+| Work | Report | Depth of reading |
 |---|---|---|
-| STEM（ICLR 2026、stem.md） | MLP の入口をトークンごとの表にする。350M で点の平均 49.72→50.90 | 本文 |
-| L³（ICML 2026、l3.md） | 層の中にトークンごとの表を置く。同じ計算の 809M で 48.28→50.25 | 本文 |
-| Hierarchical Memories（arXiv 2510.02375） | 1.6億のモデルに、46億の記憶から1,800万を引いて足すと、2倍以上の普通のモデルに並ぶ | 検索 |
-| LMLM（arXiv 2505.15962） | 事実の答えを損失から外して検索させる。3.82億が事実の課題で70億に近づく | 検索 |
-| Scone、Memory Mosaics（NeurIPS 2025） | 頻出の n-gram の表、連想記憶 | 一覧 |
+| STEM (ICLR 2026, stem.md) | Turns the MLP's input side into a per-token table. At 350M, mean score 49.72→50.90 | Full text |
+| L³ (ICML 2026, l3.md) | Puts per-token tables inside the layers. At 809M with the same compute, 48.28→50.25 | Full text |
+| Hierarchical Memories (arXiv 2510.02375) | A 160 million model that fetches and adds 18 million from a 4.6 billion memory matches ordinary models more than twice its size | Search |
+| LMLM (arXiv 2505.15962) | Takes factual answers out of the loss and has them looked up. 382 million approaches 7 billion on factual tasks | Search |
+| Scone, Memory Mosaics (NeurIPS 2025) | Tables of frequent n-grams, associative memory | List |
 
-COUNT、記録 #92、Recursive は latest-research-survey.md にある。
+COUNT, record #92 and Recursive are in latest-research-survey.md.
 
-## 形を変えて計算を減らす
+## Reducing computation by changing the shape
 
-| 研究 | 報告 | 読んだ深さ |
+| Work | Report | Depth of reading |
 |---|---|---|
-| Deep Progressive Training（ICML 2026、deep-progressive-training.md） | 0〜1層で80%まで学習してから深くする。計算が3〜5倍分 | 本文の一部 |
-| Composer（arXiv 2510.00379、ICLR 2026） | 探索で注意と MLP が1対2の形が見つかる。3.5億〜30億で点が平均 1.1〜3.1%上がる | 検索 |
-| AIRA-Compose（arXiv 2605.15871） | 11のエージェントが24時間で形を探す。10億で点が +2.4%、Mamba との混成で +3.8% | 要旨 |
-| Mixed Sparsity Training（arXiv 2408.11746） | 疎な学習で GPT-2 の FLOPs が4分の1。実時間は要旨にない | 要旨 |
-| Sparser, Faster, Lighter（ICML 2026） | L1 で MLP の99%以上が0になり、下流の影響はわずか。学習の時間は要旨にない | 要旨 |
-| BLaST（arXiv 2507.03117）、CR-Net、Bi-Phase | 疎や低ランクの MLP。BLaST は事前学習で1.11倍 | 検索、一覧 |
-| CENTRIFUGE（arXiv 2502.00340、ICLR 2026） | 重要でないトークンを逆伝播から外す。50%外すと逆伝播 −49.9%、全体 −34.7%。11億〜400億 | 検索 |
+| Deep Progressive Training (ICML 2026, deep-progressive-training.md) | Trains with 0–1 layers up to 80%, then deepens. Worth 3–5× the compute | Part of the full text |
+| Composer (arXiv 2510.00379, ICLR 2026) | A search finds a shape with attention and MLP at 1 to 2. From 350 million to 3 billion, scores rise by 1.1–3.1% on average | Search |
+| AIRA-Compose (arXiv 2605.15871) | 11 agents search for shapes in 24 hours. At 1 billion, scores +2.4%, and +3.8% in a hybrid with Mamba | Abstract |
+| Mixed Sparsity Training (arXiv 2408.11746) | Sparse training cuts GPT-2's FLOPs to a quarter. Wall-clock time is not in the abstract | Abstract |
+| Sparser, Faster, Lighter (ICML 2026) | With L1, over 99% of the MLP becomes 0, with little downstream effect. Training time is not in the abstract | Abstract |
+| BLaST (arXiv 2507.03117), CR-Net, Bi-Phase | Sparse or low-rank MLPs. BLaST is 1.11× in pretraining | Search, list |
+| CENTRIFUGE (arXiv 2502.00340, ICLR 2026) | Drops unimportant tokens from backpropagation. Dropping 50% gives backpropagation −49.9% and overall −34.7%. 1.1 billion to 40 billion | Search |
 
-## 別の系統
+## Other families
 
-| 研究 | 報告 | 読んだ深さ |
+| Work | Report | Depth of reading |
 |---|---|---|
-| Mamba-3（ICLR 2026、mamba-3.md） | 同じパラメータで 1.8億 42.8→43.5、8.8億 52.8→55.3 | 本文の一部 |
-| 拡散の言語モデル（arXiv 2610.17590） | 同じ損失に要る計算の差が16倍から、ブロック4で3.0倍に縮まる。まだ普通のモデルより多い | 要旨 |
-| ParaRNN、Energy-Based Transformers、Dual-objective（ICLR 2026） | RNN、エネルギー、2つの目的の混合 | 一覧 |
-| 逆伝播を使わない学習、スパイキング、予測符号化 | 言語モデルの規模の結果は見つからない。層の4分の3を0次の推定にする Hybrid Pretraining は二次情報のみ | 検索 |
-| Tiny Recursive Model（arXiv 2510.04871） | パズルの結果で、言語のモデルの結果は見つからない | 検索 |
+| Mamba-3 (ICLR 2026, mamba-3.md) | At the same parameters, 180 million 42.8→43.5, 880 million 52.8→55.3 | Part of the full text |
+| Diffusion language models (arXiv 2610.17590) | The gap in compute needed for the same loss shrinks from 16× to 3.0× with blocks of 4. Still more than ordinary models | Abstract |
+| ParaRNN, Energy-Based Transformers, Dual-objective (ICLR 2026) | RNNs, energy, a mix of two objectives | List |
+| Training without backpropagation, spiking, predictive coding | No results at language-model scale were found. Hybrid Pretraining, which uses zeroth-order estimates for three quarters of the layers, is known only from secondary sources | Search |
+| Tiny Recursive Model (arXiv 2510.04871) | Results on puzzles; no results for language models were found | Search |
 
-## 損失と目標
+## Losses and targets
 
-| 研究 | 報告 | 読んだ深さ |
+| Work | Report | Depth of reading |
 |---|---|---|
-| Dispersion Loss（ICML 2026、dispersion-loss.md） | 埋め込みの向きを広げる損失を足す。GPT-2 の途中学習で 34.95→35.61 | 本文の一部 |
-| GradPower（ICML 2026、gradpower.md） | 勾配を1.2乗する1行。20億で点 47.72→48.26、loss −0.022 | 要約 |
-| Lost in Backpropagation（lost-in-backpropagation.md） | 出力の表が勾配の95〜99%を失うとする | 本文の一部 |
-| Next-ToBE、Future Summaries、LLM-JEPA、CoCoMix（ICLR 2026） | 未来の語の袋を当てる、未来の要約を当てる、潜在の予測、SAE の概念を当てる | 一覧 |
+| Dispersion Loss (ICML 2026, dispersion-loss.md) | Adds a loss that spreads the directions of the embeddings. 34.95→35.61 in mid-training of GPT-2 | Part of the full text |
+| GradPower (ICML 2026, gradpower.md) | One line that raises the gradient to the power 1.2. At 2 billion, score 47.72→48.26, loss −0.022 | Summary |
+| Lost in Backpropagation (lost-in-backpropagation.md) | Claims the output table loses 95–99% of the gradient | Part of the full text |
+| Next-ToBE, Future Summaries, LLM-JEPA, CoCoMix (ICLR 2026) | Predicting the bag of future words, predicting a summary of the future, latent prediction, predicting SAE concepts | List |
 
-## データ
+## Data
 
-| 研究 | 報告 | 読んだ深さ |
+| Work | Report | Depth of reading |
 |---|---|---|
-| MeCo（arXiv 2501.01956、ICML 2025） | 文書の頭に URL などを付けて学習し、最後の10%で外す。16億で要るデータが33%減。モデルが作った話題でも効く | 検索 |
-| KoCo（ACL 2026）、Beyond URLs（ICLR 2026） | 意味の座標、細かいメタ情報を付ける | 一覧 |
-| ADAPT（arXiv 2605.05227、ICLR 2026） | 文書の重みを学習中に変える。同じ計算で事前の選別より良いとする。数字は要旨にない | 要旨 |
-| AC-ODM（ICML 2026）、Demystifying Data Organization（ACL 2026）、How Text Quality Interventions Reshape Neural Scaling Laws（ICLR 2026） | 混ぜ方の自動調整、読む順番、質の介入の2,000モデルの比較 | 一覧 |
-| Beyond Rephrasing（arXiv 2607.28109） | 本の形に整えた合成データで、中間の学習の点が約 +1.09 | 検索 |
-| It's All Training（NeurIPS 2026） | 百科の種から全部を合成して1段で学習する | 一覧 |
-| Is a Document Educational or Just Wikipedia-Style?（ACL 2026） | 質の判定器は Wikipedia 風の文体に騙される | 一覧 |
+| MeCo (arXiv 2501.01956, ICML 2025) | Trains with URLs and the like prepended to documents, and removes them for the last 10%. At 1.6 billion, 33% less data needed. Also works with topics generated by a model | Search |
+| KoCo (ACL 2026), Beyond URLs (ICLR 2026) | Attaching semantic coordinates, fine-grained metadata | List |
+| ADAPT (arXiv 2605.05227, ICLR 2026) | Changes document weights during training. Claims to beat filtering beforehand at the same compute. No numbers in the abstract | Abstract |
+| AC-ODM (ICML 2026), Demystifying Data Organization (ACL 2026), How Text Quality Interventions Reshape Neural Scaling Laws (ICLR 2026) | Automatic tuning of the mix, reading order, a comparison of quality interventions over 2,000 models | List |
+| Beyond Rephrasing (arXiv 2607.28109) | Synthetic data shaped like books raises mid-training scores by about +1.09 | Search |
+| It's All Training (NeurIPS 2026) | Synthesizes everything from encyclopedia seeds and trains in one stage | List |
+| Is a Document Educational or Just Wikipedia-Style? (ACL 2026) | Quality classifiers are fooled by a Wikipedia-like style | List |
 
-ClimbMix の列は `text` だけで、URL などのメタ情報はない（2026-11-02 に確かめた）。
+ClimbMix's only column is `text`, with no metadata such as URLs (checked on 2026-11-02).
 
-## 既存の重みや大きいモデルから始める
+## Starting from existing weights or larger models
 
-| 研究 | 報告 | 読んだ深さ |
+| Work | Report | Depth of reading |
 |---|---|---|
-| Small LLMs: Pruning vs. Training from Scratch（arXiv 2606.14150） | Llama-3.1-8B を枝刈りして始めると、同じトークンでランダムな初期値に勝つ。差は読む量と枝刈りの率が増えると縮み、率0.8でほぼ消える | 要旨 |
-| Where to Begin（arXiv 2510.07227） | 部分ネットワークと蒸留で、100億トークンで FLOPs が5.16分の1、1,000億で1.26分の1。先生の計算を数えるかは要旨にない | 要旨 |
-| Knowledge Distillation vs. Pretraining from Scratch（arXiv 2404.19319） | 同じ計算なら、普通の蒸留とゼロからの学習はほぼ同じ | 検索 |
-| Don't Ignore the Tail、Energy Accounting of Distillation（ICML 2026） | H100 1枚で1週間の蒸留が可能。蒸留はエネルギーが約2.4倍 | 一覧 |
+| Small LLMs: Pruning vs. Training from Scratch (arXiv 2606.14150) | Starting from a pruned Llama-3.1-8B beats random initialization at the same tokens. The gap shrinks as the amount read and the pruning rate grow, and nearly vanishes at a rate of 0.8 | Abstract |
+| Where to Begin (arXiv 2510.07227) | With a subnetwork and distillation, FLOPs fall to 1/5.16 at 10 billion tokens and 1/1.26 at 100 billion. Whether the teacher's compute is counted is not in the abstract | Abstract |
+| Knowledge Distillation vs. Pretraining from Scratch (arXiv 2404.19319) | At the same compute, ordinary distillation and training from scratch are about the same | Search |
+| Don't Ignore the Tail, Energy Accounting of Distillation (ICML 2026) | A week of distillation on one H100 is feasible. Distillation uses about 2.4× the energy | List |
 
-## 学習の進め方
+## Training procedure
 
-| 研究 | 報告 | 読んだ深さ |
+| Work | Report | Depth of reading |
 |---|---|---|
-| anGPT（arXiv 2505.22014、NeurIPS 2025） | 正規化を定数で近似する。QK-norm の GPT より収束が最大40%速く、時間は3%増、weight decay と warmup が要らない | 検索 |
-| Seesaw、WSM（ICLR 2026） | 学習率を下げる代わりにバッチを増やして時間 −36%。一定の学習率の重みの合流で下げる段階を置き換える | 一覧 |
-| AdaGC（ICML 2026） | テンソルごとの勾配クリップで点が +1.27〜2.48%（大きなモデル） | 一覧 |
-| SiameseNorm（arXiv 2602.08064、ICML 2026） | Pre と Post の2つの流れ。13億の算数で 28.1→39.6 | 検索 |
-| Sharpness-Aware Pretraining（arXiv 2605.02105） | 2,000万〜1.5億で SAM、大きな学習率、短い下げ方が、事後学習での忘却を最大80%減らす | 要旨 |
-| Conditioned Initialization（ICLR 2026） | 注意の行列の初期値の条件数を1にする。20〜30%速いという数字は二次情報で、言語の差は小さい | 検索 |
-| RMNP（ICML 2026） | 直交化を行の正規化に替えて13〜44倍速い。今は Muon の費用が小さいので得は少ない | 一覧 |
-| Dropout Universality（arXiv 2605.21648） | 前の層を強くする dropout。MLP と ViT の結果で、言語モデルの結果はない | 検索 |
+| anGPT (arXiv 2505.22014, NeurIPS 2025) | Approximates normalization with constants. Converges up to 40% faster than GPT with QK-norm, at 3% more time, and needs no weight decay or warmup | Search |
+| Seesaw, WSM (ICLR 2026) | Growing the batch instead of lowering the learning rate, time −36%. Replacing the decay phase with a merge of weights from a constant learning rate | List |
+| AdaGC (ICML 2026) | Per-tensor gradient clipping raises scores by +1.27–2.48% (large models) | List |
+| SiameseNorm (arXiv 2602.08064, ICML 2026) | Two streams, Pre and Post. At 1.3 billion, arithmetic 28.1→39.6 | Search |
+| Sharpness-Aware Pretraining (arXiv 2605.02105) | From 20 million to 150 million, SAM, a large learning rate and a short decay reduce forgetting in post-training by up to 80% | Abstract |
+| Conditioned Initialization (ICLR 2026) | Sets the condition number of the attention matrices' initial values to 1. The figure of 20–30% faster is from secondary sources, and the difference for language is small | Search |
+| RMNP (ICML 2026) | Replaces orthogonalization with row normalization and is 13–44× faster. Muon's cost is small now, so there is little to gain | List |
+| Dropout Universality (arXiv 2605.21648) | Dropout that strengthens earlier layers. Results on MLPs and ViT; no language-model results | Search |
 
-## 料金とハードウェア
+## Prices and hardware
 
-- Vast の料金（gpu-prices.md）で、RTX 4090 の中央値 $0.47 と H100 の $2.40 を比べると、計算あたりの料金は4090が約1.4倍良い（前の測定の速さからの粗い計算で、モデルの大きさが違う）。
-- SemiAnalysis の 2026-07 の料金の調査では B200 が $1.73、MI355X が $1.50（1チップ1時間。推論の比較のページ）。B200 のピークは H100 の約2.3倍なので、この値で借りられれば計算あたり約3倍良い。Vast の B200 の値は確かめていない。
-- MI355X の学習の費用を計算あたりで比べた資料は見つからない。
-- TPU Research Cloud は申請制で TPU が無料。公式のリポジトリは 2026-04 にアーカイブされ、今も受け付けているかは確かめていない。コードの移植が要る。
+- Comparing Vast's prices (gpu-prices.md), the RTX 4090's median of $0.47 against the H100's $2.40, the 4090 is about 1.4× better in price per compute (a rough calculation from the speeds of earlier measurements, with different model sizes).
+- SemiAnalysis's 2026-07 price survey puts the B200 at $1.73 and the MI355X at $1.50 (per chip-hour; on the inference comparison page). The B200's peak is about 2.3× the H100's, so renting at this price would be about 3× better per compute. Vast's B200 prices were not checked.
+- No source comparing the MI355X's training cost per compute was found.
+- TPU Research Cloud gives TPUs for free on application. Its official repository was archived in 2026-04, and whether it still accepts applications was not checked. The code would need porting.
 
-## 隣の分野
+## Neighboring fields
 
-- **BabyLM（EMNLP 2025 の報告の要旨）：** 新しい目的関数と構造が上位に来た。学習の FLOPs と成績は完全には相関しない。2024年の報告の要約では、読む順番の工夫の多くは効かなかった。
-- **Parameter Golf（検索の要約。記事は取得できなかった）：** 16MB、8枚の H100 で10分。上位に Muon の weight decay、埋め込みのスペクトル初期化、文書ごとの推論時の学習がある。
-- **Hutter Prize：** 2026年6〜7月に大きく進み、enwik9 が 100,424,672 バイト。古典的な文脈混合と文章向けの前処理で、学習と評価が同じデータなので BPB は比べられない。
-- **推論時の学習（arXiv 2604.06169、ICLR 2026 ほか）：** 長い文脈の課題の結果。
-- **自動の探索：** Recursive、AIRA-Compose。どの変更が効いたかの内訳は、読んだ範囲では少ない。
+- **BabyLM (abstract of the EMNLP 2025 report):** New objectives and architectures came out on top. Training FLOPs and results do not fully correlate. According to the summary of the 2024 report, most tricks with the reading order did not work.
+- **Parameter Golf (search summary; the article could not be fetched):** 16MB, 10 minutes on 8 H100s. The top entries include Muon's weight decay, spectral initialization of the embeddings, and per-document test-time training.
+- **Hutter Prize:** Advanced greatly in June–July 2026, with enwik9 at 100,424,672 bytes. It uses classic context mixing and preprocessing for text, and training and evaluation use the same data, so the BPB cannot be compared.
+- **Test-time training (arXiv 2604.06169, ICLR 2026 and others):** Results on long-context tasks.
+- **Automated search:** Recursive, AIRA-Compose. Within what was read, there is little breakdown of which changes worked.
 
-## 測り方の研究
+## Research on measurement
 
-- Relative Scaling Laws（arXiv 2510.24626、検索）：255のモデルで、損失と正解率はシグモイドの形で強く結びつく。
-- Scale Efficiently（`language-model` のメモ）：損失は大きさでほぼ決まるが、点は形に左右される。
-- Can Small Training Runs Reliably Guide Data Curation?（ICLR 2026、一覧）：小さなモデルの順位は学習率で入れ替わる。
-- AI Progress Should Be Measured by Capability-Per-Resource（NeurIPS 2025、一覧）：同じ資源あたりの能力で進歩を測るべきとする主張。
+- Relative Scaling Laws (arXiv 2510.24626, search): across 255 models, loss and accuracy are tightly linked in a sigmoid shape.
+- Scale Efficiently (a note in `language-model`): loss is mostly set by size, but scores depend on the shape.
+- Can Small Training Runs Reliably Guide Data Curation? (ICLR 2026, list): the ranking of small models flips with the learning rate.
+- AI Progress Should Be Measured by Capability-Per-Resource (NeurIPS 2025, list): argues that progress should be measured by capability for the same resources.
 
-## 分かったこと
+## Findings
 
-- **点が上がるという報告は多い：** STEM、L³、Mamba-3、Composer、AIRA-Compose、Dispersion Loss、COUNT、MeCo、LARE など。latest-research-survey.md を書いた時点の「COUNT だけ」は、探した範囲が狭かったための誤り。
-- **計算をメモリに置き換える流れが一番広い：** n-gram の表、トークンごとの表、記憶の束、データベースまで形はさまざま。
-- **注意を減らす向きが別々に出ている：** Composer の探索、AIRA-Compose、speedrun の記録 #92。
-- **読む量の違いに注意：** 今は1パラメータ12トークン。STEM の350M は約285、Deep Progressive Training の1.24億は約2,500。近いのは COUNT（10〜40）、T-Muon（約20）、speedrun、nanochat で、Dispersion Loss の途中学習も読む量が少ない。
-- **料金も大きな手段：** 計算2倍で約3.9%という換算なら、GPU の選び方だけでモデルの改善の候補の多くより大きく動く可能性がある。
+- **Many reports show higher scores:** STEM, L³, Mamba-3, Composer, AIRA-Compose, Dispersion Loss, COUNT, MeCo, LARE and others. The "only COUNT" at the time latest-research-survey.md was written was a mistake caused by the narrow search.
+- **The trend of replacing computation with memory is the broadest:** its forms vary, from n-gram tables and per-token tables to memory banks and databases.
+- **Reducing attention shows up independently:** Composer's search, AIRA-Compose, speedrun record #92.
+- **Mind the difference in amount read:** we currently read 12 tokens per parameter. STEM's 350M reads about 285 and Deep Progressive Training's 124 million about 2,500. Close ones are COUNT (10–40), T-Muon (about 20), the speedrun and nanochat, and Dispersion Loss's mid-training also reads little.
+- **Prices are also a major lever:** with the conversion of about 3.9% per doubling of compute, the choice of GPU alone could move results more than most of the model-improvement candidates.
 
-## 確かめていないこと
+## Not verified
 
-- どの手法も今の規模では測っていない。
-- 「一覧」と「検索」のものの原文。
-- 組み合わせの効果。
+- None of the methods was measured at the current scale.
+- The original texts of the "List" and "Search" entries.
+- The effects of combinations.

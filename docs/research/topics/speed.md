@@ -1,37 +1,37 @@
-# 速度と費用
+# Speed and cost
 
-同じコストで読めるトークンを増やす候補。目的が同じコストで良いモデルを作ることなので、モデルの改善と同じ扱いにする。2026-11時点の見積もりで、測ったものは[最初の束](../experiments/first-bundle.md)の速度の計測だけ。
+Candidates that increase the tokens that can be read at the same cost. The goal is to make a better model at the same cost, so they are treated the same as model improvements. These are estimates as of 2026-11; the only thing measured is the speed measurement of [the first bundle](../experiments/first-bundle.md).
 
-効果は、計算量2倍で loss が約3.9%下がるという換算（Delphi の式、[Marin の記事](../sources/marin-moe.md)）で出した粗い値。
+The effects are rough values from converting at about 3.9% lower loss per doubling of compute (Delphi's formula, [Marin's post](../sources/marin-moe.md)).
 
-## 基準の学習の時間の使い方
+## How the baseline's training spends its time
 
-内訳は[基準の学習](../experiments/baseline.md)にある。1回の貸出のうち学習は約68%で、残りの大半は借りてから使えるまでとデータの転送。GPU の使用率は学習中99〜100%なので、データの読み込みは詰まりではなかった。
+The breakdown is in [the baseline's training](../experiments/baseline.md). Training takes about 68% of a rental, and most of the rest is the time from renting until the machine is usable, plus the data transfer. GPU utilization was 99–100% during training, so data loading was not a bottleneck.
 
-効率は、autoresearch と同じ式（6N + 12·L·H·Q·T、H100 の bf16 のピーク989.5 TFLOPs）で約40%。autoresearch の表示は39.8%、nanochat の LOG は約46%。nanoGPT の表示は A100 が基準で、そのまま比べられない。
+Efficiency, by the same formula as autoresearch's (6N + 12·L·H·Q·T, against the H100's bf16 peak of 989.5 TFLOPs), is about 40%. autoresearch displays 39.8%, and nanochat's LOG about 46%. nanoGPT's display is based on the A100 and cannot be compared directly.
 
-## 候補
+## Candidates
 
-| 候補 | 効果の見込み | 注意 |
+| Candidate | Expected effect | Notes |
 |---|---|---|
-| 料金（[10-31](../experiments/gpu-prices.md)と[11-01](../experiments/h100-prices-2026-11-01.md)の一覧） | 借りた $2.41/時が $1.95 になれば約1.2%、半額なら3.9% | 安い機械はドライバが古い。モデルは変わらない |
-| 中断ありの貸出 | $0.71 なら約6.9% | `language-model` の [メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/interruptible-gpu.md)では、H100 は1分で止まって戻らなかった。モデルは変わらない |
-| 準備の時間 | 100秒まで縮めば約1.6% | 連続で回せば小さくなる。大規模には関係しない |
-| 注意の計算の方式（attention-kernel.md） | 約0.2% | 測った。1回の更新の差は1.6%以内で、差は形が新しいときの準備だけ |
-| 効率全体 | 46%まで上がれば約0.8% | 差の原因は未調査。最初の束は約39%で、注意の方式を替えても変わらなかった。[2番目の束](../experiments/second-bundle.md)は約35%（式に入らない計算が増えた）。層を流れる値の精度は stream-precision.md |
-| 1回に流す本数 | 128本で約0.1% | 測った。幅640で、64本より128本が1.6〜2.4%速く、32本は6.6%遅い。256本は流れる値を bf16 にしてもメモリに入らない |
-| FP8 | 今の規模では0か損 | `language-model` の [メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/fp8.md)では、26層で1.17倍速いが同じ損失では約5%、12層ではかえって遅い。[記録 #92](../sources/modded-nanogpt-anvil2.md) は専用のカーネルを自作して時間 −7% |
-| CUDA グラフ | 小さいはず（未測定） | 記録 #92 で時間 −4%。向こうの1回の更新は約30ミリ秒で Python の時間の割合が大きい。今は約600ミリ秒 |
+| Price (the lists of [10-31](../experiments/gpu-prices.md) and [11-01](../experiments/h100-prices-2026-11-01.md)) | About 1.2% if the rented $2.41/hour becomes $1.95; 3.9% at half price | Cheap machines have old drivers. The model does not change |
+| Interruptible rentals | About 6.9% at $0.71 | In `language-model`'s [note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/interruptible-gpu.md), the H100 stopped after 1 minute and did not come back. The model does not change |
+| Preparation time | About 1.6% if cut to 100 seconds | Smaller when runs follow one another. Irrelevant at large scale |
+| Method for computing attention (attention-kernel.md) | About 0.2% | Measured. The time per update differed by at most 1.6%; the only difference is the preparation when a shape is new |
+| Overall efficiency | About 0.8% if raised to 46% | The cause of the gap has not been investigated. The first bundle is about 39%, unchanged when the attention method was switched. [The second bundle](../experiments/second-bundle.md) is about 35% (computation not counted in the formula grew). For the precision of the values flowing through the layers, see stream-precision.md |
+| Rows per pass | About 0.1% at 128 rows | Measured. At width 640, 128 rows are 1.6–2.4% faster than 64, and 32 rows are 6.6% slower. 256 rows do not fit in memory even when the values flowing through the layers are bf16 |
+| FP8 | 0 or a loss at the current scale | In `language-model`'s [note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/fp8.md), it is 1.17× faster at 26 layers but about 5% at the same loss, and at 12 layers it is actually slower. [Record #92](../sources/modded-nanogpt-anvil2.md) wrote its own dedicated kernels for −7% in time |
+| CUDA graphs | Should be small (not measured) | −4% in time in record #92. There, each update takes about 30 milliseconds, so Python's share of the time is large. Here it is about 600 milliseconds |
 
-[Auto Research](../sources/auto-research.md) では、nanochat の品質スコアが38.7%上がり、最も大きく伸びたのは、速度の無駄を見つけて浮いた時間をトークンに回した変更だった。速度は学習を最後まで回さなくても測れるので、モデルの比較より安く確かめられる。
+In [Auto Research](../sources/auto-research.md), nanochat's quality score rose 38.7%, and the largest gain came from a change that found wasted speed and spent the time saved on more tokens. Speed can be measured without running training to the end, so it is cheaper to check than a model comparison.
 
-## 分けて考えること
+## Things to consider separately
 
-- 大規模でも効く：注意の計算、効率、GPU の選び方。
-- 小さい規模でだけ効く：準備の時間。研究の費用は減るが、フロンティアに通じる改善ではない。
-- モデルは変わらない：料金。学習量は増えるが、モデルや学習法の改善そのものではない。
+- Works at large scale too: the attention computation, efficiency, the choice of GPU.
+- Works only at small scale: preparation time. It cuts research costs but is not an improvement that carries over to the frontier.
+- Leaves the model unchanged: price. The training amount grows, but it is not an improvement to the model or the training method itself.
 
-## 見方が変わりそうな条件
+## Conditions likely to change the view
 
-- モデルの形や文脈を大きく変える場合。注意の割合と、メモリに入る本数が変わる。
-- 料金が大きく変わった場合、借りられる GPU が変わった場合。
+- When the model's shape or the context is changed greatly. Attention's share and the number of rows that fit in memory change.
+- When prices change greatly, or when the GPUs available to rent change.

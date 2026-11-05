@@ -1,18 +1,18 @@
 # kNN-LM
 
-Khandelwal ら、Generalization through Memorization: Nearest Neighbor Language Models（arXiv 1911.00172、ICLR 2020）。
+Khandelwal et al., Generalization through Memorization: Nearest Neighbor Language Models (arXiv 1911.00172, ICLR 2020).
 
-## 方法
+## Method
 
-- 学習済みのモデルが作る文脈のベクトルと、その次の単語を組にしてデータストアに入れる。推論の時に近い文脈を探し、その次の単語の分布をモデルの分布と混ぜる。モデルは学習し直さない。
-- モデルは16層、幅1,024、FFN 4,096（Baevski & Auli 2019 の形）。WikiText-103 以外は BERT の語彙（約2.9万）。
-- 評価の文章は、記事や本ごとに学習と分けている。
+- Pairs of a context vector produced by a trained model and the word that follows it are stored in a datastore. At inference, it looks up nearby contexts and mixes the distribution of their next words with the model's distribution. The model is not retrained.
+- The model has 16 layers, width 1,024 and FFN 4,096 (the shape of Baevski & Auli 2019). Except for WikiText-103, it uses BERT's vocabulary (about 29,000).
+- The evaluation text is kept apart from the training text by article or by book.
 
-## 結果
+## Results
 
-- **学習データそのものを使う（§4.1）：** WikiText-103 の perplexity が 18.65 から 16.12、Books が 11.89 から 10.89。
-- **学習より多い文章（§4.2、Table 3）：** 1億トークン（WIKI-100M）で学習し、その30倍の WIKI-3B（約28.7億トークン）をデータストアにすると、test が 19.59 から 13.73。WIKI-3B 全部で学習したモデルは 15.17。
-- **データストアの大きさ（Figure 2）：** 大きくすると単調に良くなり、約30億でも飽和していない。16億の時点で、30億全部で学習したモデルを上回る。混ぜる割合の最適値は大きいほど上がる。
-- **別の分野（Table 4）：** Wikipedia で学習したモデルに Books のデータストアを足すと、Books の test が 34.84 から 20.47。Books で学習したモデルは 11.89。
+- **Using the training data itself (§4.1):** WikiText-103 perplexity goes from 18.65 to 16.12, and Books from 11.89 to 10.89.
+- **More text than the training data (§4.2, Table 3):** training on 100 million tokens (WIKI-100M) and using WIKI-3B, 30× that size (about 2.87 billion tokens), as the datastore takes test from 19.59 to 13.73. A model trained on all of WIKI-3B gets 15.17.
+- **Datastore size (Figure 2):** a larger datastore improves results monotonically, without saturating even at about 3 billion. At 1.6 billion it already beats the model trained on all 3 billion. The best mixing weight rises as the datastore grows.
+- **Another domain (Table 4):** adding a Books datastore to a model trained on Wikipedia takes Books test from 34.84 to 20.47. A model trained on Books gets 11.89.
 
-読んだのは PDF の §3 のデータの説明、§4.1、§4.2、Table 1〜4、Figure 2 のキャプション。
+Read: the description of the data in §3, §4.1, §4.2, Tables 1–4 and the caption of Figure 2 in the PDF.

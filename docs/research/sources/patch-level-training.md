@@ -1,10 +1,10 @@
-# Patch-Level Training の規模の節
+# The scale sections of Patch-Level Training
 
-Shao ら（arXiv 2407.12665）。手法と主な表は `language-model` の[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/patch-level-training.md)にあり、ここにはそこにないことだけを書く。
+Shao et al. (arXiv 2407.12665). The method and the main tables are in `language-model`'s [note](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/patch-level-training.md); this note records only what is not there.
 
-- 出力の層は1つのままで、次のパッチの K トークンを同時に予測する。
-- パッチの段階はデータを早く消費するので、データを多く必要とする。
-- 優位はモデルが大きいほど小さくなり、データを増やすほど早く伸びる（表3、表4）。
-- 一番小さい比較は3.7億に3,600億トークンで、1パラメータ約970トークン。
+- The output layer stays a single layer and predicts the K tokens of the next patch at once.
+- The patch stage consumes data quickly, so it needs a lot of data.
+- The advantage shrinks as the model gets larger and grows faster as the data increases (Tables 3 and 4).
+- The smallest comparison is 370 million with 360 billion tokens, about 970 tokens per parameter.
 
-読んだのは手法と3.3、3.4の節の本文。表3、表4の数字は読んでいない。
+The text of the method and of Sections 3.3 and 3.4 was read. The numbers in Tables 3 and 4 were not read.

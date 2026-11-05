@@ -1,58 +1,58 @@
-# OLMES の評価の組み込み
+# Integrating the OLMES evaluation
 
-2026-11-05 に、README.md の評価（AI2 の OLMES の3つのスイート `olmo3:base_easy:qa_bpb`、`math_bpb`、`code_bpb`）を `frame.py` に組み込み、借りる前に処理用の機械（CPU）で要求とトークンを数えた。同じ日の後半に、点に使う測定だけを行う形に変えた（最後の節）。research-v4 は前の形で測った。
+On 2026-11-05, README.md's evaluation (AI2's three OLMES suites `olmo3:base_easy:qa_bpb`, `math_bpb` and `code_bpb`) was built into `frame.py`, and the requests and tokens were counted on the processing machine (CPU) before renting. Later the same day, it was changed to run only the measurements the scores use (the last section). research-v4 was measured with the earlier form.
 
-## 条件
+## Conditions
 
-- olmes はリビジョン `5a51f502d463b8cdc4a2dcad7d7096c41ff1197e`。olmes は torch 2.8 などを固定するので、学習の環境（torch 2.15）とは別の環境で動かす。版は `olmes.txt` にある。
-- スイートは 109 の課題になる（QA が 83、数学が 7、コードが 19）。olmes の集計は入れ子で、MMLU の 57 科目、basic_skills の 6 つ、多言語 MBPP の 17 言語は、それぞれ 1 つの項目として平均に入る。
-- トークナイザは今の語彙 8,192 のもの。olmes の HuggingFace の包みに、BOS を先頭に置くトークナイザとして渡した。
+- olmes is at revision `5a51f502d463b8cdc4a2dcad7d7096c41ff1197e`. olmes pins torch 2.8 and others, so it runs in an environment separate from the training one (torch 2.15). The versions are in `olmes.txt`.
+- The suites come to 109 tasks (83 QA, 7 math, 19 code). olmes's aggregation is nested: MMLU's 57 subjects, basic_skills's 6 and multilingual MBPP's 17 languages each enter the average as one item.
+- The tokenizer is the current one with a vocabulary of 8,192. It was passed to olmes's HuggingFace wrapper as a tokenizer that puts BOS first.
 
-## 数えた結果
+## Counts
 
-要求は合わせて 65万4,536。モデルが読むトークンは、行を文脈 1,024 で切った場合で次のとおり。
+The requests total 654,536. The tokens the model reads, with rows cut at the context of 1,024, are as follows.
 
-| スイート | トークン |
+| Suite | Tokens |
 |---|---|
-| QA | 1億8,072万 |
-| 数学 | 503万 |
-| コード | 709万 |
-| 合計 | 1億9,283万 |
+| QA | 180.72 million |
+| Math | 5.03 million |
+| Code | 7.09 million |
+| Total | 192.83 million |
 
-- 一番長い行は 5,978 トークン、一番長い答えは 2,960 トークン。文脈より長い行は 10万1,995（15.6%）、文脈より長い答えは 264（lab_bench_dbqa、Minerva の数学、多言語 MBPP）。
-- 大きい課題は SQuAD（4,220万トークン）、DROP（3,458万）、HellaSwag（2,283万）、CoQA（1,942万）。BPB の課題でも、olmes は選択肢すべてと文脈なしの要求を作るので、要求は例の数の数倍になる。
+- The longest row is 5,978 tokens, and the longest answer 2,960 tokens. 101,995 rows (15.6%) are longer than the context, and 264 answers are longer than the context (lab_bench_dbqa, Minerva's math, multilingual MBPP).
+- The large tasks are SQuAD (42.2 million tokens), DROP (34.58 million), HellaSwag (22.83 million) and CoQA (19.42 million). Even for BPB tasks, olmes makes requests for every choice and requests without the context, so the requests number several times the examples.
 
-## 組み込みで決めたこと
+## Decisions made in the integration
 
-課題、例、プロンプト、採点は olmes のまま変えていない。
+The tasks, examples, prompts and scoring are olmes's, unchanged.
 
-- **要求は前もって作る：** olmes は課題ごとに、例ごとに少数例の元のデータを 1 行ずつ全部読むので、要求を作るのに課題の大きさの 2 乗の時間がかかる（basic_skills の算数で 283 秒のうち 280 秒）。要求はモデルによらない（HumanEval で、モデルありとなしの要求が一致した）。そこで処理用の機械で olmes の実行器そのものに作らせ（5 プロセスで約 13 分、1.7GB）、評価では作る代わりに読み込む。olmes の多肢選択の課題は、要求を作る処理を飛ばしたときの設定も `make_metrics` で行うように書かれている。
-- **答えが文脈より長い行：** olmes の包みは答えが最大長を超えると止まる。包みの最大長は 4,096 にし、モデルは文脈より長い行を、行の終わりから半分ずつ戻る窓で読む。最後の 512 トークンは包みが 1,024 に切ったときと同じ値になる。読むのは、その課題の一番長い答えに届く窓だけ。この形で、GPU が読むトークンは 2億851万。
-- **ARC の平均：** QA のスイートは ARC（Easy と Challenge）を 1 項目として数えるが、olmes のこのリビジョンにはその 2 つを平均する決まりがなく、olmes の集計では ARC も QA のスイートも点が出ない。ほかのすべての入れ子と同じ macro の平均を与えた。
-- **データの形：** いくつかの課題のデータは `datasets` 4 で保存し直されていて、olmes が固定する `datasets` 3 では読めない。4 の `List` を 3 の `Sequence` として読ませた。ARC-Easy の test は 2,376 例で、選択肢の形も前と同じ。
-- **pytrec_eval：** olmes の課題の一覧が読み込むが、この 3 つのスイートは使わない。コンパイラがなく作れないので、同じモジュールを入れる `pytrec_eval-terrier` で代えた。
+- **Requests are made beforehand:** For each task, olmes reads all of the few-shot source data row by row for every example, so making the requests takes time that grows with the square of the task's size (280 of 283 s for basic_skills's arithmetic). The requests do not depend on the model (on HumanEval, the requests with and without a model matched). So olmes's own runner makes them on the processing machine (about 13 minutes with 5 processes, 1.7GB), and the evaluation loads them instead of making them. olmes's multiple-choice tasks are written so that `make_metrics` also does the setup needed when the step that makes requests is skipped.
+- **Rows whose answer is longer than the context:** olmes's wrapper stops when an answer exceeds the maximum length. The wrapper's maximum length was set to 4,096, and the model reads rows longer than the context in windows that step back by half from the row's end. The last 512 tokens get the same values as when the wrapper cuts at 1,024. Only the windows that reach the task's longest answer are read. In this form, the GPU reads 208.51 million tokens.
+- **ARC's average:** The QA suite counts ARC (Easy and Challenge) as one item, but this revision of olmes has no rule for averaging the two, so olmes's aggregation gives no score for ARC or for the QA suite. It was given a macro average, the same as every other nesting.
+- **Data format:** The data of some tasks has been re-saved with `datasets` 4 and cannot be read by `datasets` 3, which olmes pins. 4's `List` was made to read as 3's `Sequence`. ARC-Easy's test has 2,376 examples, and the form of the choices is the same as before.
+- **pytrec_eval:** olmes's task list imports it, but these three suites do not use it. It cannot be built without a compiler, so it was replaced with `pytrec_eval-terrier`, which installs the same module.
 
-## 時間の見積もり
+## Time estimate
 
-1 回目（2026-11-05、CORE で測った回）の実測は、借りてから使えるまで 162 秒、データの転送 232 秒（並べて送った長いほう）、学習は準備を含めて約 31.5 分。
+Measured in the first run (2026-11-05, the run measured by CORE): 162 s from renting to ready to use, 232 s for the data transfer (the longer of the parallel transfers), and about 31.5 minutes of training including preparation.
 
-評価は、olmes が課題ごとにデータを読むのに処理用の機械で 1 課題約 2 秒かかり（109 課題で 222 秒）、これを 3 つのプロセスに分ける。GPU の計算は 2億851万トークンで、学習の速さから見て 2〜4 分。要求ごとの Python の処理は 1 件 0.3 ミリ秒前後。合わせて評価は 6〜12 分と見積もった。
+For the evaluation, olmes takes about 2 s per task on the processing machine to read each task's data (222 s for 109 tasks), and this is split over 3 processes. The GPU computation is 208.51 million tokens, 2–4 minutes judging from the training speed. Python's handling of each request is around 0.3 ms. Altogether, the evaluation was estimated at 6–12 minutes.
 
-1 回の貸出は約 46〜52 分の見込みで、1 時間に収まる。olmes の環境づくりとデータの読み込みは学習の裏で行う。
+One rental is expected to take about 46–52 minutes, within the hour. Setting up olmes's environment and loading the data happen in the background during training.
 
-## 確かめていないこと
+## Not checked
 
-- GPU での評価の速さ。見積もりは学習の速さからの計算。
-- 3 つのプロセスで GPU を分けたときの速さとメモリ。
+- The evaluation's speed on the GPU. The estimate is calculated from the training speed.
+- Speed and memory when 3 processes share the GPU.
 
-## 正解だけを測る形（2026-11-05 の後半）
+## The form that measures only the correct answers (later on 2026-11-05)
 
-README の評価が「点の計算のやり方は自由、点に使わない測定は省いてよい」に変わったので、点に使う測定だけにした。
+README's evaluation changed to "how the scores are computed is free, and measurements the scores do not use may be skipped", so only the measurements the scores use were kept.
 
-- **選び方：** 3つのスイートのどの課題も、olmes は MCAccuracy で点を出し、使うのは各問いの正解の1件の bits per byte だけ。MCAccuracy は問いなしの要求（後半）を外し、問いごとにまとめ、ラベルの位置の要求を取る（ラベルが数でなければ先頭）。これを olmes が作った要求に当て、答えだけを残した（`frame.py answers`）。全109課題で、乱数の対数尤度を与えたときの点が olmes の計算と一致した（相対差 2×10⁻¹⁶）。入れ子の平均も olmes の集計と一致した。
-- **量：** 要求は 65万4,536 から 9万9,886 に、モデルが読むトークンは 2億851万から 5,839万（QA 4,523万、数学 584万、コード 732万）になった。
-- **olmes なしで測る：** 行の作り方（文脈の末尾の空白を答えに移す、BOS を先頭に置く、終わりから 4,097 トークンまで）は olmes の包み（lm_eval）と同じで、olmes の環境のテストで一致を確かめた。文脈より長い行は前と同じ窓で読む。
-- **トークン化は前もって：** 1コアで約8分かかるので、処理用の機械で行い（`frame.py rows`、158MB）、トークナイザの中身が同じときだけ使う。違うトークナイザではその場で作る。
-- **送るもの：** 借りた機械には答え（251MB）と行（158MB）だけを送る。olmes の環境（torch 2.8）、課題のデータ（1.8GB）、要求（1.7GB）は要らなくなった。
-- **前の形との一致：** 小さいモデル（3層、文脈256）で、各課題の最初の4問を前の形（olmes の実行器で全部の要求）と今の形で測った。3つの点の相対差は 10⁻⁸ 以下、課題ごとでも 6×10⁻⁸ 以下（float32 の誤差）。CPU で前の形は18分、今の形は46秒。
-- **確かめていないこと：** GPU での速さ。読むトークンが前の 28% で、olmes の課題ごとの読み込みと要求ごとの Python の処理がなくなったので、20分から数分になる見込み。
+- **Selection:** For every task of the three suites, olmes scores with MCAccuracy and uses only the bits per byte of each question's one correct answer. MCAccuracy drops the requests without the question (the second half), groups by question and takes the request at the label's position (the first one if the label is not a number). This was applied to the requests olmes made, keeping only the answers (`frame.py answers`). On all 109 tasks, the scores given random log-likelihoods matched olmes's calculation (relative difference 2×10⁻¹⁶). The nested averages also matched olmes's aggregation.
+- **Amount:** The requests went from 654,536 to 99,886, and the tokens the model reads from 208.51 million to 58.39 million (QA 45.23 million, math 5.84 million, code 7.32 million).
+- **Measuring without olmes:** The way rows are made (moving the trailing whitespace of the context into the answer, putting BOS first, up to 4,097 tokens from the end) is the same as olmes's wrapper (lm_eval), and a test in olmes's environment confirmed that they match. Rows longer than the context are read in the same windows as before.
+- **Tokenization beforehand:** It takes about 8 minutes on one core, so it is done on the processing machine (`frame.py rows`, 158MB) and used only when the tokenizer's contents are the same. With a different tokenizer, the rows are made on the spot.
+- **What is sent:** Only the answers (251MB) and the rows (158MB) are sent to the rented machine. olmes's environment (torch 2.8), the task data (1.8GB) and the requests (1.7GB) are no longer needed.
+- **Agreement with the earlier form:** With a small model (3 layers, context 256), the first 4 questions of each task were measured with the earlier form (every request through olmes's runner) and the current form. The relative differences of the three scores were 10⁻⁸ or less, and 6×10⁻⁸ or less per task (float32 error). On the CPU, the earlier form took 18 minutes and the current form 46 seconds.
+- **Not checked:** The speed on the GPU. The tokens read are 28% of before, and olmes's per-task loading and Python's per-request handling are gone, so it is expected to go from 20 minutes to a few minutes.

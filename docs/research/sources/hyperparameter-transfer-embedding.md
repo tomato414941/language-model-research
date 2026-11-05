@@ -1,14 +1,14 @@
 # Importance of Embedding Layer Learning Rate
 
-Quantifying Hyperparameter Transfer and the Importance of Embedding Layer Learning Rate（arXiv 2605.21486）。nanoGPT の上で、学習率を別の幅に持ち越せるかを、普通の形（SP）と μP の違いを1つずつ変えて調べた。
+Quantifying Hyperparameter Transfer and the Importance of Embedding Layer Learning Rate (arXiv 2605.21486). On top of nanoGPT, it studies whether the learning rate carries over to other widths, changing the differences between the standard parametrization (SP) and μP one at a time.
 
-12層、文脈1,024、語彙50,304、幅128〜2,048、FineWeb-Edu、AdamW。100億トークン、または1パラメータ20トークン。H100 で約16万時間。
+12 layers, context 1,024, vocabulary 50,304, widths 128 to 2,048, FineWeb-Edu, AdamW. 10 billion tokens, or 20 tokens per parameter. About 160,000 H100 hours.
 
-- SP と μP の違い4つの組み合わせ16通りのうち、効いているのは埋め込みの学習率。SP の埋め込みの学習率だけを μP と同じにすると μP に並び、μP の埋め込みの学習率だけを下げると悪くなる。
-- `lm_head` の初期値の大きさの効果は無視できるくらい。LayerNorm の重みの学習率も小さくて構わない。
-- 埋め込みの学習率が低いと、遅いだけでなく、一番良い学習率の近くで学習が不安定になる。
-- 学習の初めほど大事。μP で埋め込みの学習率を途中から下げると、早く下げるほど差が残り、最後に損失で約0.1〜0.2の差。
-- 共有の場合は、理論の上では `lm_head` の出力に幅分の1の係数を掛ける必要がある（付録 H.15）。
-- AdamW だけの結果で、Muon への拡張は今後の課題としている。
+- Of the 16 combinations of the four differences between SP and μP, the one that matters is the embedding learning rate. Setting only SP's embedding learning rate to μP's brings it level with μP, and lowering only μP's embedding learning rate makes it worse.
+- The effect of `lm_head`'s initial scale is negligible. The learning rate of the LayerNorm weights can also be small.
+- A low embedding learning rate not only slows training but also makes it unstable near the best learning rate.
+- It matters most early in training. Lowering the embedding learning rate partway through under μP leaves a larger gap the earlier it is lowered, ending with a loss gap of about 0.1–0.2.
+- With shared embeddings, theory requires multiplying `lm_head`'s output by a factor of 1/width (Appendix H.15).
+- The results are for AdamW only, and extending them to Muon is left to future work.
 
-読んだのは要旨、導入、4節と5節、8節の一部、付録 A、H.15 の始め。図の数字は読んでいない。
+The abstract, the introduction, Sections 4 and 5, part of Section 8, Appendix A and the start of H.15 were read. The numbers in the figures were not read.

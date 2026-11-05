@@ -1,12 +1,12 @@
 # TIDE
 
-Jaiswal ら（Apple）、TIDE: Every Layer Knows the Token Beneath the Context（arXiv 2605.06216）。
+Jaiswal et al. (Apple), TIDE: Every Layer Knows the Token Beneath the Context (arXiv 2605.06216).
 
-- 普通のモデルは、トークンの番号を入力で1回だけ使う。TIDE はトークンごとの表を K 個持ち、各層で隠れ状態から比率を作って混ぜ、残差に足す。表は RMSNorm を通す。行列の積は増えない。
-- LLaMA の形、DCLM、語彙128,256、文脈2,048、4,000億〜5,000億トークン、Adam。
-- 10億のモデルで K を2から24まで増やすと、Wikitext、PubMed、DCLM の perplexity が単調に良くなる。K が2〜4で、基準の2,000億トークンの perplexity に1,000億トークンで届く。
-- 効果の大半は珍しいトークン。K=24 で、珍しいトークンの損失は 6.671 から 6.250、よく出るトークンは0.075の減少。K=2 で珍しいトークンの改善の約55%が取れる。
-- 7.5億のモデルの LAMBADA の perplexity は 5.63 から 5.18（K=8）、ベンチマークの平均は 59.7 から 60.7。
-- 表が大きくなるので、推論では量子化して SSD に置くとしている。Muon や1億以下の結果はない。
+- A standard model uses the token ID only once, at the input. TIDE keeps K per-token tables; at each layer it mixes them with weights computed from the hidden state and adds the result to the residual. The tables go through RMSNorm. No matrix multiplications are added.
+- The LLaMA architecture, DCLM, vocabulary 128,256, context 2,048, 400 billion to 500 billion tokens, Adam.
+- In the 1 billion model, raising K from 2 to 24 improves the perplexity on Wikitext, PubMed and DCLM monotonically. With K at 2 to 4, it reaches the baseline's perplexity at 200 billion tokens in 100 billion tokens.
+- Most of the effect is on rare tokens. At K=24, the loss on rare tokens goes from 6.671 to 6.250, while that on frequent tokens falls by 0.075. K=2 captures about 55% of the improvement on rare tokens.
+- In the 750 million model, LAMBADA perplexity goes from 5.63 to 5.18 (K=8), and the benchmark mean from 59.7 to 60.7.
+- Because the tables get large, it says they are quantized and kept on SSD at inference. There are no results with Muon or at 100 million or below.
 
-読んだのは要旨、導入、3節の手法、4節の始め、表2の7.5億の行、表7。
+The abstract, the introduction, the method in Section 3, the start of Section 4, Table 2's rows for 750 million and Table 7 were read.

@@ -1,9 +1,9 @@
-# TabPFN の FlashAttention-4 への置き換え
+# TabPFN's switch to FlashAttention-4
 
-`PriorLabs/TabPFN` の [Pull Request #1291](https://github.com/PriorLabs/TabPFN/pull/1291)。表データのモデルの FlashAttention-3 を FlashAttention-4 に替える提案で、2026-11-01 の時点では未マージ。
+[Pull Request #1291](https://github.com/PriorLabs/TabPFN/pull/1291) of `PriorLabs/TabPFN`. A proposal to replace FlashAttention-3 with FlashAttention-4 in a model for tabular data, unmerged as of 2026-11-01.
 
-- H100 の測定：FlashAttention-4 は全体で4〜10%速い（10,000行以上。それ未満は同じ）と書いたあと、再測定では FlashAttention-3 が速い場合も出ている（10万行で57ミリ秒と68ミリ秒など）。
-- FlashAttention-4 の `flash_attn_func` は `torch.compile` でトレースできず、呼び出しごとにグラフが切れる。FlashAttention-3 はできる。この分で約4%遅くなり、それでも SDPA の約1.17倍。
-- FlashAttention-3 はソースからのビルドに30〜60分かかり、FlashAttention-4 は pip で入る。
+- H100 measurements: after writing that FlashAttention-4 is 4–10% faster overall (at 10,000 rows or more; below that they are the same), a re-measurement also found cases where FlashAttention-3 is faster (such as 57 milliseconds and 68 milliseconds at 100,000 rows).
+- FlashAttention-4's `flash_attn_func` cannot be traced by `torch.compile`, so the graph breaks at every call. FlashAttention-3 can be traced. This costs about 4%, and it is still about 1.17× SDPA.
+- FlashAttention-3 takes 30–60 minutes to build from source, while FlashAttention-4 installs with pip.
 
-言語モデルの学習の数字ではない。読んだのは要約ツールを通した説明と会話で、元の表は確かめていない。
+These are not numbers from language-model training. The description and the discussion were read through a summarization tool, and the original tables were not checked.

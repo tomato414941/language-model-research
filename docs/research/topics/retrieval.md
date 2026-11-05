@@ -1,16 +1,16 @@
-# 検索
+# Retrieval
 
-モデルの外に文章のデータベース（DB）を置き、探しながら予測する方法。事前学習から使い、暗記の仕事を重みの外へ移す。2026-11時点の見積もりでは今の基準の規模だと損になりそうなので、最初に試す候補には入れていない。測った結果ではないので、条件が変われば見直す。
+A method that keeps a database (DB) of text outside the model and predicts while searching it. It is used from pretraining on and moves the work of memorization out of the weights. By the estimate as of 2026-11 it would likely be a loss at the current baseline's scale, so it is not among the first candidates to try. This is not a measured result, so revisit it if the conditions change.
 
-根拠の数字は [RETRO](../sources/retro.md) から取った。以下の見積もりと計算は自分たちのもので、測った結果ではない。
+The supporting figures are taken from [RETRO](../sources/retro.md). The estimates and calculations below are our own, not measured results.
 
-- **効果：** 新しい文章の予測の改善は3〜4%（一致8トークン以下の箇所、最小モデル、DB 1.75兆トークン）で、計算量を約2倍にしたのと同じくらい。C4 全体の16%の大半は丸写しの分で、論文の「控えめ」という結論は図と合わないと見ている。ただし、事実を引けること自体には実用の価値がある。
-- **DB の大きさ：** 効果は DB が巨大になってから伸びる。C4 では20億トークンで約1%、900億で約3%、9,000億で約10%、1.75兆で約16%。
-- **今の規模：** 9,100万パラメータ、5億トークン学習、DB 20億トークンでは、効果は約1%にとどまる。追加部分の計算で学習トークンが減る分は3〜7%の悪化で、差し引き2〜6%の損と見積もる。悪化は Chinchilla（arXiv 2203.15556）の式 `L = 1.69 + 406.4/N^0.34 + 410.7/D^0.28` による。論文のモデルは4,190億トークン学習で、どちらも外挿になる。
-- **計算の増分：** 論文に数字がない。エンコーダーは本体の1トークンにつき4トークンを読む。層ごとの演算を足すと、論文のモデルは最小で約1.7倍、最大で約1.1倍。基準の12層・幅768では、エンコーダーが同じ幅で約1.8倍、半分の幅で約1.3倍。
-- **DB を作る費用：** BERT 級（12層、幅768）で20億トークンを処理すると約1.7e17回の演算で、[基準の学習](../experiments/baseline.md)（約2.7e17回）の約6割になる。作るのは1回で済む。
-- **大きさ：** 「パラメータ25分の1」は重みだけの話。索引の93TB は Jurassic-1 の重み（2バイトで約356GB）の約260倍で、減るのは計算の費用。
-- **GPT-3 との比較：** The Pile の16件から、RETRO の改善が半分前後と極端な github と gutenberg を除いた14件の平均 BPB は、検索なしの70億 0.797、GPT-3 0.797、RETRO 0.723、Gopher 0.720、Jurassic-1 0.716。検索なしの70億は1パラメータあたり60トークン学習し、GPT-3 は約2トークン。GPT-3 との比較だけなら、検索なしでも並んでいる。データの違いも影響している可能性がある。
-- **測定：** 学習データから検索すると、BPB が丸写しで下がる。一致の長さで絞っても重複は残るようで、Wikitext103 は一致8トークン以下でも約36%減る。試すなら、BPB だけでは判断しにくい。
-- **大規模：** 計算の増分が小さいので、DB を用意できるなら得になりうる。ただし、確認した主要論文約50本のうち RETRO を引用しているのは Chinchilla と Engram（arXiv 2601.07372）だけで、RETRO 型を事前学習に使ったフロンティアモデルは確認できていない。
-- **見直す条件：** BERT より安い方法で大きな DB を作れる場合、予算が増えて学習トークンが今より大幅に増える場合、事実を引く力も問う課題に変える場合、自分たちの測定が見積もりと違った場合。
+- **Effect:** the improvement in predicting new text is 3–4% (at spots with matches of 8 tokens or fewer, the smallest model, a DB of 1.75 trillion tokens), about the same as roughly doubling the compute. Most of the 16% on all of C4 comes from verbatim copying, and we think the paper's conclusion that it is "modest" does not match its figures. Still, being able to look up facts has practical value in itself.
+- **DB size:** the effect grows only once the DB is huge. On C4, about 1% at 2 billion tokens, about 3% at 90 billion, about 10% at 900 billion and about 16% at 1.75 trillion.
+- **The current scale:** at 91 million parameters, 500 million training tokens and a DB of 2 billion tokens, the effect stays at about 1%. The training tokens lost to the added parts' computation make things 3–7% worse, so we estimate a net loss of 2–6%. The worsening comes from the Chinchilla (arXiv 2203.15556) formula `L = 1.69 + 406.4/N^0.34 + 410.7/D^0.28`. The paper's models trained on 419 billion tokens, so both figures are extrapolations.
+- **Added computation:** the paper gives no figure. The encoder reads 4 tokens for each token of the main model. Adding up the operations per layer, the paper's models come to about 1.7× at the smallest and about 1.1× at the largest. For the baseline's 12 layers and width 768, about 1.8× with an encoder of the same width and about 1.3× with half the width.
+- **Cost of building the DB:** processing 2 billion tokens with a BERT-class model (12 layers, width 768) takes about 1.7e17 operations, about 60% of [the baseline's training](../experiments/baseline.md) (about 2.7e17). It needs to be built only once.
+- **Size:** "25× fewer parameters" refers to the weights only. The index's 93TB is about 260× Jurassic-1's weights (about 356GB at 2 bytes), and what shrinks is the cost of computation.
+- **Comparison with GPT-3:** of The Pile's 16 subsets, excluding github and gutenberg, where RETRO's improvement is extreme at around half, the mean BPB over the 14 is 0.797 for the 7 billion without retrieval, 0.797 for GPT-3, 0.723 for RETRO, 0.720 for Gopher and 0.716 for Jurassic-1. The 7 billion without retrieval trained on 60 tokens per parameter, GPT-3 on about 2. Against GPT-3 alone, it is level even without retrieval. Differences in data may also play a part.
+- **Measurement:** when retrieving from the training data, BPB falls through verbatim copying. Duplication seems to remain even when filtered by match length: on Wikitext103, BPB falls about 36% even with matches of 8 tokens or fewer. If it is tried, BPB alone makes it hard to judge.
+- **Large scale:** the added computation is small, so it can pay off if the DB can be prepared. However, of about 50 major papers checked, only Chinchilla and Engram (arXiv 2601.07372) cite RETRO, and no frontier model that used a RETRO-type approach in pretraining has been confirmed.
+- **Conditions for revisiting:** when a large DB can be built more cheaply than with BERT, when the budget grows and training tokens increase far beyond the current amount, when the task changes to one that also tests the ability to look up facts, or when our measurements differ from the estimates.

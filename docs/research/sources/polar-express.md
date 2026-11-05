@@ -1,10 +1,10 @@
 # Polar Express
 
-Amsel ら、The Polar Express（arXiv 2505.16932）。方法と7.74億パラメータ・10億トークンの比較は `language-model` の[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/polar-express.md)にある。ここにはその続きだけを書く。
+Amsel et al., The Polar Express (arXiv 2505.16932). The method and the comparison at 774 million parameters and 1 billion tokens are in `language-model`'s [note](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/polar-express.md). Only what follows on from it is written here.
 
-- 実験は GPT-2 の形、FineWeb、更新1回32,768トークン（32本、文脈1,024）、4 H100、bf16、反復5回。学習率は最初の40%を一定にし、あとは線形に下げる。埋め込み、出力、位置符号は AdamW で更新する。
-- 1.24億パラメータ、10億トークン（1パラメータ約8トークン）、weight decay なしの検証損失：AdamW 4.197（学習率0.0005）、元の Muon 3.639（0.01）、You の方法 3.629（0.01）、Polar Express 3.588（0.005）。
-- 7.74億パラメータ、100億トークン、weight decay 0.1 の検証損失：元の Muon 2.921、You の方法 2.919、Polar Express 2.913（どれも学習率0.002）。
-- 反復は2〜3回だと悪く、5〜6回より増やしても、SVD で厳密に計算しても良くならない。反復の回数で実行時間はほとんど変わらないが、SVD を使うと更新の時間が2倍になる。
+- The experiments use GPT-2's shape, FineWeb, 32,768 tokens per update (32 sequences, context 1,024), 4 H100s, bf16 and 5 iterations. The learning rate is constant for the first 40% and then falls linearly. The embeddings, the output and the positional encodings are updated with AdamW.
+- Validation loss at 124 million parameters and 1 billion tokens (about 8 tokens per parameter), without weight decay: AdamW 4.197 (learning rate 0.0005), the original Muon 3.639 (0.01), You's method 3.629 (0.01), Polar Express 3.588 (0.005).
+- Validation loss at 774 million parameters and 10 billion tokens, with weight decay 0.1: the original Muon 2.921, You's method 2.919, Polar Express 2.913 (all at learning rate 0.002).
+- 2–3 iterations are worse, and neither going beyond 5–6 nor computing exactly with SVD helps. The number of iterations barely changes the run time, but using SVD doubles the time of the update.
 
-読んだのは要旨、導入、実験の節。証明と付録は読んでいない。
+The abstract, the introduction and the experiments section were read. The proofs and the appendix were not read.

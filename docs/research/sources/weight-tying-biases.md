@@ -1,11 +1,11 @@
 # Weight Tying Biases Token Embeddings Towards the Output Space
 
-Lopardo ら（arXiv 2603.26663、ACL 2026 Findings）。埋め込みの共有が表の中身をどう変えるかを、公開モデルの比較と学習のやり直しで調べた。
+Lopardo et al. (arXiv 2603.26663, ACL 2026 Findings). It studies how sharing the embeddings changes the contents of the table, by comparing public models and by retraining.
 
-- 共有した表は、分けたモデルの出力の表に似る。OLMo-1B でコサイン類似度が出力と0.719、入力と0.525。
-- 学習の始めは、共有した表への勾配の大部分が出力側から来る。共有したモデルは最初の数層の働きが悪い（tuned lens の KL が高い）。
-- 共有した OLMo-1B で入力側の勾配を5倍にすると（200億トークンまで）、表は分けたモデルの入力の表に少し近づき（0.216から0.222）、出力の表から離れる（0.384から0.369）。下流の評価は一貫して良くならず、著者はトレードオフとしている。
-- 小さいモデルでは表がパラメータの大きな割合を占める（Pythia 70M で73%）ので共有する理由があり、1B を超えるなら分けることを勧めている。Qwen3 は4B以下で共有、8B以上で分離。OLMo 2、3 はどの大きさも分離。Llama 3、DeepSeek-V3 も分離。
-- 共有と分離で、ほかを揃えた損失の比較はない。
+- A shared table resembles the output table of a model with separate tables. With OLMo-1B, the cosine similarity is 0.719 with the output table and 0.525 with the input table.
+- Early in training, most of the gradient to the shared table comes from the output side. In shared models the first few layers work poorly (the tuned lens KL is high).
+- In a shared OLMo-1B, multiplying the input-side gradient by 5 (up to 20 billion tokens) moves the table slightly toward a separate model's input table (0.216 to 0.222) and away from the output table (0.384 to 0.369). Downstream evaluation does not consistently improve, and the authors call it a trade-off.
+- In small models the table takes a large share of the parameters (73% in Pythia 70M), which is a reason to share, and it recommends separating above 1B. Qwen3 shares at 4B and below and separates at 8B and above. OLMo 2 and 3 separate at every size. Llama 3 and DeepSeek-V3 also separate.
+- There is no comparison of loss between sharing and separating with everything else matched.
 
-読んだのは本文。付録は読んでいない。
+Read: the body. The appendices were not read.

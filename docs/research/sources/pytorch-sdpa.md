@@ -1,15 +1,15 @@
-# PyTorch の注意の計算の選び方
+# How PyTorch chooses its attention computation
 
-PyTorch 2.15.0 の `aten/src/ATen/native/transformers/cuda/sdp_utils.cpp`、`torch/nn/attention/`（`__init__.py`、`_registry.py`、`_fa3.py`、`_fa4.py`）、`torch/backends/cuda/__init__.py`、2.13〜2.15 のリリースノート、cu132 の wheel のメタデータ（2026-11-01 に読んだ）。
+`aten/src/ATen/native/transformers/cuda/sdp_utils.cpp`, `torch/nn/attention/` (`__init__.py`, `_registry.py`, `_fa3.py`, `_fa4.py`) and `torch/backends/cuda/__init__.py` in PyTorch 2.15.0, the release notes for 2.13 to 2.15, and the metadata of the cu132 wheel (read on 2026-11-01).
 
-- `scaled_dot_product_attention` は、優先順に条件を確かめて、最初に通った実装を使う。実装は cuDNN、FlashAttention、省メモリ、数式。
-- CUDA 13 以降のビルドでは、実行時の cuDNN が 9.15.0 より新しく、GPU の compute capability の major が 9 か 10 なら、cuDNN を先頭にする（`check_prefer_cudnn_attention`）。環境変数 `TORCH_CUDNN_SDPA_DEPRIORITIZED` で外せる。コメントには、CUDA 12.9 以前の wheel の cuDNN は古いとある。
-- `torch-2.15.0+cu132` の wheel は `nvidia-cudnn-cu13==9.26.0.51` を要求する。
-- 2.15 のリリースノートは、sm86 と sm89 でも cuDNN を優先するようにしたとする。読んだタグのコードの条件は major 9 と 10 だけで、合っていない。
-- `torch.backends.cuda.enable_cudnn_sdp(False)` で cuDNN を外せる。内蔵の FlashAttention は2系（`_get_flash_version` は 2.5.7）。
-- `torch.nn.attention.activate_flash_attention_impl("FA3")`、`("FA4")` で、FlashAttention の呼び出しを差し替えられる。`_fa3.py` の冒頭に PROTOTYPE、`_fa4.py` に UBER PROTOTYPE とある。
-  - FA4 は `flash_attn.cute.interface`（`flash-attn-4`）を読み込む。major 9 と 10 だけで、head は256次元まで、dropout なし。
-  - FA3 は `flash_attn_interface` を読み込み、`torch.ops.flash_attn_3` を探す。
-- 2.15 のリリースノートに、cuDNN が Hopper の因果でない注意で NaN の勾配を返す問題の修正がある。
+- `scaled_dot_product_attention` checks the conditions in order of priority and uses the first implementation that passes. The implementations are cuDNN, FlashAttention, memory-efficient and math.
+- In builds for CUDA 13 and later, when the runtime cuDNN is newer than 9.15.0 and the major of the GPU's compute capability is 9 or 10, cuDNN goes first (`check_prefer_cudnn_attention`). The environment variable `TORCH_CUDNN_SDPA_DEPRIORITIZED` turns this off. A comment says the cuDNN in the wheels for CUDA 12.9 and earlier is old.
+- The `torch-2.15.0+cu132` wheel requires `nvidia-cudnn-cu13==9.26.0.51`.
+- The 2.15 release notes say cuDNN is now preferred on sm86 and sm89 as well. The condition in the code at the tag read covers only majors 9 and 10, which does not match.
+- `torch.backends.cuda.enable_cudnn_sdp(False)` takes cuDNN out. The built-in FlashAttention is the 2.x line (`_get_flash_version` gives 2.5.7).
+- `torch.nn.attention.activate_flash_attention_impl("FA3")` and `("FA4")` swap out the FlashAttention call. The top of `_fa3.py` says PROTOTYPE, and that of `_fa4.py` says UBER PROTOTYPE.
+  - FA4 loads `flash_attn.cute.interface` (`flash-attn-4`). Majors 9 and 10 only, heads of up to 256 dimensions, no dropout.
+  - FA3 loads `flash_attn_interface` and looks for `torch.ops.flash_attn_3`.
+- The 2.15 release notes include a fix for cuDNN returning NaN gradients for non-causal attention on Hopper.
 
-読んだのは上に挙げた部分。`sdp_utils.cpp` は優先順、cuDNN の条件の一部、FA4 の条件。GPU では動かしていない。
+Read: the parts listed above; in `sdp_utils.cpp`, the priority order, part of the cuDNN conditions and the FA4 conditions. Nothing was run on a GPU.

@@ -1,19 +1,19 @@
 # DeepSeekMoE
 
-Dai ら（arXiv 2401.06066、2024-01）。専門家を細かく分け、共有の専門家を別に持つ MoE。
+Dai et al. (arXiv 2401.06066, 2024-01). An MoE that splits the experts finely and keeps shared experts apart.
 
-9層、幅1280、1,000億トークン（1パラメータ約500トークン）の比較。
+A comparison at 9 layers, width 1280 and 100 billion tokens (about 500 tokens per parameter).
 
-| | 素 | Hash Layer | Switch | GShard | DeepSeekMoE |
+| | Dense | Hash Layer | Switch | GShard | DeepSeekMoE |
 |---|---|---|---|---|---|
-| 全パラメータ | 2億 | 20億 | 20億 | 20億 | 20億 |
-| 動くパラメータ | 2億 | 2億 | 2億 | 3億 | 3億 |
-| 2,000トークンあたりの計算 | 2.9T | 2.9T | 2.9T | 4.3T | 4.3T |
+| Total parameters | 200 million | 2 billion | 2 billion | 2 billion | 2 billion |
+| Active parameters | 200 million | 200 million | 200 million | 300 million | 300 million |
+| Compute per 2,000 tokens | 2.9T | 2.9T | 2.9T | 4.3T | 4.3T |
 | The Pile loss | 2.060 | 1.932 | 1.881 | 1.867 | 1.808 |
 | HellaSwag | 38.8 | 46.2 | 49.1 | 50.5 | 54.8 |
 
-- すべての専門家を動かす素のモデル（Dense×16、24.6T）と The Pile の loss がほぼ同じ（1.806 と 1.808）。
-- 全体160億のモデルは2兆トークンで、DeepSeek 7B と同等の成績を約40%の計算で出す。多肢選択の課題は弱く、著者は注意のパラメータが少ないためとしている。
-- 全体1,450億の予備的な結果では、DeepSeek 67B と同等を28.5%の計算で出す。
+- A dense model that runs all the experts (Dense×16, 24.6T) has nearly the same loss on The Pile (1.806 and 1.808).
+- The model with 16 billion in total, on 2 trillion tokens, matches DeepSeek 7B's results with about 40% of the compute. It is weak on multiple-choice tasks, which the authors attribute to its few attention parameters.
+- Preliminary results at 145 billion in total match DeepSeek 67B with 28.5% of the compute.
 
-読んだのは要旨、実験の設定、表1、結論、節の冒頭。専門家の分析の節と付録は読んでいない。
+The abstract, the experimental setup, Table 1, the conclusion and the openings of the sections were read. The section analyzing the experts and the appendix were not read.

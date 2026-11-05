@@ -1,15 +1,15 @@
 # CatBoost
 
-Prokhorenkova ら、CatBoost: unbiased boosting with categorical features（arXiv 1706.09516、NeurIPS 2018）。決定木の手法の論文で、言語モデルの話ではない。データから集計した値を特徴量にするときに、集計と学習で同じデータを使うと何が起きるかを書いている。
+Prokhorenkova et al., CatBoost: unbiased boosting with categorical features (arXiv 1706.09516, NeurIPS 2018). A paper on a decision-tree method, not about language models. It describes what happens when values aggregated from the data are used as features and the same data serves both the aggregation and the training.
 
-## 集計の値の漏れ（§3.2）
+## Leakage through the aggregated values (§3.2)
 
-カテゴリごとの答えの平均を特徴量にする方法（target statistic）について。
+On using the mean of the answers per category as a feature (target statistic).
 
-- **そのまま集計する：** ある例の特徴量に、その例自身の答えが入る（target leakage）。特徴量の分布が学習の例と評価の例でずれる。
-- **極端な例：** カテゴリの値がすべて違い、答えが半々のとき、学習では1回の分岐で全問正解し、評価では正解率0.5になる。
-- **データを分ける（holdout）：** 片方で集計し、もう片方で学習する。ずれはなくなる。短所は、集計と学習の両方でデータが大きく減ること。
-- **自分だけ抜く（leave-one-out）：** 漏れを防げない。カテゴリが1種類のとき、集計の値から自分の答えが分かるので、学習では全問正解できる。
-- **順序を決める（ordered）：** データを並べ替え、自分より前の例だけで集計し、評価では全部を使う。ずれがなく、データも全部使える。前のほうの例は集計のばらつきが大きいので、複数の順序を使う。
+- **Aggregating as is:** an example's feature contains that example's own answer (target leakage). The feature's distribution shifts between the training examples and the evaluation examples.
+- **An extreme case:** when every category value is different and the answers are split half and half, training gets every example right with one split, while evaluation gets an accuracy of 0.5.
+- **Splitting the data (holdout):** aggregate on one part and train on the other. The shift disappears. The drawback is that both the aggregation and the training lose much of the data.
+- **Leaving out only oneself (leave-one-out):** does not prevent the leakage. When there is only one category, an example's own answer can be read from the aggregated value, so training can get every example right.
+- **Fixing an order (ordered):** shuffle the data, aggregate only over the examples before each one, and use all of them for evaluation. There is no shift, and all the data is used. The aggregates of the early examples vary widely, so several orders are used.
 
-読んだのは PDF の §3.2 と、§1、§4 の leakage に触れる文。順序付きのブースティング（§4 以降）と実験の結果は読んでいない。
+Read: §3.2 of the PDF, and the sentences in §1 and §4 that mention leakage. Ordered boosting (§4 onward) and the experimental results were not read.

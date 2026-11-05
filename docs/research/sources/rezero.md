@@ -1,23 +1,23 @@
 # ReZero
 
-Bachlechner ら、ReZero is All You Need: Fast Convergence at Large Depth（arXiv 2003.04887）。
+Bachlechner et al., ReZero is All You Need: Fast Convergence at Large Depth (arXiv 2003.04887).
 
-各層を `x + α F(x)` にして、学習する値 α を0から始める。α は層ごとに1つで、LayerNorm は外す。
+Each layer becomes `x + α F(x)`, with the learned value α starting at 0. There is one α per layer, and LayerNorm is removed.
 
-enwiki8（1文字ずつ）で、12層、幅512、文脈512、LAMB（学習率0.016で一定）、ドロップアウト20%。検証の BPB が1.2になるまでの回数：
+On enwiki8 (one character at a time), 12 layers, width 512, context 512, LAMB (constant learning rate 0.016), 20% dropout. The number of iterations until the validation BPB reaches 1.2:
 
-| 形 | 回数 |
+| Form | Iterations |
 |---|---|
-| Post-Norm | 発散 |
-| Post-Norm、warm-up あり | 13,690 |
+| Post-Norm | Diverges |
+| Post-Norm, with warm-up | 13,690 |
 | Pre-Norm | 17,765 |
-| GPT-2 の Norm | 21,187 |
-| ReZero、α=1 から | 14,506 |
-| ReZero、α=0 から | 8,800 |
+| GPT-2's Norm | 21,187 |
+| ReZero, from α=1 | 14,506 |
+| ReZero, from α=0 | 8,800 |
 
-- 同じ形で α の始めを1から0にすると、回数が約0.6倍。
-- 最後のテストの BPB は、どの形も1.17で差がない。
-- 比べているのは正規化のない形で、今の Pre-Norm の形に0を入れた比較ではない。層全体を1つの値で縮める形で、重みそのものを0にするのとも違う。
-- 64層と128層も学習できる（同じ条件の普通の形は発散）。
+- In the same form, starting α at 0 instead of 1 takes about 0.6× the iterations.
+- The final test BPB is 1.17 for every form, with no difference.
+- What it compares are forms without normalization, not today's Pre-Norm form with a 0 put into it. It scales a whole layer by one value, which also differs from setting the weights themselves to 0.
+- 64 and 128 layers can also be trained (the ordinary form diverges under the same conditions).
 
-読んだのは要旨、導入、6節、付録 B と C。
+The abstract, the introduction, section 6, and Appendices B and C were read.

@@ -1,12 +1,12 @@
-# FlexAttention と FlashAttention-4
+# FlexAttention and FlashAttention-4
 
-PyTorch の記事 [FlexAttention + FlashAttention-4: Fast and Flexible](https://pytorch.org/blog/flexattention-flashattention-4-fast-and-flexible/)（更新 2026-03-04）。
+PyTorch's post [FlexAttention + FlashAttention-4: Fast and Flexible](https://pytorch.org/blog/flexattention-flashattention-4-fast-and-flexible/) (updated 2026-03-04).
 
-- FlexAttention に FlashAttention-4 のバックエンド（`kernel_options={"BACKEND": "FLASH"}`）を足した。Triton の実装の1.2〜3.2倍速い。
-- Triton の FlexAttention は、Hopper で FlashAttention-3 の約60%の処理量（当初は約80%）。FlashAttention-3 を Hopper の最高水準の実装と呼んでいる。
-- GB200 の因果マスクでは、FlexAttention の FLASH バックエンドは、FlashAttention-4 に組み込みの因果の経路より順伝播が遅い。
-- H200 の数字は FlexAttention でしか書けない形（ALiBi、文書マスク、スライドウィンドウ）で、Triton との比較。順伝播1.30〜1.89倍、逆伝播1.35〜2.01倍。FlashAttention-3 との直接の比較はない。
-- Llama 3 70B、H100 64枚、長さ8192の学習で、Triton と同じ損失に収束した。
-- 開発中で、破壊的な変更がありうるとしている。
+- It added a FlashAttention-4 backend (`kernel_options={"BACKEND": "FLASH"}`) to FlexAttention. It is 1.2–3.2× faster than the Triton implementation.
+- Triton's FlexAttention reaches about 60% of FlashAttention-3's throughput on Hopper (about 80% at first). It calls FlashAttention-3 the state-of-the-art implementation on Hopper.
+- With a causal mask on GB200, FlexAttention's FLASH backend has a slower forward pass than FlashAttention-4's built-in causal path.
+- The H200 figures are for forms that only FlexAttention can express (ALiBi, document masks, sliding windows), compared with Triton: forward 1.30–1.89×, backward 1.35–2.01×. There is no direct comparison with FlashAttention-3.
+- In training Llama 3 70B on 64 H100s at length 8192, it converged to the same loss as Triton.
+- It says it is under development and may have breaking changes.
 
-図の中の数字は読んでいない。
+The numbers inside the figures were not read.

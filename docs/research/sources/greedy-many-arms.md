@@ -1,9 +1,9 @@
 # The Unreasonable Effectiveness of Greedy Algorithms in Multi-Armed Bandit with Many Arms
 
-Bayati ら（arXiv 2002.10121、NeurIPS 2020）。
+Bayati et al. (arXiv 2002.10121, NeurIPS 2020).
 
-- 候補の数 k が予算 T の平方根以上の場合を扱う。全部を1回ずつ試すだけで損が k に比例するので、普通の UCB は試しすぎる。√T 個程度に絞ると、増え方の上で最適になる。
-- 実験では、絞った UCB より、一番良く見えるものを選び続ける貪欲な方法のほうが良かった。著者は、候補が多いと良い候補が早く見つかること（自由な探索）で説明している。
-- 候補の報酬は独立と仮定している。
+- It covers the case where the number of candidates k is at least the square root of the budget T. Trying each candidate once already costs a regret proportional to k, so standard UCB explores too much. Narrowing down to about √T candidates makes it optimal in how the regret grows.
+- In the experiments, a greedy method that keeps choosing whichever candidate looks best did better than the narrowed UCB. The authors explain this by good candidates being found early when there are many of them (free exploration).
+- The candidates' rewards are assumed to be independent.
 
-読んだのは要旨、導入、主な図の説明。証明は読んでいない。
+The abstract, the introduction and the captions of the main figures were read. The proofs were not read.

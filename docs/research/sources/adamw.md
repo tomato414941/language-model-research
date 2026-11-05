@@ -1,11 +1,11 @@
 # AdamW
 
-Loshchilov と Hutter、Decoupled Weight Decay Regularization（arXiv 1711.05101、ICLR 2019）。
+Loshchilov and Hutter, Decoupled Weight Decay Regularization (arXiv 1711.05101, ICLR 2019).
 
-- Adam の weight decay を、勾配の更新から切り離す修正。SGD では L2 正則化と weight decay は同じだが、Adam では違う。L2 だと、過去の勾配が大きい重みほど弱くしか効かない。
-- CIFAR-10（ResNet、1,160万と2,560万パラメータ）と ImageNet32x32 で、学習率0.001のとき、テスト誤差が Adam より相対で15%下がった。
-- 学習率と weight decay の最良の値が、互いに独立に近くなる。
-- Adam にも学習率のスケジュールは効き、cosine annealing が固定や段階的な減衰より良かった。最良の weight decay は、更新回数が多いほど小さい。
-- 実験は画像分類で、言語モデルで他の手法と比べたものはない。利用例として Transformer（Radford ら）を挙げている。著者は、他の課題でも確かめる必要があると書いている。
+- A fix that decouples Adam's weight decay from the gradient update. In SGD, L2 regularization and weight decay are the same, but in Adam they are not. With L2, the decay acts more weakly on weights whose past gradients are larger.
+- On CIFAR-10 (ResNet, 11.6 million and 25.6 million parameters) and ImageNet32x32, at a learning rate of 0.001, the test error fell by 15% relative to Adam.
+- The best values of the learning rate and the weight decay become nearly independent of each other.
+- Learning-rate schedules also help Adam, and cosine annealing did better than a fixed rate or step decay. The best weight decay is smaller the more updates there are.
+- The experiments are image classification; there is no comparison with other methods on language models. It cites the Transformer (Radford et al.) as an example of use. The authors write that it needs to be checked on other tasks as well.
 
-読んだのは本文。付録は読んでいない。
+The main text was read. The appendix was not read.

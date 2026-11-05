@@ -1,11 +1,11 @@
 # SOAP, Muon, and Beyond
 
-Khona ら（NVIDIA）、SOAP, Muon, and Beyond: Pushing LLM Pretraining Scales（arXiv 2607.20548、2026-07）。
+Khona et al. (NVIDIA), SOAP, Muon, and Beyond: Pushing LLM Pretraining Scales (arXiv 2607.20548, 2026-07).
 
-- 全体300億（動くのは30億）の MoE を3兆トークン、全体720億（動くのは80億）の Mamba との混成を1兆トークンなどで学習する。
-- 更新の大きさをそろえて学習率を移し、AdamW、Muon、SOAP を比べる。AdamW はあるバッチを超えると悪くなり、Muon と SOAP は更新1回1億トークンまで保つとしている。
-- SOAP は大きなバッチで loss が跳ねる。毎ステップの QR 直交化と KL-Shampoo の共分散の推定で解消した。
-- Qwen3 の全体300億の形で比べると、KL-SOAP が Muon にわずかに勝つ。メモリに余裕があれば KL-SOAP を勧めている。この比較では Q、K、V を分けていない。
-- Nesterov 型の momentum は収束を良くしなかった。ε は調整していないと断っている。
+- Trains, among others, a MoE with 30 billion parameters in total (3 billion active) on 3 trillion tokens, and a hybrid with Mamba with 72 billion in total (8 billion active) on 1 trillion tokens.
+- Transfers the learning rate by matching the size of the updates, and compares AdamW, Muon and SOAP. It says AdamW gets worse beyond a certain batch, while Muon and SOAP hold up to 100 million tokens per update.
+- SOAP's loss spikes at large batches. This was resolved with QR orthogonalization at every step and KL-Shampoo's estimate of the covariance.
+- Compared on Qwen3's shape with 30 billion in total, KL-SOAP slightly beats Muon. It recommends KL-SOAP when memory allows. This comparison does not separate Q, K and V.
+- Nesterov-style momentum did not improve convergence. It notes that ε was not tuned.
 
-読んだのは要旨、導入、比較の方法の冒頭、5.5節、実装の冒頭、結論。5.3節の結果と表は読んでいない。
+Read: the abstract, the introduction, the beginning of the comparison method, Section 5.5, the beginning of the implementation, and the conclusion. The results and tables of Section 5.3 were not read.

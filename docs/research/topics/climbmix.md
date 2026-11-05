@@ -1,12 +1,12 @@
 # ClimbMix
 
-**2026-11-04 から使わない。** 元の Nemotron-ClimbMix が非商用（CC BY-NC 4.0）なので、research でも使わないと決めた。学習データは FineWeb にするルールにした（[学習データ](training-data.md)）。ClimbMix で学習したトークナイザと、それで数えた COUNT の表も作り直した。基準と束の点はデータごとに比べ直す。同じ日に3番目の束を学習するために借りた H100 は、転送の途中で消した（約19分、約$0.75）。
+**Not used from 2026-11-04 on.** The original Nemotron-ClimbMix is non-commercial (CC BY-NC 4.0), so it was decided not to use it in research either. A rule was made that the training data is FineWeb ([training data](training-data.md)). The tokenizer trained on ClimbMix and the COUNT tables counted with it were also rebuilt. The baseline's and the bundles' scores are compared again, dataset by dataset. The H100 rented that same day to train the third bundle was deleted partway through the transfer (about 19 minutes, about $0.75).
 
-2026-10時点の基準の学習データ。`autoresearch` や nanochat と同じ `karpathy/climbmix-400b-shuffle`（`915333b`）で、結果を比べやすい。データの選び方は候補の1つで、変えるなら基準の重みを新しい物差しで採点し直す。
+The baseline's training data as of 2026-10. It is `karpathy/climbmix-400b-shuffle` (`915333b`), the same as `autoresearch` and nanochat use, so results are easy to compare. How the data is chosen is one of the candidates; if it changes, score the baseline's weights again with the new yardstick.
 
-- 英語だけ。1ファイル約92MB、6,543ファイル。
-- 配布元の表示は MIT だが、元の Nemotron-ClimbMix は CC BY-NC 4.0。
-- そのまま使い、評価の問題を含む文書を除く処理はしていない。読んでいる20億トークンでは、文書の0.114%（3,071）に評価の問題が見つかった（478問、[数えた結果](../experiments/count-table-check.md)）。完全に一致するものだけで、言い換えは数えていない。v5 との違いは[全問の測定](../experiments/harness-milestone.md)に書いた。
-- 2番目の束の形で学習データだけを v6 の英語に替えると、6課題の正解率の平均は .452 から .427 に下がった（[比較](../experiments/v6-english-data.md)）。見つかった評価の問題を除いても差は +.025 のままで、原因はそれではなかった。混ぜ方、トークナイザとの相性、文書の頭から読むことの、どれが効いたかは分けていない。2026-11時点では基準のデータは ClimbMix のままにし、別のデータで学習したモデルと並べるときは、データの違いで点が動く可能性を添える。原因を分けて測ったら見直す。
+- English only. About 92MB per file, 6,543 files.
+- The distributor lists MIT, but the original Nemotron-ClimbMix is CC BY-NC 4.0.
+- It is used as is, with no processing to remove documents that contain evaluation questions. In the 2 billion tokens read, evaluation questions were found in 0.114% of documents (3,071) (478 questions, [the count](../experiments/count-table-check.md)). These are exact matches only; paraphrases were not counted. The difference from v5 is written up in [the measurement on every question](../experiments/harness-milestone.md).
+- With the second bundle's shape, replacing only the training data with v6's English lowered the mean accuracy over the 6 tasks from .452 to .427 ([comparison](../experiments/v6-english-data.md)). Even with the found evaluation questions removed, the difference stayed at +.025, so they were not the cause. Which of the mixing, the fit with the tokenizer or reading documents from their start was responsible has not been separated. As of 2026-11, the baseline's data stays ClimbMix, and when it is set beside models trained on other data, a note is added that the scores may move because the data differs. Revisit this once the causes are measured separately.
 
-データの由来、効果、混ぜ方が一部のベンチマークの成績で選ばれていることは、`language-model` の [climbmix.md](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/climbmix.md) を見る。
+For the data's origin, its effects and the fact that its mixture was chosen by the scores on some benchmarks, see `language-model`'s [climbmix.md](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/climbmix.md).

@@ -1,13 +1,13 @@
 # Muon is Scalable
 
-Liu ら（Moonshot AI ほか）、Muon is Scalable for LLM Training（arXiv 2502.16982、2025-02）。
+Liu et al. (Moonshot AI and others), Muon is Scalable for LLM Training (arXiv 2502.16982, 2025-02).
 
-- 元の Muon（muon.md）に足したもの：AdamW と同じ方式の weight decay（学習を延ばすと重みが大きくなりすぎるため）、行列の形で変わる更新の大きさの補正、AdamW の更新の大きさ（RMS 0.2〜0.4）に合わせる係数0.2。これで AdamW の学習率と weight decay をそのまま使えるとする。
-- Newton-Schulz は10回にしても5回より良くならない。momentum は調整しても安定した差が出ないので0.95のまま。
-- RMSNorm、出力、埋め込みは AdamW で更新する。全部を Muon で扱うことは今後の課題としている。
-- スケーリング則：Llama 形の3.99億〜15億パラメータ（埋め込みを除く）、文脈8K、最適なトークン量（89.2億〜389億）、AdamW は grid search。loss は Muon が 2.506·C^−0.052、AdamW が 2.608·C^−0.054。同じ性能に必要な計算量は Muon が約52%。
-- Moonlight：動くパラメータ30億、全体160億の MoE を5.7兆トークン学習した。
-- オプティマイザが占める時間は、順伝播と逆伝播の1〜3%。
-- 結論では、Muon は標準のオプティマイザとして AdamW を置き換えられるとしている。
+- What it adds to the original Muon (muon.md): weight decay in the same way as AdamW (because the weights grow too large when training is extended), a correction of the update size, which changes with the matrix's shape, and a factor of 0.2 that matches AdamW's update size (RMS 0.2–0.4). It says this lets AdamW's learning rate and weight decay be used unchanged.
+- Newton-Schulz with 10 iterations is no better than with 5. Tuning the momentum gave no stable difference, so it stays at 0.95.
+- RMSNorm, the output and the embeddings are updated with AdamW. Handling everything with Muon is left as future work.
+- Scaling laws: Llama-shaped, 399 million to 1.5 billion parameters (excluding embeddings), context 8K, the optimal number of tokens (8.92 billion to 38.9 billion), AdamW grid-searched. The loss is 2.506·C^−0.052 for Muon and 2.608·C^−0.054 for AdamW. Muon needs about 52% of the compute for the same performance.
+- Moonlight: an MoE with 3 billion active and 16 billion total parameters, trained on 5.7 trillion tokens.
+- The optimizer takes 1–3% of the time of the forward and backward passes.
+- The conclusion says Muon can replace AdamW as the standard optimizer.
 
-読んだのは方法（2.1、2.2）、スケーリング則（3.2）、事前学習の前半（3.3）、議論と結論。分散学習の詳細（2.3）、更新の大きさの実験（3.1）、fine-tuning（3.5）は読んでいない。
+The method (2.1, 2.2), the scaling laws (3.2), the first half of pretraining (3.3), and the discussion and conclusion were read. The details of distributed training (2.3), the update-size experiments (3.1) and fine-tuning (3.5) were not read.

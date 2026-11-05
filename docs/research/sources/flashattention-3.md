@@ -1,10 +1,10 @@
-# FlashAttention-3 の論文
+# The FlashAttention-3 paper
 
-Shah ら、FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision（arXiv 2407.08608）。
+Shah et al., FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision (arXiv 2407.08608).
 
-- FlashAttention-2 の H100 での使用率は35%にとどまる。
-- FlashAttention-3 は H100 の新しい命令を使い、注意の計算を FP16 で1.5〜2倍にする。最大740 TFLOPs/s（使用率75%）。FP8 では約1.2 PFLOPs/s に近づく。
-- 数字は注意の計算だけのもので、学習全体の速さは示していない。
-- 著者は、低精度の注意が大規模な学習に与える影響の理解を今後の課題としている。
+- FlashAttention-2 reaches only 35% utilization on H100.
+- FlashAttention-3 uses the H100's new instructions and makes attention 1.5–2× faster in FP16. Up to 740 TFLOPs/s (75% utilization). In FP8 it approaches about 1.2 PFLOPs/s.
+- The numbers are for the attention computation alone; the speed of training as a whole is not shown.
+- The authors leave understanding the effect of low-precision attention on large-scale training to future work.
 
-読んだのは要旨、導入、結論、実験の節の見出しと図の説明。アルゴリズムの詳細は読んでいない。
+The abstract, the introduction, the conclusion, and the headings and figure captions of the experiments section were read. The details of the algorithm were not read.

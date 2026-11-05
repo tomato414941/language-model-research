@@ -1,7 +1,7 @@
 # Beyond Solution-Centric Search
 
-Beyond Solution-Centric Search: Adaptive Inquiry and Knowledge Revision for Autonomous ML Engineering（arXiv 2608.02143、2026-08）。
+Beyond Solution-Centric Search: Adaptive Inquiry and Knowledge Revision for Autonomous ML Engineering (arXiv 2608.02143, 2026-08).
 
-候補の解を木やグラフで改良する探索ではなく、課題についての理解を状態として持ち、それで次を決める形を提案している（Iris）。解を変えずに不明な点を調べる行動と、範囲と状態の付いた知識の更新を持つ。
+Rather than a search that improves candidate solutions in a tree or a graph, it proposes a form that keeps its understanding of the task as state and uses it to decide what to do next (Iris). It has actions that investigate unknowns without changing the solution, and revisions of knowledge that carry a scope and a status.
 
-読んだのは要旨だけ。結果の数字は読んでいない。
+Only the abstract was read. The numbers in the results were not read.

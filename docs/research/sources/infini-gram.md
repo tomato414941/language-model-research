@@ -1,12 +1,12 @@
 # Infini-gram
 
-Liu ら、Infini-gram: Scaling Unbounded n-gram Language Models to a Trillion Tokens（arXiv 2401.17377、2024）。
+Liu et al., Infini-gram: Scaling Unbounded n-gram Language Models to a Trillion Tokens (arXiv 2401.17377, 2024).
 
-## 結果
+## Results
 
-- **次のトークンとの一致（§4.1）：** 一番長く一致する履歴を使う ∞-gram は、人の文章の次のトークンと47%一致する。一致した長さが16以上なら75%を超える。小さい n の普通の n-gram は29%（序論）。一致した履歴の回数は、一致率にあまり影響しない（付録 C）。
-- **モデルと混ぜる（§5.2、Table 1）：** Pile の学習データを参照にすると、Llama-2 70B の perplexity が12%下がる。RedPajama も足すと18〜19%。GPT-2 1.6B は33〜34%。
-- **参照と同じデータで学習したモデル：** Pile で学習した GPT-Neo 1.3B は16%で、GPT-2 の34%より小さい。著者はこれを、GPT-Neo が参照と同じ Pile で学習しているためとしている。
-- **評価との重なり：** 参照のコーパスから、評価の文章と13-gram の80%以上が重なる文書を除いた（Pile-train の0.6%、付録 B）。
+- **Agreement with the next token (§4.1):** the ∞-gram, which uses the longest matching history, agrees with the next token of human-written text 47% of the time. When the matched length is 16 or more, it exceeds 75%. An ordinary n-gram with a small n gets 29% (introduction). The count of the matched history has little effect on the agreement rate (Appendix C).
+- **Mixing with a model (§5.2, Table 1):** with the Pile's training data as the reference, Llama-2 70B's perplexity falls by 12%. Adding RedPajama as well gives 18–19%. For GPT-2 1.6B, 33–34%.
+- **A model trained on the same data as the reference:** GPT-Neo 1.3B, trained on the Pile, gets 16%, less than GPT-2's 34%. The authors attribute this to GPT-Neo having been trained on the same Pile as the reference.
+- **Overlap with the evaluation:** documents that share 80% or more of their 13-grams with the evaluation text were removed from the reference corpus (0.6% of Pile-train, Appendix B).
 
-読んだのは HTML 版の §4.1、§5.2、付録 B〜D の該当部分で、ツールで抜き出した引用から。本文の全体は読んでいない。
+Read: the relevant parts of §4.1, §5.2 and Appendices B–D of the HTML version, from quotes extracted with a tool. The body as a whole was not read.

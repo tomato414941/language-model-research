@@ -1,31 +1,31 @@
-# 正規化
+# Normalization
 
-各層の入力の大きさを揃える計算。基準の nanoGPT は LayerNorm で、学習する重み（大きさ）を持つ。形と計算の候補は次の3つ。
+The computation that evens out the size of each layer's input. The baseline, nanoGPT, uses LayerNorm, with learned weights (scales). The candidate forms and computations are these three:
 
-- LayerNorm：平均を引いて、標準偏差で割る。
-- RMSNorm：平均を引かず、2乗平均で割る。少し軽い。
-- それぞれ学習する重みの有無。最初の束では重みは全部で13,440個で、計算にはほとんど関係しない。
+- LayerNorm: subtracts the mean and divides by the standard deviation.
+- RMSNorm: does not subtract the mean, and divides by the mean square. Slightly lighter.
+- For each, with or without learned weights. In the first bundle these weights number 13,440 in all, and hardly matter for compute.
 
-## 分かっていること
+## What is known
 
-- **LayerNorm と RMSNorm：** 品質はほぼ同じ（[RMSNorm の論文](../sources/rmsnorm.md)、[Ceramic](../sources/revisiting-layernorm.md)）。速さは、論文の Transformer で6.9%差があり、Ceramic では素直な PyTorch で最大40%、良いカーネルで0。正規化の計算だけの差か、全体の差かは資料ごとに違う。
-- **重みの有無は割れている：**
-  - 普通の設定では重みありが良い。[OLMoE](../sources/olmoe.md) は勾配の跳ねが減り、[Lingle の記事](../sources/parametric-rmsnorm-blog.md)は 2.240 と 2.253（0.6%差）。どちらも AdamW で、OLMoE は勾配をクリップしている。
-  - `lm_head` の初期値を小さくする μP の設定では重みなしが良い（[μ-Transfer](../sources/mu-transfer.md)）。
-- **小さい規模の例：** autoresearch、nanochat、modded-nanogpt（同じ流れのコード）はどれも重みなしの RMSNorm。LLaMA、Qwen、DeepSeek は重みあり（Lingle の記事による）。今の規模で、Muon と組み合わせて比べた結果は見つけていない。
-- **FlashNorm（arXiv 2407.09577）：** 要旨によると推論を速くする話で、学習の候補ではない。
+- **LayerNorm and RMSNorm:** About the same quality ([the RMSNorm paper](../sources/rmsnorm.md), [Ceramic](../sources/revisiting-layernorm.md)). On speed, the paper's Transformer shows a 6.9% difference, and Ceramic up to 40% in plain PyTorch and 0 with good kernels. Whether the difference is in the normalization alone or in the whole model differs between sources.
+- **Results on the weights are split:**
+  - In ordinary settings, having weights is better. In [OLMoE](../sources/olmoe.md) gradient spikes decreased, and [Lingle's post](../sources/parametric-rmsnorm-blog.md) has 2.240 against 2.253 (a 0.6% difference). Both use AdamW, and OLMoE clips gradients.
+  - In μP settings that initialize `lm_head` small, no weights is better ([μ-Transfer](../sources/mu-transfer.md)).
+- **Small-scale examples:** autoresearch, nanochat and modded-nanogpt (code of the same lineage) all use RMSNorm without weights. LLaMA, Qwen and DeepSeek use weights (according to Lingle's post). We have not found comparisons at the current scale combined with Muon.
+- **FlashNorm (arXiv 2407.09577):** According to the abstract, it is about faster inference, and not a candidate for training.
 
-## 今の見方
+## Current view
 
-2026-11時点の見方では、重みなしの RMSNorm にする。理由は次の通り。
+In the view as of 2026-11, use RMSNorm without weights. The reasons:
 
-- μP の設定で重みなしが良いという結果は、`lm_head` を小さく始める形のもの。2番目の束で埋め込みを分離するなら、この形に近くなる（embeddings.md）。
-- 勾配の跳ねを問題にした報告は勾配のクリップの話で、Muon の束はクリップを使わない。
-- autoresearch の学習率の組は、この形で動いている。
+- The result that no weights is better in μP settings is for setups that start `lm_head` small. If the second bundle separates the embeddings, it comes close to this setup (embeddings.md).
+- The report that raised gradient spikes as a problem is about gradient clipping, and the Muon bundle does not use clipping.
+- autoresearch's set of learning rates runs in this form.
 
-品質への効果は0付近（±0.6%くらい）で、速度が少し良くなる程度と見ている。大きな改善の候補ではなく、形を揃えるために入れる。
+We think the effect on quality is near 0 (around ±0.6%), with speed slightly better at most. It is not a candidate for a large improvement; it goes in to match the shape.
 
-## 見方が変わりそうな条件
+## What would change the view
 
-- 勾配が不安定になる場合。学習する重みを戻す。
-- 今の規模で、重みの有無を比べた結果が出た場合。
+- Gradients becoming unstable. Then bring the learned weights back.
+- Results comparing with and without weights at the current scale.

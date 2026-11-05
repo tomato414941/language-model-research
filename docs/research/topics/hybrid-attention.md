@@ -1,13 +1,13 @@
-# 線形注意との混成
+# Hybrids with linear attention
 
-一部の層の注意を、Gated DeltaNet や Kimi Delta Attention のような線形注意に替える。2026-11時点の見方では、効果は約1〜2%で、実装が重いので最初の束には入れていない。測った結果ではない。
+Replacing the attention in some layers with linear attention such as Gated DeltaNet or Kimi Delta Attention. The view as of 2026-11 is that the effect is about 1–2%, and it was not put in the first bundle because the implementation is heavy. This is not a measured result.
 
-- **効果：** [Kimi Linear](../sources/kimi-linear.md) は、同じ計算量で検証の loss が約1.2%低い（自分たちの換算）。スケーリング則では1.16倍分。[Olmo Hybrid](../sources/olmo-hybrid.md) は1Bで1.3倍分で、大きいほど増える。名目1億の比較では loss が4〜6%低いが、パラメータ数が約1億300万と1億3,000万で揃っていない。差し引いて1〜3%と見ている。
-- **速度：** 主な利点は長い文脈での推論。[Gated DeltaNet の論文](../sources/gated-deltanet.md)では、文脈2,000トークンまでは普通の注意のほうが速い。Olmo Hybrid は形を調整して速さを合わせている。今の文脈（1,024）で費用が安くなるとは見ていない。
-- **注意を残す理由：** [Zoology](https://arxiv.org/abs/2312.04927)（要旨）では、注意のない最新の畳み込み型は、Pile の perplexity で注意より最大2.1悪く、差の82%は前に出た情報を思い出す力で説明できた。思い出す課題では、7,000万の注意のモデルが14億の畳み込み型に勝つ。
-- **採用：** Qwen3-Next、Qwen 3.5、3.6、Kimi K3 などフロンティアで使われている。
+- **Effect:** [Kimi Linear](../sources/kimi-linear.md) has about 1.2% lower validation loss at the same compute (our conversion). By the scaling law, that is worth 1.16× the compute. [Olmo Hybrid](../sources/olmo-hybrid.md) is worth 1.3× at 1B, more at larger sizes. In a comparison at a nominal 100 million, the loss is 4–6% lower, but the parameter counts, about 103 million and 130 million, are not matched. Allowing for that, we think it is 1–3%.
+- **Speed:** the main advantage is inference at long contexts. In [the Gated DeltaNet paper](../sources/gated-deltanet.md), ordinary attention is faster up to a context of 2,000 tokens. Olmo Hybrid adjusts its shape to match speeds. We do not think it becomes cheaper at the current context (1,024).
+- **Why keep attention:** In [Zoology](https://arxiv.org/abs/2312.04927) (abstract), the latest attention-free convolutional models are up to 2.1 worse than attention in Pile perplexity, and 82% of the gap was explained by the ability to recall information that appeared earlier. On recall tasks, a 70-million attention model beats a 1.4-billion convolutional one.
+- **Adoption:** used at the frontier, in Qwen3-Next, Qwen 3.5 and 3.6, Kimi K3 and others.
 
-## 見方が変わりそうな条件
+## Conditions likely to change the view
 
-- 文脈を大きく伸ばす場合、推論の費用も数える場合。
-- 今の規模で、実時間を含めて比べた結果が出た場合。
+- When the context is lengthened greatly, or when the cost of inference is also counted.
+- When a comparison at the current scale that includes wall-clock time comes out.

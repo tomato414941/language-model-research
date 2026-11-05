@@ -1,20 +1,20 @@
-# modded-nanogpt の CPLM（PR #379）
+# modded-nanogpt's CPLM (PR #379)
 
-`KellerJordan/modded-nanogpt` の PR #379（2026-11-03 時点で未マージ）。記録 #92 の上に、文書の前のトークンを指すポインタを足す。論文は「近く公開」とあり、まだ読めない。
+PR #379 of `KellerJordan/modded-nanogpt` (unmerged as of 2026-11-03). On top of record #92, it adds a pointer to earlier tokens in the document. The paper is described as "coming soon" and cannot be read yet.
 
-## 仕組み
+## How it works
 
-- 次のトークンの分布を、LM の softmax と、同じ文書の前のトークンへのポインタの混合にする。`p(y) = p_lm(y)·(1 − α(1 − a_sink)) + α·p_copy(y)`。
-- 混ぜる割合 α は、出力の表の使っていない行（`<copy>`）に softmax がつけた確率。同じ softcap を通す。
-- ポインタは最後の隠れ状態の上の1ヘッド（128次元）で、同じ文書の前のトークンだけを見る。学習ではポインタの届く範囲が2,048トークン、検証では8,192トークン。学習するシンク（a_sink）があり、その分は LM に戻る。
-- Q と K を RMS で正規化し、学習する利得を掛ける。ないと、種によってポインタの値が発散した。
-- パラメータは +196,737。メモリは学習で約0.1GB、計算は学習の FLOPs の0.8%以下、1ステップの時間は +1.3%。
+- The next-token distribution is a mixture of the LM's softmax and a pointer to earlier tokens in the same document. `p(y) = p_lm(y)·(1 − α(1 − a_sink)) + α·p_copy(y)`.
+- The mixing weight α is the probability the softmax gives to an unused row of the output embedding table (`<copy>`). It goes through the same softcap.
+- The pointer is a single head (128 dimensions) on top of the last hidden state, and it looks only at earlier tokens in the same document. The pointer reaches 2,048 tokens in training and 8,192 tokens in validation. There is a learned sink (a_sink), whose share goes back to the LM.
+- Q and K are RMS-normalized and multiplied by a learned gain. Without this, the pointer's values diverged for some seeds.
+- Parameters: +196,737. Memory is about 0.1GB in training, compute is at most 0.8% of the training FLOPs, and the time per step is +1.3%.
 
-## 結果
+## Results
 
-- 同じ機械の記録 #92（13回）が1,194ステップ、40.575 ± 0.024秒、検証損失3.2765 ± 0.0016。PR（8回）は1,050ステップ、36.009 ± 0.039秒、3.2769 ± 0.0016。時間は −11.25%で、損失の差は +0.33ミリナット（p = 0.66）。
-- ステップ数はこの機械で選んだもので、別の機械では約3ミリナット高く出たと著者が書いている。
-- ポインタを外す、検証の範囲を2,048にするなどの比較はない。下流の点もない。
-- 記録 #92 の注意は、7層のうち5層の窓が128〜768トークン（128トークンの塊で数えて1〜6個）で、長い窓の2層も学習中は最大約1,700トークン、最後の検証で2,560トークン（`train_gpt.py` の設定、128トークンの塊で数えた値から計算）。ポインタは、多くの層の窓より遠くまで届く。
+- Record #92 on the same machine (13 runs): 1,194 steps, 40.575 ± 0.024 seconds, validation loss 3.2765 ± 0.0016. The PR (8 runs): 1,050 steps, 36.009 ± 0.039 seconds, 3.2769 ± 0.0016. The time is −11.25%, and the loss difference is +0.33 millinats (p = 0.66).
+- The step count was chosen on this machine, and the author writes that the loss came out about 3 millinats higher on another machine.
+- There are no comparisons such as removing the pointer or setting the validation range to 2,048. There are no downstream scores either.
+- In record #92's attention, 5 of the 7 layers have windows of 128 to 768 tokens (1 to 6 blocks of 128 tokens), and even the 2 long-window layers reach at most about 1,700 tokens during training and 2,560 tokens in the final validation (computed from the settings in `train_gpt.py`, which count in blocks of 128 tokens). The pointer reaches further than most layers' windows.
 
-読んだのは PR の説明とコメント、記録 #92 のログに入っている窓の設定。コードは読んでいないし、動かしていない。
+The PR's description and comments, and the window settings recorded in record #92's log, were read. The code was neither read nor run.

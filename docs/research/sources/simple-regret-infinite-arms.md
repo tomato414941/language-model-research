@@ -1,8 +1,8 @@
 # Simple regret for infinitely many armed bandits
 
-Carpentier、Valko（arXiv 1505.04627、ICML 2015）。
+Carpentier, Valko (arXiv 1505.04627, ICML 2015).
 
-- 候補が無数にあり、全部は1回ずつも試せない問題で、最後に選ぶ1つの良さを最大にする方法（SiRI）を示した。
-- 達成できる損の小ささは、良い候補がどれだけあるかを表す値 β で決まる（max(n^−1/2、n^−1/β)）。予算内で試す候補の数はこれに応じて変わる。
+- For problems with countless candidates, where not every candidate can be tried even once, it presents a method (SiRI) that maximizes the quality of the single candidate chosen at the end.
+- How small the regret can be made is set by β, a value describing how many good candidates there are (max(n^−1/2, n^−1/β)). The number of candidates tried within the budget changes accordingly.
 
-読んだのは要旨、導入、主な結果の式。証明は読んでいない。
+The abstract, the introduction and the formulas of the main results were read. The proofs were not read.

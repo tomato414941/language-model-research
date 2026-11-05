@@ -1,9 +1,9 @@
 # An AI Scientist that Doesn't Drift
 
-An AI Scientist that Doesn't Drift: Taste, Structure, and Falsifiable Findings in a Quadruped Navigation Research Loop（arXiv 2608.07542、2026-08）。
+An AI Scientist that Doesn't Drift: Taste, Structure, and Falsifiable Findings in a Quadruped Navigation Research Loop (arXiv 2608.07542, 2026-08).
 
-- 自律研究の繰り返しは、測る指標の局所的な調整に流れやすいとして、予測と結果を対にした変更できない記録、役割を絞った補助のエージェント、研究者の好みを持つ判断役を足した。
-- 判断役の有無で11の研究の流れを比べた。どちらも流されず、仮説の約4分の3を自ら否定した。最高の方策は判断役なしの側から出た。
-- 判断役が変えたのはスコアではなく探す方向で、判断役の側だけがテスト時の適応を探った。
+- On the grounds that repeated autonomous research tends to drift into local tuning of the metric being measured, it added an immutable record pairing predictions with results, helper agents with narrowed roles, and a judge with a researcher's taste.
+- It compared 11 research streams with and without the judge. Neither side drifted, and each refuted about three quarters of its own hypotheses. The best policy came from the side without the judge.
+- What the judge changed was not the score but the direction of the search: only the side with the judge explored test-time adaptation.
 
-読んだのは要旨だけ。ロボットの研究で、言語モデルではない。
+Only the abstract was read. The research is on robots, not language models.

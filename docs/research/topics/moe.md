@@ -1,14 +1,14 @@
 # MoE
 
-MLP を複数の専門家に分け、トークンごとに一部だけを動かす。`language-model` にも[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/moe.md)がある。2026-11時点の見方では、今の規模では効果がはっきりせず実装も重いので、優先度を下げている。測った結果ではない。
+Splits the MLP into several experts and runs only some of them for each token. `language-model` also has a [note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/moe.md). In the view as of 2026-11, its effect at the current scale is unclear and the implementation is heavy, so its priority is lowered. This is not a measured result.
 
-- **大きな効果の報告：** [Marin](../sources/marin-moe.md) は 1e18〜3e20 で計算量の約4倍分（1e23 では6.7倍、実時間で3.6倍）。[Engram の論文](../sources/engram.md)の比較では、同じ計算量で検証 loss が7.6%低い。[DeepSeekMoE](../sources/deepseekmoe.md) は、動くパラメータが同じ2億のモデルで The Pile の loss が6〜9%低い。
-- **学習量の違い：** DeepSeekMoE の比較は1パラメータ500トークン。今の基準は5〜15トークンで、トークンが足りない側にある。容量を増やす MoE は同じようには効きにくいと見ている（自分たちの解釈）。
-- **小さい規模での実時間：** nanochat の LOG（2026-02-19）では、ステップあたりは良くなったが、効率が約46%から約35%に落ちて時間で負けた。
-- **採用：** フロンティアでは標準で、大きなモデルを目指すなら優先度は上がる。
+- **Reports of large effects:** [Marin](../sources/marin-moe.md): worth about 4× the compute at 1e18 to 3e20 (6.7× at 1e23, 3.6× in wall-clock time). In [the Engram paper](../sources/engram.md)'s comparison, validation loss is 7.6% lower at the same compute. [DeepSeekMoE](../sources/deepseekmoe.md): with models of the same 200 million active parameters, The Pile loss is 6–9% lower.
+- **Difference in the amount of training:** DeepSeekMoE's comparison is at 500 tokens per parameter. The current baseline is at 5–15 tokens, on the side short of tokens. We think MoE, which adds capacity, is unlikely to help in the same way (our own interpretation).
+- **Wall-clock time at small scale:** In nanochat's LOG (2026-02-19), it got better per step, but efficiency fell from about 46% to about 35% and it lost on time.
+- **Adoption:** It is standard at the frontier, and its priority rises if we aim for large models.
 
-## 見方が変わりそうな条件
+## What would change the view
 
-- 予算が増え、1パラメータあたりのトークンが大幅に増える場合。
-- 速度の落ちない実装が見つかった場合。
-- 大規模でも効く改善をより重視する場合。今の順番は今の規模での効果を中心にしている。
+- A larger budget that greatly increases the tokens per parameter.
+- Finding an implementation that does not lose speed.
+- Putting more weight on improvements that also work at large scale. The current order centers on the effect at the current scale.

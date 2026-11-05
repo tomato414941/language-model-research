@@ -1,37 +1,37 @@
 # First Steps Toward Automated AI Research
 
-Recursive の公開物（GitHub の `recursive-org/first-steps-toward-automated-ai-research`、2026-06-11）。自動で案を出して試す仕組みで見つけた学習コードと、測った結果。自社の報告で、外部の追試は見ていない。
+Recursive's release (`recursive-org/first-steps-toward-automated-ai-research` on GitHub, 2026-06-11). Training code found by a system that proposes and tests ideas automatically, and the results measured. It is the company's own report; no external replication has been seen.
 
-## NanoChat（autoresearch の課題）
+## NanoChat (autoresearch's task)
 
-1枚の B200 で5分学習し、検証の BPB を測る。データとトークナイザは autoresearch と同じ（ClimbMix、語彙8,192、文脈2,048。行は BOS から始まり文書を詰める）。10の種で測った。平均と標準偏差は公開の CSV から計算した。
+It trains for 5 minutes on one B200 and measures validation BPB. The data and tokenizer are the same as autoresearch's (ClimbMix, vocabulary 8,192, context 2,048; each row starts with BOS and is packed with documents). Measured with 10 seeds. The mean and standard deviation were computed from the public CSV.
 
-| 解 | 平均 | 標準偏差 |
+| Solution | Mean | Standard deviation |
 |---|---|---|
-| 素の Transformer | 1.0587 | 0.0101 |
-| Karpathy の出発点 | 0.9751 | 0.0112 |
-| Karpathy の最良 | 0.9646 | 0.0154 |
-| コミュニティの最良 | 0.9372 | 0.0079 |
-| 素の Transformer から探した解 | 0.9344 | 0.0122 |
-| Karpathy の出発点から探した解 | 0.9109 | 0.0067 |
+| Vanilla Transformer | 1.0587 | 0.0101 |
+| Karpathy's starting point | 0.9751 | 0.0112 |
+| Karpathy's best | 0.9646 | 0.0154 |
+| The community's best | 0.9372 | 0.0079 |
+| Solution found from the vanilla Transformer | 0.9344 | 0.0122 |
+| Solution found from Karpathy's starting point | 0.9109 | 0.0067 |
 
-一番良い解（`optimized_from_karpathy.py`）の中身。
+What the best solution (`optimized_from_karpathy.py`) contains.
 
-- **形：** 8層、幅768、ヘッド128次元が6つ。1更新147,456トークン（72本×2,048）。Value embeddings は1層おき。
-- **n-gram の表：** 2トークンと3トークンをハッシュして表を引き、注意の value にゲート付きで足す。語彙の64倍（524,288行）で幅が半分の表を2つ連結する。2トークンは4層、3トークンは3層で、表だけで約28億パラメータ（自分たちの計算）。層ごとにハッシュを変える。表は1次のモーメントのない RMSProp でメモリを半分にし、学習率を下げない。
-- **注意の窓：** 3層は文脈の4分の1、1層は全部（`TTTL`）。
-- **正規化：** MLP の入力と出力の両方に RMSNorm をかける。
-- **学習率：** 上げる期間はなく、最初の5%のあと最後まで直線で5%に下げる。Adam の下げ始めは残り65%から。行列0.04、読む表0.6、出力の表0.004。
-- **そのほか：** Muon のモメンタムを0.95から0.79へ下げる。Adam の β1 を0.8から0.55へ下げる。weight decay を一時的に3〜5倍にする時期が3回ある。
+- **Shape:** 8 layers, width 768, six heads of 128 dimensions. 147,456 tokens per update (72 sequences × 2,048). Value embeddings on every other layer.
+- **n-gram tables:** It hashes 2 tokens and 3 tokens to look up tables, and adds the result to attention's value through a gate. Two tables of 64× the vocabulary (524,288 rows) and half the width are concatenated. 2 tokens in 4 layers and 3 tokens in 3 layers, about 2.8 billion parameters in the tables alone (our own calculation). The hash changes from layer to layer. The tables use RMSProp without a first moment, which halves the memory, and their learning rate is not lowered.
+- **Attention windows:** three layers see a quarter of the context and one layer all of it (`TTTL`).
+- **Normalization:** RMSNorm on both the input and the output of the MLP.
+- **Learning rate:** No warmup; after the first 5%, it falls linearly to 5% by the end. Adam's decay starts when 65% remains. Matrices 0.04, the lookup tables 0.6, the output table 0.004.
+- **Others:** Muon's momentum lowered from 0.95 to 0.79. Adam's β1 lowered from 0.8 to 0.55. There are 3 periods in which the weight decay is temporarily raised 3–5×.
 
-素の Transformer から探した解（`optimized_from_vanilla.py`）は7層で、1回の更新を131,072トークン（64本×2,048）で始め、学習の50%で262,144に上げて学習率を1.2倍にする。
+The solution found from the vanilla Transformer (`optimized_from_vanilla.py`) has 7 layers, starts with 131,072 tokens per update (64 sequences × 2,048), and at 50% of training raises it to 262,144 and the learning rate by 1.2×.
 
-どの変更がどれだけ効いたかの表はない。
+There is no table of how much each change helped.
 
 ## speedrun
 
-記録 #83（同じ機械で80.61秒）から77.34秒（13回、検証損失3.2789）。FP8 を注意の入出力に広げる、NorMuon に焼きなましのノイズを足す、表に cautious Adam を使う、ReLU² の計算をまとめる、など。別の弱い出発点からは約185秒まで進み、そこには文書の中だけの注意と窓の組み合わせ、2トークンの表、更新ごとの Muon がある。
+From record #83 (80.61 seconds on the same machine) to 77.34 seconds (13 runs, validation loss 3.2789). Extending FP8 to attention's inputs and outputs, adding annealed noise to NorMuon, using cautious Adam for the tables, fusing the computation of ReLU², and more. From a different, weaker starting point it reached about 185 seconds, which includes attention within documents combined with windows, a 2-token table, and Muon on every update.
 
-## 読んだ範囲
+## What was read
 
-リポジトリの README、NanoChat と speedrun の README、`val_bpb.csv`、`lib.py`、`optimized_from_karpathy.py` の設定とモデルの部分、`optimized_from_vanilla.py` のバッチと形の設定を読んだ。元の記事は取得できず（404）読んでいない。
+The repository's README, the NanoChat and speedrun READMEs, `val_bpb.csv`, `lib.py`, the settings and model parts of `optimized_from_karpathy.py`, and the batch and shape settings of `optimized_from_vanilla.py` were read. The original post could not be retrieved (404) and was not read.

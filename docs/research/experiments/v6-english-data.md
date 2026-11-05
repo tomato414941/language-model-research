@@ -1,94 +1,94 @@
-# 2番目の束の形を v6 の英語データで学習した
+# Trained the second bundle's form on v6's English data
 
-2026-11-02 に、2番目の束と同じ形を、ClimbMix の代わりに `language-model` の v6 の英語データで1回学習し、6課題の全問で測った。6課題の正解率の平均は .452 から .427 に下がった（同じ問題どうしの差 −.025 ± .004。± は標準誤差。以下同じ）。データだけでこれだけ動く。どの違いが効いたかは分けていない。
+On 2026-11-02, the same form as the second bundle was trained once on `language-model`'s v6 English data instead of ClimbMix, and measured on every question of the 6 tasks. The mean accuracy over the 6 tasks fell from .452 to .427 (difference paired by question −.025 ± .004; ± is the standard error, here and below). The data alone moves it this much. Which difference mattered was not separated.
 
-## 結果を見る前に決めた読み方
+## How to read the results, decided before seeing them
 
-平均の下がり方が .01 以内ならデータの差は小さい。それより大きければデータが効いている。今回は .01 より大きいので、データが効いていると読む。
+If the mean falls by .01 or less, the difference the data makes is small. If it falls by more, the data matters. This time it fell by more than .01, so the reading is that the data matters.
 
-## 条件
+## Conditions
 
-- モデルと学習：2番目の束（second-bundle.md）と同じ。計算に使うパラメータは5,440万、1,281回の更新、1回524,288トークン、種は1337、学習率も同じで未調整。設定は `configs/bundle2_v6.py`。更新の回数は2番目の束のものをそのまま使い、速度は測り直していない。
-- 機械：Vast.ai の日本の H100 SXM 80GB を1枚、$2.41/時。ドライバ 615.71.09。イメージは基準と同じ。
-- データ：v6 のコーパスの `corpus-stable` と `corpus-decay` の `train_en.bin` と `validation_en.bin`。R2 から読み取り専用で読み、チェックサムと文書数が v6 の記録と合うことを確かめた。パッチのコーパスは読んでいない。
-- 変換（`prepare_packed.py`）：文書ごとに v6 のトークナイザで文字に戻し、基準のトークナイザ（ClimbMix で学習した語彙8,192）で作り直して、文書の順を混ぜた。語彙を変えるとモデルの形が変わるので、v6 のトークナイザ（語彙32,768）は使っていない。ファイルの頭の7万文書では、文字に戻して v6 のトークナイザで作り直すと元のトークンと全部一致した。
-- 読み方：学習率が下がり始める641回目の更新で、安定期のデータから減衰期のデータに替えた。v6 の設定も、学習率が下がり始める所で混ぜ方を替える。読むトークンは半分ずつになる。v6 は全体で 80:20 だが、1トークンずつ読む部分だけなら 40:60 で、その間にある。
-- 採点：ハーネス 0.4.13 の6課題の全問（30,470問）、bf16。MMLU の作者の形式は測っていない。比較の相手の点は harness-milestone.md のもの。
+- Model and training: the same as the second bundle (second-bundle.md). 54.4 million parameters used in the computation, 1,281 updates of 524,288 tokens each, seed 1337, and the same learning rates, untuned. The settings are in `configs/bundle2_v6.py`. The second bundle's number of updates was used as is, and the speed was not measured again.
+- Machine: one H100 SXM 80GB in Japan on Vast.ai, $2.41/hour. Driver 615.71.09. The image is the same as the baseline's.
+- Data: `train_en.bin` and `validation_en.bin` of `corpus-stable` and `corpus-decay` from v6's corpus. They were read read-only from R2, and their checksums and document counts were confirmed to match v6's records. The patch corpus was not read.
+- Conversion (`prepare_packed.py`): each document was turned back into text with v6's tokenizer and re-tokenized with the baseline's tokenizer (vocabulary 8,192, trained on ClimbMix), and the order of the documents was shuffled. Changing the vocabulary would change the model's form, so v6's tokenizer (vocabulary 32,768) was not used. For the first 70,000 documents of the files, turning them back into text and re-tokenizing them with v6's tokenizer matched the original tokens exactly.
+- Reading: at the 641st update, where the learning rate starts to fall, the data was switched from the stable-phase data to the decay-phase data. v6's settings also switch the mix where the learning rate starts to fall. The tokens read are split half and half. v6 is 80:20 overall, but 40:60 counting each token only once, and half and half lies between the two.
+- Scoring: every question (30,470) of the 6 tasks in the harness 0.4.13, bf16. MMLU in its authors' format was not measured. The scores of the models compared against are from harness-milestone.md.
 
-## 点
+## Scores
 
-6課題の正解率。差は、このモデルから相手を引いた、同じ問題どうしの差。
+Accuracy on the 6 tasks. Each difference is this model minus the other, paired by question.
 
-| 課題 | 2番目の束 | v6 の英語で学習 | 2番目の束との差 | v5 | v5 との差 |
+| Task | Second bundle | Trained on v6 English | Difference from the second bundle | v5 | Difference from v5 |
 |---|---|---|---|---|---|
-| MMLU（続きの形） | .264 | .259 | −.005 ± .003 | .274 | −.015 ± .003 |
+| MMLU (continuation form) | .264 | .259 | −.005 ± .003 | .274 | −.015 ± .003 |
 | ARC-Easy | .439 | .420 | −.019 ± .009 | .454 | −.034 ± .009 |
 | ARC-Challenge | .247 | .232 | −.015 ± .010 | .263 | −.031 ± .011 |
 | HellaSwag | .308 | .294 | −.014 ± .004 | .347 | −.053 ± .004 |
 | PIQA | .635 | .567 | −.067 ± .010 | .611 | −.044 ± .010 |
 | SciQ | .820 | .788 | −.032 ± .011 | .818 | −.030 ± .012 |
-| 平均 | .452 | .427 | −.025 ± .004 | .461 | −.034 ± .004 |
+| Mean | .452 | .427 | −.025 ± .004 | .461 | −.034 ± .004 |
 
-- 6課題すべてで下がった。誤差よりはっきり大きいのは PIQA、HellaSwag、SciQ。
-- ClimbMix の混ぜ方を選ぶのに使われた3課題（PIQA、ARC-Easy、HellaSwag）の平均は −.033、残りの3課題は −.017。1回の測定で、差があるとまでは言えない。
-- 正解の BPB の平均は 1.342 から 1.460 に上がった（+8.8%）。課題ごとには MMLU +1.8%、ARC-Easy +5.8%、ARC-Challenge +6.3%、HellaSwag +13.2%、PIQA +14.6%、SciQ +14.2%。この比較では BPB と正解率の向きが揃った。
-- `scoring.py` の ClimbMix の検証の BPB は 1.046 から 1.188 に上がった。この検証の文章は2番目の束が学習したデータのもので、このモデルが学習したデータのものではない。
+- All 6 tasks fell. The drops clearly larger than the error are PIQA, HellaSwag and SciQ.
+- The mean of the 3 tasks used to choose ClimbMix's mix (PIQA, ARC-Easy, HellaSwag) was −.033, and that of the other 3 tasks −.017. With one measurement, this does not go as far as showing a difference.
+- The mean correct-answer BPB rose from 1.342 to 1.460 (+8.8%). By task: MMLU +1.8%, ARC-Easy +5.8%, ARC-Challenge +6.3%, HellaSwag +13.2%, PIQA +14.6%, SciQ +14.2%. In this comparison, BPB and accuracy pointed the same way.
+- The validation BPB on ClimbMix from `scoring.py` rose from 1.046 to 1.188. This validation text is from the data the second bundle trained on, not from the data this model trained on.
 
-## 学習が壊れていないことの確かめ
+## Checking that training was not broken
 
-点が下がったので、学習のあとで処理用の機械（CPU、float32）で、2つのモデルを3つの検証の文章で測り直した。文書の頭から始まる96行の BPB。
+Since the scores fell, both models were measured again after training on the processing machine (CPU, float32), on three validation texts. BPB over 96 rows that start at the heads of documents.
 
-| 検証の文章 | 2番目の束 | v6 の英語で学習 |
+| Validation text | Second bundle | Trained on v6 English |
 |---|---|---|
 | ClimbMix | 0.954 | 1.088 |
-| v6 の安定期 | 1.090 | 0.982 |
-| v6 の減衰期 | 1.074 | 0.792 |
+| v6 stable phase | 1.090 | 0.982 |
+| v6 decay phase | 1.074 | 0.792 |
 
-どちらのモデルも、自分の学習データに近い文章のほうをよく読む。v6 の英語で学習したモデルは、v6 の文章を確かに学んでいる。
+Each model does better on the text closer to its own training data. The model trained on v6 English has indeed learned v6's text.
 
-## ClimbMix との違い
+## Differences from ClimbMix
 
-下がった原因の候補。どれも分けて測っていない。
+Candidate causes of the drop. None was measured separately.
 
-| | ClimbMix | v6 の安定期 | v6 の減衰期 |
+| | ClimbMix | v6 stable phase | v6 decay phase |
 |---|---|---|---|
-| 文書 | 268万 | 75万 | 69万 |
-| トークン（基準のトークナイザ） | 20億 | 6.6億 | 10.0億 |
-| 文書の長さの中央値 | 617 | 463 | 940 |
-| 読んだ行 | 655,872 | 328,192 | 327,680 |
-| 同じ文書を読み直す割合（計算） | 11% | 19% | 20% |
-| 1トークンのバイト数（4,000行の標本） | 4.02 | 3.43 | 3.25 |
+| Documents | 2.68 million | 750,000 | 690,000 |
+| Tokens (baseline tokenizer) | 2 billion | 660 million | 1.00 billion |
+| Median document length | 617 | 463 | 940 |
+| Rows read | 655,872 | 328,192 | 327,680 |
+| Share of rereading the same document (calculated) | 11% | 19% | 20% |
+| Bytes per token (sample of 4,000 rows) | 4.02 | 3.43 | 3.25 |
 
-- 評価の問題：v6 は評価の問題の文を含む文書を除いている。英語で除いたのは安定期1,271文書（残した文書の0.17%）、減衰期2,138文書（同0.31%）。ClimbMix は除いておらず、入っている数は数えていない。
-- 混ぜ方：v6 の英語は安定期でもコードが2割、数学が16%ある。ClimbMix の混ぜ方は6課題のうち3課題の検証用の問題の成績で選ばれている。
-- 読む文字の量：基準のトークナイザは ClimbMix で学習したもので、v6 の英語では1トークンあたりのバイト数が少ない。同じトークン数で読む文字が約17%少ない。データの中身とは別の違いで、点をどちらにどれだけ動かしたかは測っていない。
-- 文書の頭から読むこと：文書を同じ確率で選ぶので、短い文書の多い出典が多く読まれる。v6 の安定期では行の始まりの58%が FinePhrase で、混ぜ方（トークンで30%）より多い。減衰期では general-llmjp が18%（混ぜ方は8%）。v6 自身はこの読み方をしない。
-- 読み直し：行を引く文書の数が少ないので、同じ文書を読み直す割合が高い。
+- Evaluation questions: v6 removes documents that contain the text of evaluation questions. In English, it removed 1,271 documents from the stable phase (0.17% of the documents kept) and 2,138 from the decay phase (0.31% of those kept). ClimbMix does not remove them, and how many it contains has not been counted.
+- Mix: v6's English is 20% code and 16% math even in the stable phase. ClimbMix's mix was chosen by performance on the validation questions of 3 of the 6 tasks.
+- Amount of text read: the baseline tokenizer was trained on ClimbMix, so on v6's English it gives fewer bytes per token. For the same number of tokens, about 17% less text is read. This difference is separate from the data's content, and which way and how far it moved the scores was not measured.
+- Reading from the heads of documents: documents are chosen with equal probability, so sources with many short documents are read more. In v6's stable phase, 58% of row starts are FinePhrase, more than its share in the mix (30% by tokens). In the decay phase, general-llmjp is 18% (8% in the mix). v6 itself does not read this way.
+- Rereading: rows are drawn from fewer documents, so the share of rereading the same document is higher.
 
-## 時間と費用
+## Time and cost
 
-| 段階 | 実測 |
+| Stage | Measured |
 |---|---|
-| データの変換（処理用の機械、無料） | 25分 |
-| 借りてから使えるまで | 59秒 |
-| コードとデータの転送（3.7GB） | 5秒、164秒 |
-| パッケージの追加 | 48秒 |
-| 学習 | 823秒 |
-| `scoring.py` の採点 | 18秒 |
-| 6課題の全問 | 144秒 |
-| 結果の取得 | 13秒 |
+| Converting the data (the processing machine, free) | 25 min |
+| From renting to ready to use | 59 s |
+| Transferring the code and the data (3.7GB) | 5 s, 164 s |
+| Adding packages | 48 s |
+| Training | 823 s |
+| Scoring with `scoring.py` | 18 s |
+| Every question of the 6 tasks | 144 s |
+| Fetching the results | 13 s |
 
-借りていた約23分で約 $0.93（時間と料金からの計算）。うち学習は約 $0.55。1回の更新は0.604秒で、2番目の束の0.615秒と変わらない。学習の実時間は2番目の束の796秒より長いが、最初の更新が38秒かかったため。2番目の束は、速度の計測のあとだったので6.6秒で済んでいる。
+The rental of about 23 minutes cost about $0.93 (calculated from the time and the rate), of which training was about $0.55. One update took 0.604 s, no different from the second bundle's 0.615 s. The training's wall time was longer than the second bundle's 796 s, but that is because the first update took 38 s. The second bundle came after the speed measurement, so for it this took only 6.6 s.
 
-## 分かったこと
+## What was learned
 
-- 同じ形でも、データを替えるだけで正解率の平均は .025 動いた。最初の束から2番目の束への +.003 ± .003 より大きく、基準から最初の束への +.060 より小さい。
-- ClimbMix で学習した .452 は、評価の問題を除いたデータで学習した v5 と同じ条件の点ではない。v5 との差は、ClimbMix で −.009、v6 の英語で −.034 だった。ただし v5 と v6 のデータも同じではない。
-- この比較から、v6 のデータが悪いとは言えない。読む文字の量と文書の頭から読むことは v6 自身の学習とは違う条件で、これらが点をどちらに動かしたかは測っていない。悪いとも悪くないとも、この1回では分からない。
+- Even with the same form, changing only the data moved the mean accuracy by .025. This is larger than the +.003 ± .003 from the first bundle to the second, and smaller than the +.060 from the baseline to the first bundle.
+- The .452 from training on ClimbMix is not a score under the same conditions as v5, which was trained on data with the evaluation questions removed. The difference from v5 was −.009 with ClimbMix and −.034 with v6's English. But v5's and v6's data are not the same either.
+- This comparison does not show that v6's data is bad. The amount of text read and reading from the heads of documents are conditions that differ from v6's own training, and which way they moved the scores was not measured. From this one run, it cannot be told whether the data is bad or not.
 
-## 確かめていないこと
+## Not checked
 
-- 上の候補のうち、どれがどれだけ効いたか。評価の問題については、あとで数えて、完全に一致するものを除いても差が変わらないことを確かめた（count-table-check.md）。
-- v6 の英語で学習したトークナイザを使う場合と、文書の頭から読まない場合の点。
-- 種によるばらつき。基準の2つの種の差は、平均で +.002 ± .003。
-- 学習率が v6 のデータに合っているか。
+- Which of the candidates above mattered, and how much. For the evaluation questions, they were counted later, and removing exact matches was confirmed not to change the difference (count-table-check.md).
+- The scores when using a tokenizer trained on v6's English, and when not reading from the heads of documents.
+- Variation from the seed. The difference between the baseline's two seeds is +.002 ± .003 on the mean.
+- Whether the learning rates suit v6's data.

@@ -1,11 +1,11 @@
 # Tokenizer-Agnostic Engram Module
 
-Lim、Chieu（arXiv 2607.29065、2026-07）。Engram の表をトークナイザに依存しない形にする研究で、独立の追試にもなっている。各1回の学習。
+Lim and Chieu (arXiv 2607.29065, 2026-07). A study that makes the Engram table independent of the tokenizer, which also serves as an independent replication. One training run each.
 
-- SmolLM2 1.7B を320億トークン。基準のベンチマーク平均0.556、wikitext の BPB 0.861。
-- 8億の Engram（元のハッシュ）を足すと、平均0.605、BPB 0.919。表を切って評価すると平均0.587、BPB 1.034。
-- 多項式ハッシュの形でも、平均0.612、BPB 0.925。
-- Qwen3.5 7億を1,000億トークン。基準の平均0.560、BPB 0.821。別のモデルで学習した表を凍結して使うと、平均0.584、BPB 0.811。
-- 3トークンまでの表（N=3）や7トークンまでの表に比べ、1トークンだけの表は効かない。
+- SmolLM2 1.7B on 32 billion tokens. The baseline has a benchmark mean of 0.556 and a wikitext BPB of 0.861.
+- Adding an 800 million Engram (with the original hash) gives a mean of 0.605 and BPB 0.919. Evaluating with the table cut off gives a mean of 0.587 and BPB 1.034.
+- The polynomial-hash form also gives a mean of 0.612 and BPB 0.925.
+- Qwen3.5 700 million on 100 billion tokens. The baseline has a mean of 0.560 and BPB 0.821. Using a frozen table trained with another model gives a mean of 0.584 and BPB 0.811.
+- Compared with tables of up to 3 tokens (N=3) or up to 7 tokens, a table of single tokens alone does not help.
 
-読んだのは本文。参考文献の先は読んでいない。
+Read: the body. The cited works were not read.

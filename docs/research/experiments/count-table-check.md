@@ -1,12 +1,12 @@
-# COUNT の表の大きさと ClimbMix の評価の問題
+# The size of COUNT's table, and evaluation questions in ClimbMix
 
-2026-11-03 に、COUNT を入れられるかを確かめるために、処理用の機械（CPU、無料）で ClimbMix の学習データ20億トークンを数えた。評価の問題は文書の0.114%に見つかり、それを除いても v6 の英語との差は変わらなかった。表は上位8候補、下限4回で約5.4GB になる。学習が読む文章で表を作ると、表はその文章を実際より良く当てる。3番目の束の表は FineWeb の20億トークンで作り、5.3GB になった。ClimbMix の検証の文章に当たる割合は、ClimbMix で作った表より低い。
+On 2026-11-03, to check whether COUNT could be added, we counted 2 billion tokens of ClimbMix's training data on the processing machine (CPU, free). Evaluation questions were found in 0.114% of the documents, and removing them did not change the gap with v6's English data. With the top 8 candidates and a minimum of 4 occurrences, the table comes to about 5.4GB. A table built from the text that training reads predicts that text better than it really can. The third bundle's table was built from 2 billion tokens of FineWeb and came to 5.3GB. Its hit rate on ClimbMix's validation text is lower than that of the table built from ClimbMix.
 
-## 評価の問題
+## Evaluation questions
 
-`language-model` の v6 と同じ規則で探した。文章を NFKC、小文字にして記号を除き、真ん中の64文字（短ければ全部）が文書にあれば見つかったとする。24文字未満は調べられない。MMLU の最初の説明文は除いた。全2,683,950文書を調べた。
+We searched with the same rules as v6 in `language-model`. Text is NFKC-normalized, lowercased and stripped of symbols, and a question counts as found when its middle 64 characters (all of it if shorter) appear in a document. Questions under 24 characters cannot be checked. MMLU's opening instruction was left out. All 2,683,950 documents were checked.
 
-| 課題 | 問題 | 調べられた問題 | 見つかった問題 | うち文書に正解もある |
+| Task | Questions | Questions checkable | Questions found | Of these, answer also in the document |
 |---|---|---|---|---|
 | MMLU | 14,042 | 13,685 | 284 | 129 |
 | ARC-Easy | 2,376 | 2,357 | 54 | 34 |
@@ -14,30 +14,30 @@
 | HellaSwag | 10,042 | 10,042 | 53 | 22 |
 | PIQA | 1,838 | 1,166 | 23 | 2 |
 | SciQ | 1,000 | 1,000 | 43 | 38 |
-| 合計 | 30,470 | 29,408 | 478 | 238 |
+| Total | 30,470 | 29,408 | 478 | 238 |
 
-- 問題を含む文書は3,071（0.114%）。v6 が英語で除いた割合（0.17〜0.31%）と同じくらいだが、v6 は調べる課題がもっと多い。
-- 同じ問題が多くの文書に入っていることがある。1文書だけの問題が326、6文書以上が72、最多は813文書。
-- 「正解もある」は、正解の文字列が文書のどこかにあること。「4」のような短い正解は偶然でも当たる。8文字以上の正解に限ると186問。
-- 完全一致だけを探すので、言い換えは見つからない。
+- 3,071 documents (0.114%) contain questions. This is about the same as the share v6 removed from its English data (0.17–0.31%), but v6 checks more tasks.
+- The same question can appear in many documents. 326 questions appear in only one document, 72 in six or more, and the most in 813 documents.
+- "Answer also in the document" means the answer string appears somewhere in the document. Short answers like "4" can match by chance. Restricted to answers of 8 characters or more, there are 186 questions.
+- Only exact matches are searched for, so paraphrases are not found.
 
-## 点への影響
+## Effect on the scores
 
-v6-english-data.md の2つのモデルを、同じ問題どうしで比べ直した。6課題の平均で、課題の重みは同じ。
+The two models of v6-english-data.md were compared again on the same questions. The mean over 6 tasks, with equal task weights.
 
-| 問題 | ClimbMix で学習 | v6 の英語で学習 | 差 |
+| Questions | Trained on ClimbMix | Trained on v6's English data | Difference |
 |---|---|---|---|
-| 全部 | .4521 | .4269 | +.0252 ± .0035 |
-| 見つかった問題を除く | .4521 | .4272 | +.0249 ± .0035 |
-| 見つかった問題だけ | .4772 | .4453 | +.0319 ± .0266 |
+| All | .4521 | .4269 | +.0252 ± .0035 |
+| Excluding the questions found | .4521 | .4272 | +.0249 ± .0035 |
+| Only the questions found | .4772 | .4453 | +.0319 ± .0266 |
 
-見つかった問題を除いても差は変わらない。見つかった問題だけの差も誤差の範囲で同じくらいなので、ClimbMix で学習すると見つかった問題で特に点が高い、という様子はない。データを替えて点が下がった原因は、完全に一致する評価の問題ではない。
+Excluding the questions found does not change the difference. The difference on the found questions alone is also about the same within the error, so there is no sign that training on ClimbMix gives particularly high scores on the found questions. The cause of the score drop after switching the data is not exactly matching evaluation questions.
 
-## 表の大きさ
+## The size of the table
 
-履歴のハッシュの16分の1だけを残して正確に数え、16倍した。履歴は1〜5トークンで、BOS は履歴の先頭にだけ置ける。大きさは行数 × (2バイト × 履歴の長さ + 3バイト × K) で、固定の幅の行にした場合の計算。短い履歴から候補を埋める処理は入れていない。
+We kept only 1/16 of the history hashes, counted them exactly and multiplied by 16. Histories are 1–5 tokens, and BOS can only be at the start of a history. The size is rows × (2 bytes × history length + 3 bytes × K), calculated for fixed-width rows. Filling candidates from shorter histories is not included.
 
-| 履歴の回数の下限 | K=8 | K=4 |
+| Minimum occurrences of a history | K=8 | K=4 |
 |---|---|---|
 | 2 | 15.57GB | 9.78GB |
 | 3 | 8.00GB | 5.00GB |
@@ -48,114 +48,114 @@ v6-english-data.md の2つのモデルを、同じ問題どうしで比べ直し
 | 32 | 0.51GB | 0.31GB |
 | 64 | 0.25GB | 0.15GB |
 
-下限4回のときの当たり方。検証の文章は `val.bin` の最初の1,600万トークン、正解の文は6課題の正解のトークンで、課題ごとの範囲。
+Hit rates at a minimum of 4. The validation text is the first 16 million tokens of `val.bin`; the answer text is the tokens of the 6 tasks' correct answers, given as the range over tasks.
 
-| 履歴の長さ | 行 | 検証の文章で見つかる | 次のトークンが上位8に入る | 正解の文で見つかる |
+| History length | Rows | Found in the validation text | Next token in the top 8 | Found in the answer text |
 |---|---|---|---|---|
-| 1 | 約8,000 | 100% | 41.6% | 100% |
-| 2 | 851万 | 99.0% | 51.0% | 99〜100% |
-| 3 | 4,800万 | 83.6% | 45.6% | 65〜85% |
-| 4 | 6,515万 | 51.8% | 28.7% | 40〜52% |
-| 5 | 4,763万 | 25.5% | 14.6% | 7〜24% |
+| 1 | About 8,000 | 100% | 41.6% | 100% |
+| 2 | 8.51 million | 99.0% | 51.0% | 99–100% |
+| 3 | 48 million | 83.6% | 45.6% | 65–85% |
+| 4 | 65.15 million | 51.8% | 28.7% | 40–52% |
+| 5 | 47.63 million | 25.5% | 14.6% | 7–24% |
 
-下限を変えた見つかる割合（検証の文章）。
+The share found at different minimums (validation text).
 
-| 下限 | 履歴3 | 履歴4 | 履歴5 |
+| Minimum | History 3 | History 4 | History 5 |
 |---|---|---|---|
 | 2 | 87.9% | 59.4% | 32.2% |
 | 4 | 83.6% | 51.8% | 25.5% |
 | 8 | 78.7% | 44.5% | 20.0% |
 | 16 | 72.9% | 37.6% | 15.5% |
 
-## 表の文章と学習の文章の重なり
+## Overlap between the table's text and the training text
 
-学習が読む文章を表に数えると、表はその文章の続きを知っている。どれだけ違うかを、学習データの先頭 N トークンを数えた表（ハッシュの16分の1）で測った。引いたのは、数えた文章の最初の1,600万トークン、数えていない続きの1,600万トークン、`val.bin` の最初の1,600万トークン。
+When the text that training reads is counted into the table, the table knows that text's continuations. How large the difference is was measured with tables that counted the first N tokens of the training data (1/16 of the hashes). The text looked up was the first 16 million tokens of the counted text, the following 16 million tokens that were not counted, and the first 16 million tokens of `val.bin`.
 
-20億トークン、下限4回の表で、行が見つかったときに次のトークンが上位8に入る割合。
+With the table of 2 billion tokens and a minimum of 4, the share where the next token is in the top 8 when a row is found.
 
-| 履歴の長さ | 数えた文章 | 検証の文章 |
+| History length | Counted text | Validation text |
 |---|---|---|
 | 3 | 65.9% | 54.5% |
 | 4 | 76.2% | 55.5% |
 | 5 | 83.4% | 57.3% |
 
-- 数えた文章では、履歴が長いほど表が頼れるように見える。検証の文章では、長さでほとんど変わらない。
-- 全位置に対する割合では、履歴5で数えた文章 24.2%、検証の文章 14.6%。
-- 下限を上げると差は縮む。履歴5で、下限16回は 71.5% と 60.9%、下限64回は 65.8% と 61.9%。
-- 2.5億、5億、10億トークンの表で、数えていない続きの文章と検証の文章の差は、履歴3〜5とどの下限でも0.3ポイント以内だった。学習データの数えていない部分は、当たり方では検証の文章と同じに扱える。
-- 数えた文章は連続した1,600万トークンで、学習が読む文書の頭からの行そのものではない。
+- On the counted text, the table looks more reliable the longer the history. On the validation text, it barely changes with length.
+- As a share of all positions, at history 5: counted text 24.2%, validation text 14.6%.
+- Raising the minimum narrows the gap. At history 5, a minimum of 16 gives 71.5% and 60.9%, and a minimum of 64 gives 65.8% and 61.9%.
+- With tables of 250 million, 500 million and 1 billion tokens, the difference between the uncounted continuation and the validation text was within 0.3 points for histories 3–5 at every minimum. In terms of hit rates, the uncounted part of the training data can be treated the same as the validation text.
+- The counted text is 16 million contiguous tokens, not the very rows starting at document heads that training reads.
 
-## 数える文章の量
+## How much text to count
 
-検証の文章で、次のトークンが上位8に入る割合（全位置に対して）。大きさがほぼ同じ表を選んだ。
+On the validation text, the share where the next token is in the top 8 (over all positions). Tables of about the same size were chosen.
 
-| 数えた量 | 下限 | 大きさ（K=8） | 履歴3 | 履歴4 | 履歴5 |
+| Amount counted | Minimum | Size (K=8) | History 3 | History 4 | History 5 |
 |---|---|---|---|---|---|
-| 2.5億 | 2 | 2.19GB | 35.9% | 18.9% | 8.3% |
-| 5億 | 3 | 2.11GB | 38.9% | 21.3% | 9.6% |
-| 10億 | 4 | 2.75GB | 42.0% | 24.3% | 11.4% |
-| 10億 | 6 | 1.64GB | 40.6% | 22.4% | 10.1% |
-| 20億 | 8 | 2.32GB | 43.4% | 25.3% | 11.9% |
+| 250 million | 2 | 2.19GB | 35.9% | 18.9% | 8.3% |
+| 500 million | 3 | 2.11GB | 38.9% | 21.3% | 9.6% |
+| 1 billion | 4 | 2.75GB | 42.0% | 24.3% | 11.4% |
+| 1 billion | 6 | 1.64GB | 40.6% | 22.4% | 10.1% |
+| 2 billion | 8 | 2.32GB | 43.4% | 25.3% | 11.9% |
 
-- 同じ大きさなら、文章を2倍にするごとに、履歴3で2〜3ポイント、履歴4で約2ポイント、履歴5で約1ポイント上がる。伸びは少しずつ小さくなる。
-- 下限を文章に比例して上げると（2.5億で2回から20億で16回）、表は 2.19GB から 1.08GB に小さくなり、履歴3は 35.9% から 40.4% に上がる。
-- 見ているのは上位8に入るかどうかだけで、点数の精度は測っていない。
-- 検証の1シャードは6,337万トークンなので、ClimbMix の全体は計算で約4,100億トークン。学習データは先頭の約32シャードで、全体の約0.5%。
+- At the same size, each doubling of the text raises it by 2–3 points at history 3, about 2 points at history 4 and about 1 point at history 5. The gains shrink gradually.
+- Raising the minimum in proportion to the text (from 2 at 250 million to 16 at 2 billion) shrinks the table from 2.19GB to 1.08GB and raises history 3 from 35.9% to 40.4%.
+- Only whether the next token is in the top 8 is looked at; the precision of the scores was not measured.
+- One validation shard is 63.37 million tokens, so ClimbMix as a whole comes to about 410 billion tokens by calculation. The training data is about the first 32 shards, about 0.5% of the whole.
 
-## ClimbMix 以外の文章で作った表
+## Tables built from text other than ClimbMix
 
-FineWeb（10BT の標本の最初のファイル、リビジョン `9bb295d`）の2.5億トークンと、ClimbMix の学習データの先頭2.5億トークンで、同じように表を作って比べた。基準のトークナイザで、FineWeb は1トークン3.70バイトで、ClimbMix の4.02より少ない。
+Tables were built the same way from 250 million tokens of FineWeb (the first file of the 10BT sample, revision `9bb295d`) and from the first 250 million tokens of ClimbMix's training data, and compared. With the baseline's tokenizer, FineWeb has 3.70 bytes per token, fewer than ClimbMix's 4.02.
 
-下限2回（約2.1〜2.2GB）で、次のトークンが上位8に入る割合（全位置に対して）。左から直前3、4、5トークン。
+At a minimum of 2 (about 2.1–2.2GB), the share where the next token is in the top 8 (over all positions). From the left, the preceding 3, 4 and 5 tokens.
 
-| 引いた文章 | ClimbMix の表 | FineWeb の表 |
+| Text looked up | ClimbMix's table | FineWeb's table |
 |---|---|---|
-| ClimbMix の検証 | 35.9 / 18.9 / 8.3% | 29.6 / 13.3 / 4.9% |
-| v6 の英語、安定期の検証 | 31.0 / 13.9 / 5.9% | 22.9 / 9.8 / 3.8% |
-| v6 の英語、減衰期の検証 | 31.7 / 13.6 / 6.4% | 20.0 / 8.7 / 3.2% |
-| FineWeb の続き | 29.5 / 13.3 / 4.9% | 35.0 / 18.0 / 7.9% |
+| ClimbMix's validation | 35.9 / 18.9 / 8.3% | 29.6 / 13.3 / 4.9% |
+| v6's English data, stable-phase validation | 31.0 / 13.9 / 5.9% | 22.9 / 9.8 / 3.8% |
+| v6's English data, decay-phase validation | 31.7 / 13.6 / 6.4% | 20.0 / 8.7 / 3.2% |
+| FineWeb's continuation | 29.5 / 13.3 / 4.9% | 35.0 / 18.0 / 7.9% |
 
-- どちらの表も、自分と同じデータの文章で一番当たる。相手の文章での当たり方はほぼ同じ（29.6% と 29.5%）。
-- どちらでもない v6 の英語では、ClimbMix の表のほうが当たる。理由は分けていない。
-- 引いたのは、ClimbMix と FineWeb は1,600万トークン、v6 は検証の全部（約590万と約240万）。下限を1、4、8回にしても並びは同じ。
-- FineWeb の2.66億トークンへの変換は161秒。20億トークンなら計算で約20分で、10BT の標本の約3ファイル（1ファイル約2.1GB）。
+- Each table hits best on text from its own data. Their hit rates on each other's text are about the same (29.6% and 29.5%).
+- On v6's English data, which is neither, ClimbMix's table hits more. The reasons were not separated.
+- The text looked up was 16 million tokens for ClimbMix and FineWeb, and all of the validation data for v6 (about 5.9 million and about 2.4 million). The order is the same with minimums of 1, 4 and 8.
+- Converting FineWeb into 266 million tokens took 161 seconds. 2 billion tokens would take about 20 minutes by calculation, about 3 files of the 10BT sample (about 2.1GB per file).
 
-## FineWeb の20億トークンで作った表
+## The table built from 2 billion tokens of FineWeb
 
-3番目の束に使う予定だった表。2026-11-04 にトークナイザを FineWeb で学習し直したので、表も作り直した（training-data.md）。下の数字は ClimbMix で学習したトークナイザでのもの。`count_data.py` と `count_table.py` で、処理用の機械で作った（時間は下の「時間と費用」）。
+The table that was to be used in the third bundle. On 2026-11-04 the tokenizer was retrained on FineWeb, so the table was rebuilt too (training-data.md). The numbers below are with the tokenizer trained on ClimbMix. It was built with `count_data.py` and `count_table.py` on the processing machine (for the time, see "Time and cost" below).
 
-- **文章：** 10BT の標本（リビジョン `9bb295d`）の先頭から2,410,588文書を読み、評価の問題を含む1,123文書（0.047%）を除いた20億トークン。1トークン3.70バイト。問題を含む文書の割合は ClimbMix（0.114%）の半分以下。
-- **表：** 履歴の回数の下限4回、上位8候補。5.29GB、1億6,517万行。
+- **Text:** 2 billion tokens, from reading 2,410,588 documents from the start of the 10BT sample (revision `9bb295d`) and removing the 1,123 documents (0.047%) that contain evaluation questions. 3.70 bytes per token. The share of documents containing questions is less than half of ClimbMix's (0.114%).
+- **Table:** a minimum of 4 occurrences per history, the top 8 candidates. 5.29GB, 165.17 million rows.
 
-`val.bin` の最初の約1,600万トークンを長さ1,024の行にして、モデルと同じ引き方で引いた。上の ClimbMix の表と同じ文章。
+The first roughly 16 million tokens of `val.bin` were cut into rows of length 1,024 and looked up the same way the model looks them up. The same text as for the ClimbMix table above.
 
-| 履歴の長さ | 行 | 見つかる | 次のトークンが候補に入る | 見つかったときに入る |
+| History length | Rows | Found | Next token among the candidates | Among them when found |
 |---|---|---|---|---|
 | 0 | 1 | 100% | 16.0% | 16.0% |
 | 1 | 8,126 | 99.0% | 35.1% | 35.5% |
-| 2 | 842万 | 96.4% | 46.3% | 48.1% |
-| 3 | 4,762万 | 77.2% | 38.4% | 49.8% |
-| 4 | 6,400万 | 42.7% | 21.0% | 49.2% |
-| 5 | 4,512万 | 18.0% | 9.0% | 49.9% |
+| 2 | 8.42 million | 96.4% | 46.3% | 48.1% |
+| 3 | 47.62 million | 77.2% | 38.4% | 49.8% |
+| 4 | 64 million | 42.7% | 21.0% | 49.2% |
+| 5 | 45.12 million | 18.0% | 9.0% | 49.9% |
 
-- どれかの長さの候補に次のトークンが入る位置は56.9%。
-- ClimbMix の20億トークンの表（下限4回）より、履歴3〜5で、見つかる割合が6〜9ポイント、候補に入る割合が6〜8ポイント、見つかったときに入る割合が5〜7ポイント低い。候補に入る割合は履歴3で16%、履歴5で38%低く、2.5億トークンで比べたとき（18〜41%）と同じくらい。
-- **段落の区切り：** FineWeb の文章は段落を改行1つで区切り、改行2つを含むトークンが1つもない。ClimbMix の検証の文章では、トークンの0.95%が改行2つを含む。それを含む履歴は表になく、次のトークンの候補にもならない。そうした履歴の位置は、履歴3で2.8%、履歴5で4.7%で、見つかる割合の差の一部はこれによる。FineWeb の文章では段落と行の区切りを見分けられないので、置き換えでは合わせられない。
-- 読み込みに11秒、最大メモリ5.6GB。CPU で6万5,536位置を引くのに0.07秒。
+- The next token is among the candidates of some length at 56.9% of positions.
+- Compared with ClimbMix's 2-billion-token table (minimum 4), at histories 3–5 the share found is 6–9 points lower, the share among the candidates 6–8 points lower, and the share among them when found 5–7 points lower. The share among the candidates is 16% lower at history 3 and 38% lower at history 5, about the same as in the comparison at 250 million tokens (18–41%).
+- **Paragraph breaks:** FineWeb's text separates paragraphs with a single newline, and no token contains two newlines. In ClimbMix's validation text, 0.95% of tokens contain two newlines. Histories containing them are not in the table, and they are never candidates for the next token either. Positions with such histories are 2.8% at history 3 and 4.7% at history 5, and part of the gap in the share found comes from this. FineWeb's text does not distinguish paragraph breaks from line breaks, so substitution cannot make them match.
+- Loading took 11 seconds, with peak memory of 5.6GB. Looking up 65,536 positions on the CPU took 0.07 seconds.
 
-## 時間と費用
+## Time and cost
 
-- 評価の問題を探すのに4プロセスで約14分。表の16分の1を数えるのに1スレッドで約14分。処理用の機械なので追加の費用はない。
-- 全部の表は16区画に分けて数える。20億トークンの1区画を測ると、次数6で174秒（うちハッシュの計算140秒）、次数3で118秒、最大メモリは約11GB（トークンのファイルの読み込みを含む）。メモリの都合で1つずつしか動かせないので、16区画で約3時間と計算したが、実際は約1.6時間だった（下）。時間の大半は、どの区画でも全部の位置のハッシュを計算している分なので、区画の分け方を変えればもっと縮む見込み。
-- FineWeb の20億トークンで作ると、文章の準備（ダウンロード、評価の問題を探す、トークンにする）が4プロセスで約34分、数えるのが約1.6時間だった。ディスクは、トークン4.0GB、表5.3GB。
-- 重なりの確認は4つを同時に動かして約13分。
-- 5.3GB の転送は、前回の速さ（3.7GB を164秒）で約4分、約 $0.16。学習のたびにかかる。
+- Searching for evaluation questions took about 14 minutes with 4 processes. Counting 1/16 of the table took about 14 minutes on 1 thread. It ran on the processing machine, so there was no extra cost.
+- The full table is counted in 16 partitions. One partition of 2 billion tokens measured 174 seconds at order 6 (140 seconds of it computing hashes), 118 seconds at order 3, and peak memory of about 11GB (including loading the token file). Memory allows only one at a time, so 16 partitions were estimated at about 3 hours, but it actually took about 1.6 hours (below). Most of the time goes to computing the hashes of all positions in every partition, so changing how the partitions are split would likely shorten it further.
+- Building from 2 billion tokens of FineWeb, preparing the text (downloading, searching for evaluation questions, tokenizing) took about 34 minutes with 4 processes, and counting about 1.6 hours. On disk, the tokens take 4.0GB and the table 5.3GB.
+- The overlap check took about 13 minutes, running 4 at once.
+- Transferring 5.3GB at the last speed (3.7GB in 164 seconds) takes about 4 minutes, about $0.16. It is paid on every training run.
 
-## 確かめていないこと
+## Not verified
 
-- 20億トークンの表で、COUNT の効果がどれだけ出るか。論文の表は約6兆トークンから作っている。
-- 表と学習の文章の重なりが、点をどれだけ動かすか。測ったのは表の当たり方の差で、モデルの点ではない。
-- FineWeb で作った表と ClimbMix で作った表で、点がどれだけ違うか。
-- 20億トークンより多く数えた表の当たり方。上の表は20億までの実測。
-- 言い換えられた評価の問題の数。
-- 400B のうち読んでいない部分に入っている評価の問題の数。
+- How much effect COUNT has with a 2-billion-token table. The paper's table is built from about 6 trillion tokens.
+- How much the overlap between the table and the training text moves the scores. What was measured is the difference in the table's hit rates, not the model's scores.
+- How much the scores differ between the table built from FineWeb and the one built from ClimbMix.
+- The hit rates of tables counted from more than 2 billion tokens. The tables above are measured up to 2 billion.
+- The number of paraphrased evaluation questions.
+- The number of evaluation questions in the unread part of the 400B.

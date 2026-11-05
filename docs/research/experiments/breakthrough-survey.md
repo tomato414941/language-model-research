@@ -1,33 +1,33 @@
-# ブレイクスルーの調査
+# Survey of breakthroughs
 
-2026-10-31〜11-01 に、機械学習と言語モデルの一般的なブレイクスルーを、賞、総説、採用をもとに選んで読んだ。候補の順番を決める材料にした。読んだ深さはまちまちで、要旨と主な結果が中心。下の数字は読んだときのメモから写した。
+From 2026-10-31 to 11-01, we read general breakthroughs in machine learning and language models, picked by awards, reviews and adoption. They served as material for ordering the candidates. The depth of reading varied, mostly abstracts and main results. The numbers below were copied from the notes taken while reading.
 
-| 年 | 研究 | 分かったこと |
+| Year | Work | Findings |
 |---|---|---|
-| 2017 | Attention（arXiv 1706.03762） | 英独の BLEU が基準で27.3、当時の最良の単一モデルは26.03で計算量は約6倍 |
-| 2020 | Scaling Laws（2001.08361） | loss は計算量、パラメータ、データのべき乗に従い、形の影響は小さい |
-| 2022 | Chinchilla（2203.15556） | パラメータとトークンは同じ割合で増やす。約20トークン/パラメータ。70B が Gopher 280B に同じ計算量で勝つ。根拠は大規模の1組で、最小の予算は 6e18（今の基準は 2.7e17） |
-| 2022 | InstructGPT（2203.02155） | 1.3B が 175B の GPT-3 より好まれる |
-| 2022 | Chain-of-Thought（2201.11903） | PaLM の GSM8K が18%から57% |
-| 2023 | LLaMA（2302.13971） | 13B が10倍大きい GPT-3 に勝つ。RMSNorm、SwiGLU、RoPE を使うが、個別の効果の数字はない |
-| 2023 | QLoRA（2305.14314） | 65B を48GB の GPU 1枚で fine-tuning |
-| 2023 | phi-1（2306.11644） | 1.3B、8 A100で4日、HumanEval 50.6%。データの質を重視 |
-| 2023 | Mamba（2312.00752） | 3B が同じ大きさの Transformer に勝ち、2倍の大きさと並ぶ |
-| 2024 | FineWeb-Edu（2406.17557） | 同じ水準に要るトークンが約10分の1 |
-| 2024 | DeepSeek-V2、V3（2405.04434、2412.19437） | MoE で費用を減らす。V3 は 671B（動く37B）、14.8兆トークン、266.4万 H800 時間 |
-| 2025 | DeepSeek-R1（2501.12948） | 強化学習で AIME が15.6%から77.9%。費用は V3 の事前学習の約5.5% |
-| 2025 | Gated Attention（NeurIPS 2025 Best） | 大規模で効くが、小さい規模では弱い |
-| 2025 | Superposition（NeurIPS 2025 準優勝） | スケーリング則の説明 |
-| 2025 | On-policy distillation | Qwen3-8B の AIME24 が、1.8k GPU 時間で74.4%（強化学習は17.9k で67.6%） |
-| 2026 | mHC（2512.24880） | 27B で loss −0.021、MMLU 59.0から63.4。DeepSeek-V4 が採用 |
-| 2026 | Attention Residuals（2603.15031） | 1.25倍分。1.94億で 1.931 から 1.899（Marin の小さい規模の結果では1.06〜1.12倍） |
-| 2026 | Olmo Hybrid（2604.03444） | olmo-hybrid.md |
-| 2026 | The Flexibility Trap（ICML 2026 Outstanding） | 拡散言語モデルは柔軟さと品質が両立しにくい。LLaDA 2.0 100B は Qwen3 30B 程度 |
-| 2026 | ハーネス（GLM-5.1 の報告） | 重みを変えずに52.5%から65.5%。ハーネスの差がモデルの差の7.8倍 |
+| 2017 | Attention (arXiv 1706.03762) | English-German BLEU of 27.3 with the base model; the best single model at the time had 26.03 with about 6× the compute |
+| 2020 | Scaling Laws (2001.08361) | Loss follows power laws in compute, parameters and data; the shape has little effect |
+| 2022 | Chinchilla (2203.15556) | Scale parameters and tokens in the same proportion. About 20 tokens/parameter. 70B beats Gopher 280B at the same compute. The evidence is one set at large scale, whose smallest budget is 6e18 (the current baseline is 2.7e17) |
+| 2022 | InstructGPT (2203.02155) | 1.3B is preferred over the 175B GPT-3 |
+| 2022 | Chain-of-Thought (2201.11903) | PaLM's GSM8K goes from 18% to 57% |
+| 2023 | LLaMA (2302.13971) | 13B beats GPT-3, which is 10× larger. Uses RMSNorm, SwiGLU and RoPE, but gives no numbers for their individual effects |
+| 2023 | QLoRA (2305.14314) | Fine-tuning 65B on one 48GB GPU |
+| 2023 | phi-1 (2306.11644) | 1.3B, 4 days on 8 A100s, HumanEval 50.6%. Emphasizes data quality |
+| 2023 | Mamba (2312.00752) | 3B beats Transformers of the same size and matches ones twice its size |
+| 2024 | FineWeb-Edu (2406.17557) | About a tenth of the tokens needed for the same level |
+| 2024 | DeepSeek-V2, V3 (2405.04434, 2412.19437) | Cut costs with MoE. V3 is 671B (37B active), 14.8 trillion tokens, 2.664 million H800 hours |
+| 2025 | DeepSeek-R1 (2501.12948) | Reinforcement learning takes AIME from 15.6% to 77.9%. The cost is about 5.5% of V3's pretraining |
+| 2025 | Gated Attention (NeurIPS 2025 Best) | Works at large scale but is weak at small scale |
+| 2025 | Superposition (NeurIPS 2025 runner-up) | An explanation of scaling laws |
+| 2025 | On-policy distillation | Qwen3-8B's AIME24 reaches 74.4% in 1.8k GPU hours (reinforcement learning: 67.6% in 17.9k) |
+| 2026 | mHC (2512.24880) | At 27B, loss −0.021 and MMLU from 59.0 to 63.4. Adopted by DeepSeek-V4 |
+| 2026 | Attention Residuals (2603.15031) | Worth 1.25×. At 194 million, from 1.931 to 1.899 (1.06–1.12× in Marin's small-scale results) |
+| 2026 | Olmo Hybrid (2604.03444) | olmo-hybrid.md |
+| 2026 | The Flexibility Trap (ICML 2026 Outstanding) | Diffusion language models struggle to combine flexibility and quality. LLaDA 2.0 100B is at about Qwen3 30B's level |
+| 2026 | Harness (GLM-5.1's report) | From 52.5% to 65.5% without changing the weights. The gap between harnesses is 7.8× the gap between models |
 
-オプティマイザの調査は optimizer.md、検索は retrieval.md、Engram は engram.md、MoE は moe.md、RoPE は rope.md にある。
+The optimizer survey is in optimizer.md, retrieval in retrieval.md, Engram in engram.md, MoE in moe.md and RoPE in rope.md.
 
-分かったこと：
+Findings:
 
-- Attention ほど画期的な単一の発明はこの5年で見当たらない。Raschka の年ごとの整理でも、進歩は単一のブレイクスルーより積み重ねによるとしている（2022 RLHF と PPO、2023 LoRA と SFT、2024 Mid-Training、2025 RLVR と GRPO）。
-- 効果の大きいものの多くは、事後学習やデータの質など、今の BPB では測れないか、規模を変えないと見えない。
+- No single invention as groundbreaking as Attention can be found in the last five years. Raschka's year-by-year overview also attributes progress to accumulation rather than single breakthroughs (2022 RLHF and PPO, 2023 LoRA and SFT, 2024 Mid-Training, 2025 RLVR and GRPO).
+- Many of the changes with large effects, such as post-training and data quality, cannot be measured with the current BPB or do not show without changing the scale.

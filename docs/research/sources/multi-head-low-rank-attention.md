@@ -1,14 +1,14 @@
 # Multi-Head Low-Rank Attention
 
-Multi-Head Low-Rank Attention（arXiv 2603.02188）。注意の KV キャッシュを小さくする手法の論文。本題の前の比較（4.2.1、表38）で、注意と FFN の出力の重みの初期値を比べている。
+Multi-Head Low-Rank Attention (arXiv 2603.02188). A paper on a method that shrinks attention's KV cache. In a comparison that comes before its main topic (4.2.1, Table 38), it compares initial values for the output weights of the attention and the FFN.
 
-nanoGPT の上に Llama 3 の形を作った約29億のモデル（普通の注意は24層、幅3,072）、FineWeb-Edu、983億トークン（1パラメータ約34トークン）、AdamW、学習率1.6e-4。ほかの重みはどれも `N(0, 0.02)`。
+A model of about 2.9 billion with the Llama 3 architecture built on top of nanoGPT (24 layers and width 3,072 with standard attention), FineWeb-Edu, 98.3 billion tokens (about 34 tokens per parameter), AdamW, learning rate 1.6e-4. All other weights are `N(0, 0.02)`.
 
-7つのデータの平均の perplexity。損失の差は自分たちの計算。
+Mean perplexity over seven datasets. The loss differences are our own calculation.
 
-| 注意の形 | 出力が0.02 | 出力が0 | 損失の差 |
+| Attention | Output at 0.02 | Output at 0 | Loss difference |
 |---|---|---|---|
-| 普通の注意（MHA） | 14.094 | 13.860 | −0.63% |
+| Standard attention (MHA) | 14.094 | 13.860 | −0.63% |
 | MQA | 14.283 | 14.306 | +0.06% |
 | GQA | 14.164 | 14.139 | −0.07% |
 | MLA | 13.927 | 13.727 | −0.55% |
@@ -18,9 +18,9 @@ nanoGPT の上に Llama 3 の形を作った約29億のモデル（普通の注�
 | GLA-4 | 14.140 | 13.815 | −0.88% |
 | GTA | 14.285 | 13.972 | −0.83% |
 
-- 普通の注意は7つのデータのすべてで0が良く、FineWeb-Edu では 9.571 から 9.434（−0.64%）。
-- 著者は0のほうが良いとして、以降の実験を0にしている。
-- 比べた相手の0.02は、GPT-2 のような層の数での縮小がない。24層で縮小すると0.0029で、相手はその約7倍大きい。縮小した値と0の比較はない。
-- 種の数は書かれていない。
+- For standard attention, 0 is better on all seven datasets, and on FineWeb-Edu it goes from 9.571 to 9.434 (−0.64%).
+- The authors judge 0 to be better and use 0 in the later experiments.
+- The 0.02 it is compared with has no scaling by the number of layers as in GPT-2. Scaled for 24 layers it would be 0.0029, so the comparison point is about 7× larger. There is no comparison between the scaled value and 0.
+- The number of seeds is not stated.
 
-読んだのは実験の条件、4.2の本文、付録の表18と表38。本題の手法は読んでいない。
+The experimental settings, the text of 4.2, and Tables 18 and 38 in the appendix were read. The main method was not read.

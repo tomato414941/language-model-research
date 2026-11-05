@@ -1,9 +1,9 @@
-# QK-norm の論文
+# The QK-norm paper
 
-Henry ら、Query-Key Normalization for Transformers（arXiv 2010.04245）。
+Henry et al., Query-Key Normalization for Transformers (arXiv 2010.04245).
 
-- 注意の内積を、学習する大きさを掛けた cosine 類似度に替える。内積が大きくなって softmax が飽和するのを防ぐという考え。
-- 対象は少ないデータの機械翻訳。5つの言語の組で、テストの BLEU が平均0.928上がった。別の小さな比較で、19.4から24.33。
-- 言語モデルの事前学習の結果はない。
+- It replaces attention's dot product with cosine similarity multiplied by a learned scale. The idea is to keep the dot product from growing so large that the softmax saturates.
+- The target is low-resource machine translation. Over five language pairs, the test BLEU rose by 0.928 on average. In a separate small comparison, it went from 19.4 to 24.33.
+- There are no results on language-model pretraining.
 
-読んだのは要旨、導入、結果の表の説明。
+The abstract, the introduction and the captions of the results tables were read.

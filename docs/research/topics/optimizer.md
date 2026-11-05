@@ -1,63 +1,63 @@
-# オプティマイザ
+# Optimizer
 
-何を使って重みを更新するか。「今の見方」は2026-11時点で読んだものからの仮のもの。自分たちの測定は束全体の1回だけ（[最初の束](../experiments/first-bundle.md)）で、Muon だけの効果は測っていない。新しい結果が出たら書き換える。
+What to update the weights with. "Current view" is provisional, based on what was read as of 2026-11. Our only measurement is one run of the whole bundle ([the first bundle](../experiments/first-bundle.md)), and Muon's own effect was not measured. Rewrite it when new results come in.
 
-## 読んで分かったこと
+## What reading showed
 
-- **AdamW：** [論文](../sources/adamw.md)の実験は画像分類で、言語モデルで他の手法と比べたものではない。
-- **Muon と AdamW の関係：** 全部の代わりではなく併用する。[Muon](../sources/muon.md) は隠れ層の行列に使い、埋め込み、出力、正規化、スカラーは AdamW で更新する。[Kimi](../sources/muon-is-scalable.md) と DeepSeek-V4（arXiv 2606.19348）も同じ分け方で、基準の12層・幅768なら、パラメータの約92%が Muon 側になる。
-- **差の大きさ：** 報告は割れている。
+- **AdamW:** the experiments in [the paper](../sources/adamw.md) are image classification, not comparisons with other methods on language models.
+- **How Muon relates to AdamW:** it is used alongside AdamW, not as a replacement for all of it. [Muon](../sources/muon.md) is used for the hidden layers' matrices, and the embeddings, the output, normalization and scalars are updated with AdamW. [Kimi](../sources/muon-is-scalable.md) and DeepSeek-V4 (arXiv 2606.19348) split them the same way; for the baseline's 12 layers and width 768, about 92% of the parameters fall on Muon's side.
+- **Size of the difference:** the reports are split.
 
-| 出典 | 条件 | Muon の差（AdamW 比） |
+| Source | Conditions | Muon's difference (vs AdamW) |
 |---|---|---|
-| [元の記事](../sources/muon.md) | 幅768、更新1回524,288トークン、FineWeb の速度記録 | 1.35倍 |
-| [Fantastic](../sources/fantastic-pretraining-optimizers.md) | 1.3億、学習量1倍 | 約1.4倍 |
-| 同上 | 12億 | 約1.1倍 |
-| [Volkova ら](../sources/optimizer-scaling-laws.md) | ClimbMix、5,000万〜15億、学習量1.5〜10倍 | トークンへの効きが2.08倍 |
-| 同上 | FineWeb、同じ範囲 | トークンへの効きが1.41倍 |
-| [Kimi](../sources/muon-is-scalable.md) | 3.99億〜15億、最適なトークン量 | 計算量52%（約2倍） |
-| [Essential AI](../sources/practical-efficiency-of-muon.md) | 1億〜40億 | トークンが10〜15%少ない |
-| [Polar Express の論文](../sources/polar-express.md) | 1.24億、10億トークン、更新1回32,768トークン、weight decay なし | loss が AdamW 4.197、Muon 3.639（−13%） |
+| [The original post](../sources/muon.md) | Width 768, 524,288 tokens per update, the FineWeb speed record | 1.35× |
+| [Fantastic](../sources/fantastic-pretraining-optimizers.md) | 130 million, 1× the training amount | About 1.4× |
+| Same as above | 1.2 billion | About 1.1× |
+| [Volkova et al.](../sources/optimizer-scaling-laws.md) | ClimbMix, 50 million to 1.5 billion, 1.5–10× the training amount | An effect on tokens of 2.08× |
+| Same as above | FineWeb, the same range | An effect on tokens of 1.41× |
+| [Kimi](../sources/muon-is-scalable.md) | 399 million to 1.5 billion, the optimal number of tokens | 52% of the compute (about 2×) |
+| [Essential AI](../sources/practical-efficiency-of-muon.md) | 100 million to 4 billion | 10–15% fewer tokens |
+| [The Polar Express paper](../sources/polar-express.md) | 124 million, 1 billion tokens, 32,768 tokens per update, no weight decay | Loss 4.197 with AdamW, 3.639 with Muon (−13%) |
 
-- **Muon の改良：** [Polar Express](../sources/polar-express.md) は費用を変えずに、10億トークンで loss が1.4〜1.7%、100億トークンで0.3%下がった。NorMuon（[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/normuon.md)）は、同じ損失に要る更新が Muon より1.24億で6%、3.5億で15%少ない。11億では AdamW より21.74%少なく、Muon は10.43%。メモリは Adam の約半分で、更新の時間は AdamW より2.9%長い（54億の場合、arXiv 2510.05491）。
-- **Cautious weight decay：** 1パラメータ20トークンの3.38億で AdamW が3.0136から3.0059（−0.26%）、100トークンの10億で AdamW が2.65から2.56、Muon が2.51から2.42（約−3.5%。arXiv 2510.12402、`language-model` の[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/cautious-weight-decay.md)）。[IMU-1](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/imu-1.md) の7,000万では約−1%で、基準の値に不一致がある。学習量が少ないと効果は小さい側と見ている。
-- **Q、K、V を分けるか：** [元の記事](../sources/muon.md)は分けるほうが良いとし、NorMuon の著者は分けても改善がなかったとしていて、報告が割れている。ヘッドごとに分けると、[T-Muon](../sources/t-muon.md) は普通の Muon で6,000万〜3.5億の loss が0.6〜0.7%低いとする。NorMuon の [speedrun](../sources/modded-nanogpt-paired-head-muon.md) では、K と V を2ヘッドずつにした得は約0.04%で、[Group Muon](../sources/group-muon.md) ではヘッドごとに全部分けると最後は少し悪い。
-- **2026年の改良：** [Muown](../sources/muown.md) は普通の Muon より10億以上で約1%だが、NorMuon と比べると1.24億で約0.1%。[FARO](../sources/faro.md) は800ステップで約0.4%。どれも読んだ範囲では今使っている NorMuon と cautious weight decay の組と直接比べていない、または差が小さい。[記録 #92](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/anvil.md) では、更新則を戻しても4.9ミリナットで、差の大半は最後の重みの作り方から来ている。[効かなかった報告](../sources/modded-nanogpt-wr-blog.md)では、AdEMAMix など遅い状態を持つものは1,500ステップ未満で負けている。今の1,281回の更新も短い側。
-- **勾配の累乗：** [GradPower](../sources/gradpower.md) は勾配を要素ごとに p 乗してからオプティマイザに渡す。論文の p=1.2 は1回131,072トークンの結果で、今と同じ524,288トークンと Muon の [Parameter Golf](../sources/parameter-golf-gradpower.md) では悪化し、0.9 のほうが少し良かった。
+- **Improvements to Muon:** [Polar Express](../sources/polar-express.md), with no change in cost, lowered loss by 1.4–1.7% at 1 billion tokens and 0.3% at 10 billion tokens. NorMuon ([note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/normuon.md)) needs 6% fewer updates than Muon for the same loss at 124 million and 15% fewer at 350 million. At 1.1 billion it needs 21.74% fewer than AdamW, against 10.43% for Muon. Its memory is about half of Adam's, and its update time is 2.9% longer than AdamW's (at 5.4 billion, arXiv 2510.05491).
+- **Cautious weight decay:** at 338 million with 20 tokens per parameter, AdamW went from 3.0136 to 3.0059 (−0.26%); at 1 billion with 100 tokens, AdamW went from 2.65 to 2.56 and Muon from 2.51 to 2.42 (about −3.5%; arXiv 2510.12402, `language-model`'s [note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/cautious-weight-decay.md)). At [IMU-1](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/imu-1.md)'s 70 million it is about −1%, with an inconsistency in the baseline's values. We think the effect is on the small side when the training amount is small.
+- **Whether to split Q, K and V:** [the original post](../sources/muon.md) says splitting is better, while NorMuon's authors say splitting brought no improvement, so the reports are split. On splitting per head, [T-Muon](../sources/t-muon.md) says that with plain Muon it gives 0.6–0.7% lower loss at 60 million to 350 million. In NorMuon's [speedrun](../sources/modded-nanogpt-paired-head-muon.md), the gain from treating K and V two heads at a time is about 0.04%, and in [Group Muon](../sources/group-muon.md) splitting fully per head is slightly worse at the end.
+- **Improvements from 2026:** [Muown](../sources/muown.md) is about 1% better than plain Muon at 1 billion and above, but against NorMuon it is about 0.1% at 124 million. [FARO](../sources/faro.md) is about 0.4% at 800 steps. As far as was read, none of them is compared directly with the combination of NorMuon and cautious weight decay now in use, or else the difference is small. In [record #92](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/anvil.md), even with the update rule reverted the difference is 4.9 millinats, and most of the difference comes from how the final weights are made. In [the reports of what did not work](../sources/modded-nanogpt-wr-blog.md), optimizers with slow state, such as AdEMAMix, lose below 1,500 steps. The current 1,281 updates are also on the short side.
+- **Powers of the gradient:** [GradPower](../sources/gradpower.md) raises the gradient to the power p element-wise before passing it to the optimizer. The paper's p=1.2 is a result at 131,072 tokens per update; in [Parameter Golf](../sources/parameter-golf-gradpower.md), with the same 524,288 tokens as now and Muon, it made things worse, and 0.9 was slightly better.
 
-- **他の手法：** 行列を使う SOAP や Kron は、学習量を増やすと Muon に並ぶか上回る（[Fantastic](../sources/fantastic-pretraining-optimizers.md)、[Volkova ら](../sources/optimizer-scaling-laws.md)、[NVIDIA](../sources/soap-muon-and-beyond.md)）。[Semenov ら](../sources/benchmarking-optimizers.md)は、長い学習で AdEMAMix と MARS を一番良いとしていて、Fantastic と食い違う。原因は決着していない。[AlgoPerf](../sources/algoperf.md) の調整ありの部門は、行列を使う Distributed Shampoo が優勝した。[modded-nanogpt の最適化の部門](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/modded-nanogpt-optimization-track.md)は、ステップ数で SOAP-Muon が Muon より少ない。ただし時間は問わない比較。
-- **学習率：** Fantastic は、ピーク学習率6e-4の AdamW を基準として弱いとする。nanoGPT も同じ6e-4。同じ更新サイズの1.3億の調整例では0.008だった。モデルの形が違うので、そのまま当てはまるとは限らない。
-- **費用：** 幅768、更新1回524,288トークンなら、Muon の計算の増分は上限0.7%（元の記事の計算）。メモリは AdamW より少ない。
-- **Weight decay の大きさ：** [nanochat](../sources/nanochat-log.md) の一番良い値は幅512で約0.40、幅768で約0.22で、幅の2乗に反比例するとしている。幅640なら約0.3で、今の0.2は小さい側。ただし nanochat は学習が今より長く、autoresearch は幅512で0.2を使っている。
-- **細かい調整の限界：** nanochat は、ある規模で調整した値が別の規模で悪くなるとしている。測るのも1回 $0.55 かかるので、読むだけでは決められない。
+- **Other methods:** the matrix-based SOAP and Kron match or beat Muon as the training amount grows ([Fantastic](../sources/fantastic-pretraining-optimizers.md), [Volkova et al.](../sources/optimizer-scaling-laws.md), [NVIDIA](../sources/soap-muon-and-beyond.md)). [Semenov et al.](../sources/benchmarking-optimizers.md) rank AdEMAMix and MARS best for long training, which conflicts with Fantastic. The cause is unsettled. In [AlgoPerf](../sources/algoperf.md)'s track that allows tuning, the matrix-based Distributed Shampoo won. In [modded-nanogpt's optimization track](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/modded-nanogpt-optimization-track.md), SOAP-Muon takes fewer steps than Muon. However, that comparison does not count time.
+- **Learning rate:** Fantastic says AdamW with a peak learning rate of 6e-4 is a weak baseline. nanoGPT uses the same 6e-4. In a tuned example at 130 million with the same update size, it was 0.008. The model shapes differ, so it does not necessarily carry over as is.
+- **Cost:** at width 768 and 524,288 tokens per update, Muon's extra computation is at most 0.7% (the original post's calculation). Its memory is less than AdamW's.
+- **Weight decay size:** [nanochat](../sources/nanochat-log.md)'s best values are about 0.40 at width 512 and about 0.22 at width 768, and it says the value is inversely proportional to the square of the width. At width 640 that is about 0.3, so the current 0.2 is on the small side. However, nanochat trains longer than we do, and autoresearch uses 0.2 at width 512.
+- **Limits of fine adjustment:** nanochat says values tuned at one scale do worse at another. Measuring also costs $0.55 per run, so it cannot be decided by reading alone.
 
-## 今の見方
+## Current view
 
-基準（9,100万パラメータ、5億トークン、更新1回524,288トークン、学習量は約0.27倍）で最初に試すものとして、最初の束は Muon と AdamW の併用にした。
+As the first thing to try on the baseline (91 million parameters, 500 million tokens, 524,288 tokens per update, a training amount of about 0.27×), the first bundle used Muon and AdamW together.
 
-設定は autoresearch の値から始めた。ただし次の点で同じではない。
+The settings started from autoresearch's values, but differ in the following points.
 
-- 埋め込みと出力の学習率：[autoresearch](../sources/autoresearch.md) は別々の表に0.6と0.004を使う。最初の束は1つの表を共有するので、そのままは使えない。出力の0.004を使い、位置符号と正規化の重みにも同じ値を使った（分離の見方は embeddings.md）。[最初の Muon の記録](../sources/modded-nanogpt-muon-record.md)の0.0036に近い。
-- 行列の学習率0.04：autoresearch と更新の回数とサイズは同じだが、幅が違い（512と768）、調整もしていない。nanochat の既定は0.02。最初の Muon の記録は、同じ形で学習が6.5倍長く、更新の大きさは今の値の約4分の1。
-- Polar Express、NorMuon、cautious weight decay：autoresearch の値はこれらを含むので、最初はすべて使う。設定でそれぞれ外せるので、結果が悪いときは順に確かめられる。
-- Q、K、V：モデルは1つの行列のまま変えず、オプティマイザの中で3つに分けて直交化する。基準の重みはそのまま読める。
+- Embedding and output learning rates: [autoresearch](../sources/autoresearch.md) uses 0.6 and 0.004 for separate tables. The first bundle shares one table, so these cannot be used as is. It used the output's 0.004, and the same value for the position encoding and the normalization weights (the view on separation is in embeddings.md). This is close to the 0.0036 of [the first Muon record](../sources/modded-nanogpt-muon-record.md).
+- Matrix learning rate 0.04: the number and size of updates are the same as autoresearch's, but the width differs (512 and 768), and it is untuned. nanochat's default is 0.02. The first Muon record has the same shape with 6.5× longer training, and its update magnitude is about a quarter of the current value.
+- Polar Express, NorMuon, cautious weight decay: autoresearch's values include them, so all are used at first. Each can be turned off in the settings, so they can be checked one by one if the results are bad.
+- Q, K, V: the model keeps them as one matrix unchanged, and the optimizer splits it into three to orthogonalize. The baseline's weights can be loaded as is.
 
-そう見ている理由は次の通り。
+The reasons for this view are these.
 
-- 比べられた中で一番少ない学習量1倍で、Muon が先頭だった。ただし0.27倍は比較の範囲の外で、外挿になる。
-- 計算とメモリの費用が小さい。
-- autoresearch が同じ953回の更新で動かしている。他の変更も入っているので、Muon だけの効果は分からない。
+- At 1×, the smallest training amount compared, Muon came first. However, 0.27× is outside the compared range, so this is extrapolation.
+- Its cost in computation and memory is small.
+- autoresearch runs it with the same 953 updates. Other changes are included too, so Muon's own effect is unknown.
 
-効果の粗い見積もりは、学習率の調整で最大2倍、Muon でさらに1.4倍、合わせて最大2.8倍分。計算量2倍で loss が約3.9%下がるという換算（[Open Athena の記事](https://www.openathena.ai/blog/pretraining-speedup/)にある Delphi の式 `loss = 1.65 + 117.8·C^−0.0966`）で、約6%になる。別々の条件の数字を掛けたもので、順番を決めるための目安にすぎない。Polar Express の論文の比較では13〜15%下がっていて、学習量が少ないと見積もりより大きい可能性がある。ただし更新のサイズが今の約16分の1で、weight decay もない。最初の束は全体で18.5%下がり、この粗い見積もりより論文の比較に近かった。ただし Muon 以外の変更と、基準の AdamW の弱い設定の分も含む。
+A rough estimate of the effect: up to 2× from tuning the learning rate and a further 1.4× from Muon, up to 2.8× in all. Converted at about 3.9% lower loss per doubling of compute (Delphi's formula `loss = 1.65 + 117.8·C^−0.0966` in [Open Athena's post](https://www.openathena.ai/blog/pretraining-speedup/)), that is about 6%. It multiplies figures from different conditions and is only a guide for deciding the order. The Polar Express paper's comparison showed a 13–15% drop, so with a small training amount the effect may be larger than estimated. However, its update size is about 1/16 of ours, and it has no weight decay. The first bundle fell 18.5% overall, closer to the paper's comparison than to this rough estimate. However, that includes changes other than Muon and the share from the baseline AdamW's weak settings.
 
-## 見方が変わりそうな条件
+## Conditions likely to change the view
 
-- 自分たちの測定で、見積もりと大きく違った場合。特に、調整した AdamW に Muon の束が勝てない場合。
-- 学習量を増やす場合。SOAP や Kron のほうが良くなる可能性がある。
-- 更新1回のトークン数を大きく減らす場合。Semenov らの AdEMAMix や MARS を見直す。
-- SOAP-Muon などを、時間まで含めて今の規模で比べた結果が出た場合。
-- モデルを大きくする場合。Fantastic では差が薄れ、NVIDIA ではバッチを大きくすると差が出ている。
+- When our measurements differ greatly from the estimates. Especially if the Muon bundle cannot beat a tuned AdamW.
+- When the training amount is increased. SOAP or Kron may become better.
+- When the number of tokens per update is cut greatly. Revisit Semenov et al.'s AdEMAMix and MARS.
+- When results come out comparing SOAP-Muon and others at the current scale, time included.
+- When the model is made larger. In Fantastic the difference fades, and in NVIDIA's work a difference appears with larger batches.
 
-## 関係するもの
+## Related
 
-- `language-model` のメモ：[NorMuon](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/normuon.md)、[Muon+](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/muon-plus.md)、[MuonEq](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/muoneq.md)、[SOAP-Muon](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/soap-muon.md)、[IMU-1](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/imu-1.md)。
+- `language-model`'s notes: [NorMuon](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/normuon.md), [Muon+](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/muon-plus.md), [MuonEq](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/muoneq.md), [SOAP-Muon](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/soap-muon.md), [IMU-1](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/imu-1.md).

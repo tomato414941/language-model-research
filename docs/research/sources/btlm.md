@@ -1,7 +1,7 @@
 # BTLM-3B-8K
 
-Dey ら、BTLM-3B-8K: 7B Parameter Performance in a 3B Parameter Model（arXiv 2309.11568）。
+Dey et al., BTLM-3B-8K: 7B Parameter Performance in a 3B Parameter Model (arXiv 2309.11568).
 
-活性化関数については、GELU を SwiGLU にして損失が1.37%下がった。計算を揃えるために、中の幅を4倍から8/3倍にしている。モデルは Cerebras-GPT の μP の設定で、1パラメータ20トークン。
+On activation functions, replacing GELU with SwiGLU lowered the loss by 1.37%. To keep the compute equal, the inner width goes from 4× to 8/3×. The model uses Cerebras-GPT's μP settings, with 20 tokens per parameter.
 
-ReLU² は比べていない。読んだのは活性化関数と位置の節だけ。
+ReLU² is not compared. Only the sections on activation functions and positions were read.

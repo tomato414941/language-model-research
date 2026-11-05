@@ -1,28 +1,28 @@
-# 2026-11-05 の調査
+# The 2026-11-05 survey
 
-4番目の束の8つ目を決める前に、新しい論文と記事を37本確かめた。ほとんどは検索の要約で読み、IMU-1 と Parameter Golf の分析だけは本文を読んだ。
+Before choosing the eighth change in the fourth bundle, we checked 37 new papers and posts. Most were read through search summaries; only IMU-1 and the Parameter Golf analysis were read in full.
 
-## 束に関わったもの
+## What bore on the bundle
 
-| 出典 | 分かったこと |
+| Source | Findings |
 |---|---|
-| IMU-1（arXiv 2602.02522） | 7,000万の代わりのモデルで、QK-norm −0.63%、正規化した value residual −0.38%、LayerNorm scaling −0.36%、ヘッドごとのゲート −0.05%。NorMuon と cautious weight decay で −5.2%。WSD は下げる期間 20% が cosine と同じで、10% と 30% は悪い。学習のデータにはコードが約19%、数学が約13%ある（集めた量からの見積もり） |
-| Parameter Golf: What Really Works?（arXiv 2607.01517） | FineWeb の BPB を小さいモデルで競った記録の分析。上位の中でも効いたのは、評価のときの n-gram の混ぜ合わせ、Gated DeltaNet、value residual、窓の注意。全体では文書ごとの注意（VarLen）、トークンの組の表、MuonEq-R、重みの平均なども良い向き。1つの手法の効きはたいてい1%未満で、積み重ねで効く。相関の分析で、比べ合わせた実験ではない |
-| SmolLM2（arXiv 2502.02737） | ウェブ、コード、数学を混ぜる。後の段階で 75/20/5。FineMath と Stack-Edu を作った |
-| FineMath の比較（Hugging Face） | 数学のデータの質で、数学の課題の点が変わる |
+| IMU-1 (arXiv 2602.02522) | On a 70 million proxy model, QK-norm −0.63%, normalized value residual −0.38%, LayerNorm scaling −0.36%, per-head gates −0.05%. NorMuon and cautious weight decay −5.2%. For WSD, a decay period of 20% equals cosine, and 10% and 30% are worse. The training data has about 19% code and about 13% math (estimated from the amounts collected) |
+| Parameter Golf: What Really Works? (arXiv 2607.01517) | An analysis of the records of a contest on FineWeb BPB with small models. Within the top entries, what worked was n-gram mixing at evaluation, Gated DeltaNet, value residual and windowed attention. Across all entries, per-document attention (VarLen), tables of token tuples, MuonEq-R, weight averaging and others also lean the right way. A single method usually gives under 1%, and the gains come from stacking. It is a correlational analysis, not controlled experiments |
+| SmolLM2 (arXiv 2502.02737) | Mixes web, code and math. 75/20/5 in the later stages. Built FineMath and Stack-Edu |
+| FineMath's comparison (Hugging Face) | The quality of math data changes the scores on math tasks |
 
-## そのほか確かめたもの
+## Others checked
 
-- **最適化：** MUON+（2602.21545。NorMuon、AdaMuon より良いとする）、HTMuon（2603.10067。6,000万と1.35億で NorMuon より良く、組み合わせるとさらに良い）、MuonEq（2603.28254）、Newton-Muon（2604.01472）、MALT（2608.05088）、SOAP, Muon, and Beyond（2607.20548。8B で SOAP がわずかに上）、最適化の調査（2608.28557）、Benchmarking Optimizers（2509.01440）、AdaMuon（2507.11005）、MARS（2411.10438）。
-- **学習の進め方：** Small Batch Size Training（2507.07101）、Multi-Power Law（2503.12811）、Marin 8B の振り返り（WSD-S）、Marin の学習率の予定の issue #764。
-- **データと目的：** Data-Constrained Pretraining（2606.06888。データが足りない側の話）、Bridging Compute- and Data-Optimal Pretraining（2607.25271。検証の BPB が下流の点をよく予測する）、Self-Play Pretraining（2609.30063）、ESLM（2505.19893）、SwallowMath/SwallowCode（2505.02881。ほかのモデルで書き直すので使えない）、Scaling Inherently Interpretable LMs（2608.07594）。
-- **表と記憶：** Engram（2601.07372）、Memory Grafting（2605.20948）、Lngram v2（2609.03426）、Qwen の新しい形の設計（2608.30320。n-gram の表を含む）。
-- **注意：** 注意の進化の調査（2609.39661）、Deconstructing Attention（2510.11602）、Language Models Can Control Their Own Attention（2609.02737。推論の時の話）、Tucker Attention（2603.30033）、小さいモデルの形の比較（2512.20877）。
-- **トークナイザ：** 46の設定の比較（COLM 2026、2608.18062）、言語ごとの影響（2610.12144）、バイトでの模擬（2604.27263）、バイトのモデルへの蒸留（2609.12303）、ByteFlow（2603.03583）、トークナイザの拡張（2607.15232）、Boundless BPE（2504.00178）。
-- **Parameter Golf：** 公式のリポジトリと順位表の記事。
+- **Optimization:** MUON+ (2602.21545; claims to beat NorMuon and AdaMuon), HTMuon (2603.10067; better than NorMuon at 60 million and 135 million, and better still combined), MuonEq (2603.28254), Newton-Muon (2604.01472), MALT (2608.05088), SOAP, Muon, and Beyond (2607.20548; SOAP slightly ahead at 8B), a survey of optimization (2608.28557), Benchmarking Optimizers (2509.01440), AdaMuon (2507.11005), MARS (2411.10438).
+- **Training procedure:** Small Batch Size Training (2507.07101), Multi-Power Law (2503.12811), the Marin 8B retrospective (WSD-S), Marin's issue #764 on the learning-rate schedule.
+- **Data and objectives:** Data-Constrained Pretraining (2606.06888; about the side where data runs short), Bridging Compute- and Data-Optimal Pretraining (2607.25271; validation BPB predicts downstream scores well), Self-Play Pretraining (2609.30063), ESLM (2505.19893), SwallowMath/SwallowCode (2505.02881; unusable, since they are rewritten by other models), Scaling Inherently Interpretable LMs (2608.07594).
+- **Tables and memory:** Engram (2601.07372), Memory Grafting (2605.20948), Lngram v2 (2609.03426), Qwen's design of a new architecture (2608.30320; includes n-gram tables).
+- **Attention:** a survey of the evolution of attention (2609.39661), Deconstructing Attention (2510.11602), Language Models Can Control Their Own Attention (2609.02737; about inference time), Tucker Attention (2603.30033), a comparison of small-model architectures (2512.20877).
+- **Tokenizers:** a comparison of 46 settings (COLM 2026, 2608.18062), the effects per language (2610.12144), simulation in bytes (2604.27263), distillation into byte models (2609.12303), ByteFlow (2603.03583), tokenizer extension (2607.15232), Boundless BPE (2504.00178).
+- **Parameter Golf:** the official repository and a post on the leaderboard.
 
-## 決めたこと
+## Decisions
 
-- 8つ目は、FineMath（4plus）とコード（Common Pile）を、それぞれ学習の行の10%混ぜることにした。OLMES の数学とコードのスイートに直接効く。混ぜ方は SmolLM2 と IMU-1 を目安にした。
-- value residual は IMU-1 と Parameter Golf の両方で良い向きで、次の束の候補に残す。今の束は Value embeddings を持ち、重なる可能性がある。
-- IMU-1 では下げる期間が 30% で 20% より悪く、4番目の束の 75% とは逆の向き。束では試すが、結果が悪ければまずここを見直す。
+- The eighth change mixes in FineMath (4plus) and code (Common Pile), each at 10% of the training rows. It acts directly on OLMES's math and code suites. The mix was guided by SmolLM2 and IMU-1.
+- Value residual leans the right way in both IMU-1 and Parameter Golf, and is kept as a candidate for the next bundle. The current bundle has Value embeddings, which may overlap with it.
+- In IMU-1, a 30% decay period is worse than 20%, the opposite direction from the fourth bundle's 75%. The bundle tries it anyway, but if the result is bad, this is the first thing to revisit.

@@ -1,56 +1,56 @@
 # COUNT
 
-Magnusson、Smith、Koh、The COUNT: Counting N-grams Unlocks Scaling on Host Memory and Training-Free Adaptation（arXiv 2610.20456、2026-10）。実装、表、重みは `IanMagnusson/COUNT` で公開。全体の結果は `language-model` の [メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/count-ngram.md)にある。
+Magnusson, Smith, Koh, The COUNT: Counting N-grams Unlocks Scaling on Host Memory and Training-Free Adaptation (arXiv 2610.20456, 2026-10). The implementation, tables and weights are released at `IanMagnusson/COUNT`. The full results are in `language-model`'s [note](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/count-ngram.md).
 
-## 仕組み
+## How it works
 
-- 凍結した表が、各履歴に対して、続くトークンの上位 K 個と点数を持つ。次数 n の履歴は n−1 トークンで、次数1は履歴なし。文書の区切りを履歴に含めない。
-- 点数は stupid backoff：見た続きは `C(h,w)/C(h)`、なければ短い履歴に戻って0.4倍。正規化はしない。
-- 入力は `f_t = (1/J) Σ_j Σ_k S(w_k | h_{t,j}) B[w_k]`。B はモデル自身の出力の表で、勾配は B にも流れる。`LayerNorm(e_t + f_t)·√d` を最初の層に入れる。
-- 表には K=32 を入れ、学習では K=8、J=6（次数1〜6）を使う。
+- A frozen table holds, for each history, the top K next tokens and their scores. A history of order n is n−1 tokens, and order 1 has no history. Histories do not include document boundaries.
+- The score is stupid backoff: a seen continuation scores `C(h,w)/C(h)`; otherwise it backs off to a shorter history and is multiplied by 0.4. The scores are not normalized.
+- The input is `f_t = (1/J) Σ_j Σ_k S(w_k | h_{t,j}) B[w_k]`. B is the model's own output embedding table, and gradients also flow into B. `LayerNorm(e_t + f_t)·√d` goes into the first layer.
+- The table stores K=32; training uses K=8 and J=6 (orders 1 to 6).
 
-## 表の大きさ
+## Table size
 
-Dolma 3（約6兆トークン）から作った。K=32 で、履歴の回数の下限と n-gram の回数の下限を変えた大きさ（GB）。
+Built from Dolma 3 (about 6 trillion tokens). Sizes (GB) at K=32 for different minimum counts of the history and of the n-gram.
 
-| 履歴の下限 | n-gram の下限 | 大きさ |
+| Minimum history count | Minimum n-gram count | Size |
 |---|---|---|
-| 12,319 | 27 | 17.114（6,000万〜1.9億で使う） |
+| 12,319 | 27 | 17.114 (used at 60 million to 190 million) |
 | 3,255 | 7 | 68.458 |
 | 1,536 | 7 | 142.037 |
 | 460 | 7 | 459.222 |
-| 265 | 7 | 797.487（3.7億〜10億で使う） |
+| 265 | 7 | 797.487 (used at 370 million to 1 billion) |
 
-- 大半は次数4〜6。K を8にすると約3割、4にすると約2割になる（Figure 7 の読み取り）。
-- 分野の表は 106.6億トークン、下限4、K=32 で 83.4GB。推論の時に差し替えて使い、この表で学習はしていない。
-- 学習と同じコーパス全体を数える（§3.1）。読むのは6,000万、D/N=10で約6億トークン、10億、D/N=40で400億トークンなので、表の元の文章は読む量の約1万倍から150倍（自分たちの計算）。行は少なくとも数百回（17GB の表は12,319回）現れた履歴で、読む文章自身が回数に占める割合は小さい。
+- Most of it is orders 4 to 6. With K at 8 it shrinks to about 30%, and with K at 4 to about 20% (read off Figure 7).
+- The domain table, from 10.66 billion tokens with a minimum count of 4 and K=32, is 83.4GB. It is swapped in at inference; no training was done with this table.
+- It counts the whole corpus that training uses (§3.1). The amount read is about 600 million tokens at 60 million and D/N=10, and 40 billion tokens at 1 billion and D/N=40, so the text behind the table is about 10,000× to 150× the amount read (our own calculation). The rows are histories that appeared at least several hundred times (12,319 times for the 17GB table), so the text being read makes up a small share of the counts.
 
-## 今の規模に近い条件
+## Settings close to our scale
 
-6,000万は8層、幅384、ヘッド8、MLP 1,536。AdamW（学習率 `0.00235(N/1.08億)^(-1/3)`、β2 0.99、weight decay 0.1）、1更新262,144トークン、文脈8,192、語彙100,278。N は入力の表を除き出力の表を含むパラメータ、D/N は読むトークンとの比。
+The 60 million model has 8 layers, width 384, 8 heads and an MLP of 1,536. AdamW (learning rate `0.00235(N/108M)^(-1/3)`, β2 0.99, weight decay 0.1), 262,144 tokens per update, context 8,192, vocabulary 100,278. N is the parameter count excluding the input embeddings and including the output embeddings, and D/N is the ratio of the tokens read to N.
 
-図の読み取り（Figure 2。41の選択式の課題の平均の正解率と、74課題の正解の BPB）。
+Read off Figure 2 (mean accuracy over 41 multiple-choice tasks, and correct-answer BPB over 74 tasks).
 
-| 条件 | 計算量 | 正解率：普通 → COUNT | 正解の BPB：普通 → COUNT |
+| Setting | Compute | Accuracy: plain → COUNT | Correct-answer BPB: plain → COUNT |
 |---|---|---|---|
-| 6,000万、D/N=10 | 約2×10¹⁷ | 29.7 → 31.3 | 2.05 → 1.91 |
-| 6,000万、D/N=20 | 約4×10¹⁷ | 30.4 → 31.3 | 1.91 → 1.83 |
-| 6,000万、D/N=40 | 約8×10¹⁷ | 31.1 → 31.4 | 1.80 → 1.74 |
-| 1億、D/N=10 | 約6×10¹⁷ | 30.6 → 31.4 | |
-| 1.9億、D/N=10 | 約2×10¹⁸ | 31.3 → 32.3 | 1.66 → 1.63 |
-| 1.9億、D/N=40 | 約8×10¹⁸ | 32.9 → 32.2 | 1.51 → 1.47 |
+| 60 million, D/N=10 | about 2×10¹⁷ | 29.7 → 31.3 | 2.05 → 1.91 |
+| 60 million, D/N=20 | about 4×10¹⁷ | 30.4 → 31.3 | 1.91 → 1.83 |
+| 60 million, D/N=40 | about 8×10¹⁷ | 31.1 → 31.4 | 1.80 → 1.74 |
+| 100 million, D/N=10 | about 6×10¹⁷ | 30.6 → 31.4 | |
+| 190 million, D/N=10 | about 2×10¹⁸ | 31.3 → 32.3 | 1.66 → 1.63 |
+| 190 million, D/N=40 | about 8×10¹⁸ | 32.9 → 32.2 | 1.51 → 1.47 |
 
-差は計算量が少ないほど大きい。正解率は1点ごとの揺れがあり、下がった点もある。
+The gap is larger at lower compute. Accuracy is noisy from point to point, and some points went down.
 
-## そのほかの結果
+## Other results
 
-- 出力に混ぜる形（late fusion）は COUNT より効果が小さく、事前学習に入れても推論の時だけと変わらない（Figure 9、11）。出力に混ぜる形では、一番長く一致した履歴だけを使う。低い次数の粗い予測を、モデルが後から直せないため。推論の時だけの比較では、足す形を λ=0.1、掛ける形を α=0.1 に固定している（B.1）。Figure 9 の6,000万、D/N=10 の読み取りでは、検証の損失が普通 4.06、掛ける形 4.04、足す形 3.96、COUNT 3.82、課題の損失が 2.05、2.00、1.99、1.91。足す形で COUNT の改善の約4割が出ている。規模が大きいほど差は縮む。
-- 次数1〜6は1〜3より、1.9億のすべての予算で損失が低い。
-- 基底は出力の表が入力の表より良い（10億）。入力の表でも損失は下がるが、課題の損失と正解率は普通より悪い。
-- LayerNorm と √d の増幅は1.9億の COUNT で損失を下げる。普通のモデルでは小さい規模で少し効き、大きいと悪くなる。
-- 10億で表を小さくしても1桁以上まで普通のモデルより良い。K と J を学習と大きく変えると効果の大半を失う。
-- 速さは10億、8枚の H200 で普通の93.1〜97.8%。GPU のメモリはほぼ増えない。工夫は別スレッドの検索、先読み、候補を保存せずに足す計算。
-- 学習する表は、表全部を更新すると1.9億で4.4%の速さ、触った行だけで96.3%。
-- 著者も、高い次数の珍しい文脈では表が元の文章の断片を漏らしうるとしている。
+- Mixing into the output (late fusion) has a smaller effect than COUNT, and putting it into pretraining is no different from using it only at inference (Figures 9 and 11). Late fusion uses only the longest matching history, because the model cannot later correct the coarse predictions of the low orders. In the inference-only comparison, the additive form is fixed at λ=0.1 and the multiplicative form at α=0.1 (B.1). Read off Figure 9 at 60 million and D/N=10, the validation loss is 4.06 plain, 4.04 multiplicative, 3.96 additive and 3.82 COUNT, and the task loss is 2.05, 2.00, 1.99 and 1.91. The additive form gets about 40% of COUNT's improvement. The gap shrinks at larger scale.
+- Orders 1 to 6 give a lower loss than orders 1 to 3 at every budget at 190 million.
+- As the basis, the output embeddings work better than the input embeddings (1 billion). With the input embeddings the loss also falls, but the task loss and accuracy are worse than plain.
+- LayerNorm and the √d scaling lower the loss of COUNT at 190 million. In the plain model they help a little at small scale and hurt at larger scale.
+- At 1 billion, the model stays better than the plain one even with the table shrunk by more than an order of magnitude. Changing K and J far from their training values loses most of the effect.
+- Speed at 1 billion on eight H200s is 93.1–97.8% of plain. GPU memory barely grows. The techniques are lookup in a separate thread, prefetching, and summing without storing the candidates.
+- A trainable table at 190 million runs at 4.4% of the speed when the whole table is updated, and at 96.3% when only the touched rows are.
+- The authors also say that for rare high-order contexts the table can leak fragments of the source text.
 
-本文と付録を読み、Figure 1、2、7 は図を見て読み取った。数字は目で読んだので誤差がある。公開のコードは README、埋め込みの部分、表の形式を読んだ。
+The main text and appendix were read, and Figures 1, 2 and 7 were read off the plots. The numbers were read by eye, so they carry some error. In the released code, the README, the embedding part and the table format were read.

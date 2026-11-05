@@ -1,51 +1,51 @@
 # RETRO
 
-Borgeaud ら、Improving Language Models by Retrieving from Trillions of Tokens（arXiv 2112.04426、ICML 2022）。DeepMind。パラメータ数は埋め込みを除く。
+Borgeaud et al., Improving Language Models by Retrieving from Trillions of Tokens (arXiv 2112.04426, ICML 2022). DeepMind. Parameter counts exclude the embeddings.
 
-## 方法
+## Method
 
-- 入力を64トークンごとに区切り、固定した BERT のベクトルで似た文章をデータベース（DB）から探す。見つけた64トークンとその続きの64トークンを使う。学習中の検索は事前に計算して、データとして持つ。
-- 見つけた文章を2層のエンコーダー（幅896、約1,900万パラメータ）で読み、本体が3層に1回 cross-attention で参照する。パラメータは1億3,200万から1億7,200万（+30%）、70億から75億（+8%）に増える。
-- 学習はどのモデルも4,190億トークン、AdamW。学習時の DB は6,000億トークンで、検索は2件。評価時の DB は1.75兆トークン（書籍は4%だけ）。
-- 学習時の DB は学習データと同じ部分集合から作る（§2.1）。自分の続きを引くと因果が壊れるので、学習の文と同じ文書から来た近傍は除く（§2.3）。除かない場合の測定は、読んだ範囲にない。
-- 索引の大きさは、40億トークンの Wikipedia で215GB、1.75兆トークンの全体で93TB。検索は10ミリ秒。
+- The input is split every 64 tokens, and similar text is searched for in a database (DB) with frozen BERT vectors. The 64 tokens found and the 64 tokens that follow them are used. The retrieval during training is computed beforehand and kept as data.
+- A 2-layer encoder (width 896, about 19 million parameters) reads the text found, and the main network refers to it with cross-attention once every 3 layers. The parameters grow from 132 million to 172 million (+30%) and from 7 billion to 7.5 billion (+8%).
+- Every model is trained on 419 billion tokens with AdamW. The DB at training is 600 billion tokens, with 2 neighbors retrieved. The DB at evaluation is 1.75 trillion tokens (only 4% for books).
+- The training DB is built from the same subsets as the training data (§2.1). Since retrieving a sequence's own continuation breaks causality, neighbors from the same document as the training sequence are excluded (§2.3). No measurement without this exclusion appears in what was read.
+- The index is 215 GB for the 4-billion-token Wikipedia and 93 TB for all 1.75 trillion tokens. Retrieval takes 10 milliseconds.
 
-## 結果
+## Results
 
-BPB の値。左から1億7,200万、4億2,500万、15億、75億パラメータの順で、基準はそれぞれ1億3,200万、3億6,800万、13億、70億。
+BPB values. From left to right, 172 million, 425 million, 1.5 billion and 7.5 billion parameters; the baselines are 132 million, 368 million, 1.3 billion and 7 billion respectively.
 
-| 評価データ | 基準 | 検索あり |
+| Evaluation data | Baseline | With retrieval |
 |---|---|---|
-| C4 | 0.98、0.92、0.84、0.78 | 0.82、0.77、0.71、0.66 |
-| Wikipedia 2021年9月（DB 作成後の23記事） | 0.85、0.78、0.71、0.65 | 0.79、0.73、0.66、0.61 |
-| Curation Corpus（要約、DB にない） | 0.69、0.63、0.56、0.52 | 0.66、0.61、0.55、0.50 |
+| C4 | 0.98, 0.92, 0.84, 0.78 | 0.82, 0.77, 0.71, 0.66 |
+| Wikipedia September 2021 (23 articles written after the DB was built) | 0.85, 0.78, 0.71, 0.65 | 0.79, 0.73, 0.66, 0.61 |
+| Curation Corpus (summaries, not in the DB) | 0.69, 0.63, 0.56, 0.52 | 0.66, 0.61, 0.55, 0.50 |
 
-- DB の大きさ（最小モデル、C4、基準0.98）：20億と40億で0.97、90億〜360億で0.96、900億で0.95、1,800億で0.94、3,600億で0.92、9,000億で0.88、1.75兆で0.82。
-- 評価時に検索する数を増やすと、最小モデルは10件まで、最大モデルは40件まで良くなり、その先は悪くなる。
-- 検索を切ると、基準とほぼ同じになる。
-- The Pile：要旨は「GPT-3 や Jurassic-1 と同等で、パラメータは25分の1」とする。表の16件を数えると、75億パラメータの RETRO は Jurassic-1（1,780億）に10件、Gopher（2,800億）に9件で勝つ。
-- 質問応答（Natural Questions）：検索なし30.4%、RETRO 45.5%、FiD 51.4%。
-- 後付け：重みを固定し、追加部分だけを事前学習の3%のトークンで学習する。C4 ではゼロから学習した値に近づく。Curation Corpus の最小モデルは perplexity が基準と同じ約20.7のままで、ゼロから学習すると約18になる（図5から読む）。
-- 小さいデータ：Wikitext103 だけで学習すると、ゼロからの RETRO は過学習で基準より悪かった。基準に後付けすると、40億トークンの Wikipedia を検索して perplexity が21.53から18.46になった。
-- 部分の寄与（最小モデル、1,570億トークン、C4）：通常0.822、検索なし0.987、見つけた箇所だけ0.950、続きだけ0.895。学習時の検索が1件で0.858、4件で0.847。
+- DB size (smallest model, C4, baseline 0.98): 0.97 at 2 billion and 4 billion, 0.96 at 9 billion–36 billion, 0.95 at 90 billion, 0.94 at 180 billion, 0.92 at 360 billion, 0.88 at 900 billion and 0.82 at 1.75 trillion.
+- Retrieving more neighbors at evaluation helps up to 10 for the smallest model and up to 40 for the largest, and hurts beyond that.
+- With retrieval turned off, it is nearly the same as the baseline.
+- The Pile: the abstract says it is "comparable to GPT-3 and Jurassic-1, with 25× fewer parameters". Counting the table's 16 entries, the 7.5-billion-parameter RETRO beats Jurassic-1 (178 billion) on 10 and Gopher (280 billion) on 9.
+- Question answering (Natural Questions): 30.4% without retrieval, RETRO 45.5%, FiD 51.4%.
+- Retrofitting: the weights are frozen, and only the added parts are trained, on 3% of the pretraining tokens. On C4 it approaches the value of training from scratch. On Curation Corpus the smallest model's perplexity stays at about 20.7, the same as the baseline, while training from scratch gives about 18 (read from Figure 5).
+- Small data: trained on Wikitext103 alone, RETRO from scratch overfit and was worse than the baseline. Retrofitted onto the baseline, retrieving from the 4-billion-token Wikipedia took the perplexity from 21.53 to 18.46.
+- Contributions of the parts (smallest model, 157 billion tokens, C4): standard 0.822, no retrieval 0.987, only the passage found 0.950, only the continuation 0.895. With 1 neighbor retrieved at training 0.858, with 4 0.847.
 
-## 丸写しの切り分け
+## Separating out verbatim copying
 
-評価の各箇所と、DB から探した10件との最長の一致を測り、一致が短い箇所だけで BPB を測る（§2.6）。論文は、改善のうちリークによる分は控えめと結論している。
+For each evaluation chunk, the longest match with the 10 neighbors found in the DB is measured, and BPB is measured only on the chunks with short matches (§2.6). The paper concludes that the part of the improvement due to leakage is modest.
 
-最小モデルの値を図6から読むと、基準から検索ありへの変化は次の通り。
+Reading the smallest model's values from Figure 6, the change from the baseline to retrieval is as follows.
 
-| 評価データ | 全箇所 | 一致8トークン以下 |
+| Evaluation data | All chunks | Match of 8 tokens or fewer |
 |---|---|---|
 | C4 | 0.980→0.817 | 1.015→0.977 |
-| Wikipedia 2021年9月 | 0.852→0.794 | 0.862→0.838 |
+| Wikipedia September 2021 | 0.852→0.794 | 0.862→0.838 |
 | Curation Corpus | 0.646→0.619 | 0.655→0.629 |
 | Wikitext103 | 0.915→0.335 | 0.923→0.587 |
 
-## 書かれていないこと、合わないこと
+## What is not stated, and what does not match
 
-- 検索なしのモデルと比べた学習時間と、DB を作る費用は書かれていない。時間の図は RETRO を基準にした相対値で、同じコストでの比較もない。
-- 絞り込みの図の75億パラメータの線は表と合わない。Wikipedia 2021年9月の検索ありは図で約0.58、表で0.61。The Pile の arxiv の基準は図で約0.42、表で0.742。
-- 本文は dm_mathematics と ubuntu_irc で基準を超えないとするが、表では少し良い（1.177→1.164、1.200→1.178）。
+- The training time compared with the model without retrieval, and the cost of building the DB, are not stated. The time figure gives values relative to RETRO, and there is no comparison at the same cost either.
+- The 7.5-billion-parameter line in the filtering figure does not match the table. Wikipedia September 2021 with retrieval is about 0.58 in the figure and 0.61 in the table. The baseline on The Pile's arxiv is about 0.42 in the figure and 0.742 in the table.
+- The text says it does not beat the baseline on dm_mathematics and ubuntu_irc, but in the table it is slightly better (1.177→1.164, 1.200→1.178).
 
-読んだのは HTML 版の本文、付録、図。図の値は目盛りからの読み取り。
+The main text, the appendix and the figures of the HTML version were read. The values in the figures were read off the axis ticks.

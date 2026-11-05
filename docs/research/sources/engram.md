@@ -1,23 +1,23 @@
 # Engram
 
-Cheng ら（DeepSeek、北京大学）、Conditional Memory via Scalable Lookup（arXiv 2601.07372、v2 は 2026-07）。
+Cheng et al. (DeepSeek, Peking University), Conditional Memory via Scalable Lookup (arXiv 2601.07372, v2 in 2026-07).
 
-- 直前の2〜3トークンをハッシュして学習する表を引き、内部の状態で作るゲートを通して足す。30層のモデルでは2層目と15層目に入れる。推論では表を GPU の外に置ける。
-- 2,620億トークン、動くパラメータ38億、30層の比較。
+- It hashes the preceding 2–3 tokens to look up a learned table, and adds the result through a gate made from the internal state. In the 30-layer model it goes in at layers 2 and 15. At inference the table can be kept off the GPU.
+- A comparison at 262 billion tokens, 3.8 billion active parameters and 30 layers.
 
-| | 素のモデル | MoE | Engram 27B | Engram 40B |
+| | Dense model | MoE | Engram 27B | Engram 40B |
 |---|---|---|---|---|
-| 全パラメータ | 41億 | 267億 | 267億 | 395億 |
-| 検証 loss | 1.768 | 1.634 | 1.622 | 1.610 |
+| Total parameters | 4.1 billion | 26.7 billion | 26.7 billion | 39.5 billion |
+| Validation loss | 1.768 | 1.634 | 1.622 | 1.610 |
 | The Pile loss | 2.091 | 1.960 | 1.950 | 1.942 |
 | MMLU | 48.6 | 57.4 | 60.4 | 60.6 |
 
-- 全パラメータをそろえて MoE の分を表へ回すと、最適は2〜3割。6e20 FLOPs で 1.7248 から 1.7109。図から読むと、5%回すだけで効果の7〜9割が出る。
-- 全体30億（動く5.68億）の MoE、1,000億トークンに表を足すと、検証 loss は1.808から、26万行で1.788、1,000万行で1.743（図から読む）。
-- 12層のモデルに1.6B の表を1つ入れる位置を変えると、2層目が1.7705で最良、12層目が1.7826（図から読む）。2層目と6層目に分けると1.768。そこからゲートを外すと約1.773、語彙の圧縮を外すと約1.7735、畳み込みを外すと約1.7685。
-- 1,000億パラメータの表を GPU の外に置いたときの速度の低下は1.9%と2.8%。
-- 推論で表を切ると、TriviaQA は元の29%、MATH は36%、C3 は93%の成績が残る。著者は、学習時と条件が変わるので結果にノイズが入ると断っている。
+- With the total parameters held equal and the MoE's share moved to the table, the optimum is 20–30%. At 6e20 FLOPs, from 1.7248 to 1.7109. Read from the figure, moving just 5% gives 70–90% of the effect.
+- Adding the table to an MoE of 3 billion in total (568 million active) on 100 billion tokens takes the validation loss from 1.808 to 1.788 with 260,000 rows and 1.743 with 10 million rows (read from the figure).
+- Varying where one 1.6B table goes in a 12-layer model, layer 2 is best at 1.7705 and layer 12 gives 1.7826 (read from the figure). Splitting it between layers 2 and 6 gives 1.768. From there, removing the gate gives about 1.773, removing the vocabulary compression about 1.7735, and removing the convolution about 1.7685.
+- With a table of 100 billion parameters kept off the GPU, the slowdown is 1.9% and 2.8%.
+- Cutting off the table at inference leaves 29% of the original score on TriviaQA, 36% on MATH and 93% on C3. The authors caution that the results are noisy because the conditions differ from training.
 
-合わない点：要旨の MMLU +3.4 は表では +3.0（+3.4 は MMLU-Redux）。本文は OverEncoding が MoE の上で意味のある改善を出さないとするが、図では125万行で1.808から約1.782になる。Engram 40B は HumanEval、MBPP、C3 で 27B より低く、著者は学習不足と推測しているが確かめていない。
+Inconsistencies: the abstract's MMLU +3.4 is +3.0 in the table (+3.4 is MMLU-Redux). The text says OverEncoding gives no meaningful improvement on top of an MoE, but in the figure it goes from 1.808 to about 1.782 with 1.25 million rows. Engram 40B is lower than 27B on HumanEval, MBPP and C3; the authors guess it is undertrained but did not check.
 
-読んだのは本文、付録の表、主な図。参考文献の先は読んでいない。
+The main text, the appendix's tables and the main figures were read. The cited works were not read.

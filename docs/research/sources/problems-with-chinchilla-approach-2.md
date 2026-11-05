@@ -1,10 +1,10 @@
 # Problems with Chinchilla Approach 2
 
-Eric Czech の記事（Open Athena、2026-03、https://www.openathena.ai/blog/problems-with-chinchilla-approach-2/）。
+A post by Eric Czech (Open Athena, 2026-03, https://www.openathena.ai/blog/problems-with-chinchilla-approach-2/).
 
-- Chinchilla の Approach 2 は、同じ計算量の点に放物線を当てはめて最適を探す。実際の曲線は放物線ではないので、点の取り方によって偏りが出る。
-- 公開された約15の例にも、最適の点が中央に来ていないものがある。
-- Llama 3 のデータでは、Approach 2 と Approach 3 で計算量の配分の予測が約6.5%ずれた。
-- 著者は Approach 3 を、より偏りの少ない方法として勧めるが、完全な正解とはしていない。
+- Chinchilla's Approach 2 fits a parabola to points of the same compute to find the optimum. The actual curves are not parabolas, so the choice of points introduces a bias.
+- Some of the roughly 15 published examples also have the optimum away from the middle.
+- On Llama 3's data, Approach 2 and Approach 3 differed by about 6.5% in the predicted allocation of compute.
+- The author recommends Approach 3 as a less biased method, but does not present it as fully correct.
 
-読んだのは記事の全文。元の論文は読んでいない。
+Read: the whole post. The original paper was not read.

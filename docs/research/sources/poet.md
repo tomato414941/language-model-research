@@ -1,7 +1,7 @@
 # POET
 
-Wang ら、Paired Open-Ended Trailblazer（arXiv 1901.01753、2019）。
+Wang et al., Paired Open-Ended Trailblazer (arXiv 1901.01753, 2019).
 
-課題と解を同時に作り、解を別の課題へ移すことで行き詰まりを抜ける。二足歩行の障害物コースで、直接の最適化では解けない課題を解いた。途中の解を踏み台として残すことを重視している。
+It generates tasks and solutions together, and gets out of dead ends by transferring solutions to other tasks. On biped-walking obstacle courses, it solved tasks that direct optimization cannot solve. It stresses keeping intermediate solutions as stepping stones.
 
-読んだのは要旨と導入の一部。
+The abstract and part of the introduction were read.

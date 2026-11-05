@@ -1,48 +1,48 @@
-# x0、resid の重み
+# x0 and resid weights
 
-層ごとに学習する2つの数で、各ブロックの前に `x = resid[i] * x + x0[i] * x0` とする。`x0` は埋め込みの直後の値で、深い層にもトークンそのものの情報を届ける。増える重みは層の数の2倍だけ。`language-model` に短いメモ（[x0](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/x0-lambdas.md)、[resid](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/resid-lambdas.md)）がある。
+Two numbers learned per layer, applied before each block as `x = resid[i] * x + x0[i] * x0`. `x0` is the value right after the embedding, and it brings the token's own information to deep layers too. The only added weights are twice the number of layers. `language-model` has short notes ([x0](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/x0-lambdas.md), [resid](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/resid-lambdas.md)).
 
-## 分かっていること
+## What is known
 
-差は自分たちの計算。
+The differences are our own calculations.
 
-| 出典 | 条件 | 足したもの | 結果 |
+| Source | Conditions | What was added | Result |
 |---|---|---|---|
-| [nanochat](../sources/nanochat-log.md)（01-11） | Muon、8〜20層、BPB | x0 と resid | 8層 −0.95%、12層 −0.79%、16層 −0.63%、20層 −0.46% |
-| [modded-nanogpt の記録9](../sources/modded-nanogpt-records.md) | Muon、12層、幅768、3,200回の更新 | 近道（value residual のあと） | −0.28%。1回の更新は146から152ミリ秒（4.1%遅い） |
-| [Marin](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/marin-nano-arch-ablations.md) | 1.5億〜2.8億、1つずつ足す | resid、そのあと x0 | −0.25%、−0.08% |
+| [nanochat](../sources/nanochat-log.md) (01-11) | Muon, 8–20 layers, BPB | x0 and resid | 8 layers −0.95%, 12 layers −0.79%, 16 layers −0.63%, 20 layers −0.46% |
+| [modded-nanogpt's record 9](../sources/modded-nanogpt-records.md) | Muon, 12 layers, width 768, 3,200 updates | Shortcut (after value residual) | −0.28%. Each update went from 146 to 152 milliseconds (4.1% slower) |
+| [Marin](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/marin-nano-arch-ablations.md) | 150 million to 280 million, added one at a time | resid, then x0 | −0.25%, −0.08% |
 
-- **nanochat の数字は高めに出ている：** 学習率を振って一番良い値を選んだ結果で、Value embeddings を入れる前の比較。Value embeddings もトークンの情報を深い層へ届けるので、重なるかもしれない（自分たちの読み）。記録9は value residual のあとで、差が小さい。
-- **費用：** [2番目の束](../experiments/second-bundle.md)の H100 で、1回の更新が3.1%遅い（0.597秒と0.615秒。換算で +0.17%）。nanochat は計算はほとんど増えないとし、記録9は4.1%遅い。
-- **学習率：** nanochat は、足す x0 は0.5でよく、掛ける resid は100分の1でないとうまくいかないとしている。x0 の beta1 は0.96が一番良く、0.98で大きく悪くなる（d20）。[autoresearch](../sources/autoresearch.md) は x0 を0.1、resid を1.0から始め、学習率は0.5と0.005。今の nanochat は x0 を0.20から0.05へ、resid を1.15から1.05へ、層ごとに下げて始める。
-- **一番良い学習率は深さで違う：** nanochat の x0 の値は8層で0.2、12層で0.6、16層で0.2、20層で0.1。今の0.5は調整していない。
-- **出だし：** 2番目の束の形で、本来の約500分の1のバッチで試すと、重みありは4回目の更新で損失が跳ね（9.36と8.04）、30回目ごろまでにほぼ追いつく（[確認の記録](../experiments/second-bundle-code-check.md)）。品質の比較ではない。
-- **学習された値：** [1回の学習を見た記事](../sources/modded-nanogpt-lambdas.md)では、x0 の重みは多くの層で大きい。あるなしの比較ではない。
+- **nanochat's figures run high:** they come from sweeping the learning rate and picking the best value, and the comparison predates value embeddings. Value embeddings also bring token information to deep layers, so the two may overlap (our reading). Record 9 comes after value residual, and its difference is small.
+- **Cost:** on the H100 of [the second bundle](../experiments/second-bundle.md), each update is 3.1% slower (0.597 and 0.615 seconds; +0.17% when converted). nanochat says computation barely increases, and record 9 is 4.1% slower.
+- **Learning rate:** nanochat says 0.5 is fine for the added x0, while the multiplying resid does not work well unless it is 1/100. For x0, a beta1 of 0.96 is best, and 0.98 is much worse (d20). [autoresearch](../sources/autoresearch.md) starts x0 at 0.1 and resid at 1.0, with learning rates of 0.5 and 0.005. The current nanochat starts x0 at values falling from 0.20 to 0.05 and resid from 1.15 to 1.05, layer by layer.
+- **The best learning rate depends on depth:** nanochat's x0 values are 0.2 at 8 layers, 0.6 at 12, 0.2 at 16 and 0.1 at 20. The current 0.5 is untuned.
+- **The start of training:** in a trial with the second bundle's shape at a batch about 1/500 of the real one, the version with the weights had its loss jump at the 4th update (9.36 against 8.04) and had nearly caught up by around the 30th ([the check's record](../experiments/second-bundle-code-check.md)). It is not a comparison of quality.
+- **Learned values:** in [a post that examined one training run](../sources/modded-nanogpt-lambdas.md), the x0 weights are large in many layers. It is not a with-and-without comparison.
 
-**採用：** 使っているのは nanochat、autoresearch、modded-nanogpt（同じ流れのコード）と Marin の比較で、大きなモデルでの採用は見つけていない。modded-nanogpt の最適化の部門は「普通でない部品」として外している。
+**Adoption:** it is used by nanochat, autoresearch and modded-nanogpt (code of the same lineage) and in Marin's comparison; no adoption in a large model has been found. modded-nanogpt's optimization track leaves it out as an "unusual component".
 
-**近い考えの別の形：**
+**Other forms of a similar idea:**
 
-- [TIDE](../sources/tide.md)（Apple）：トークンごとの表を複数持ち、各層で混ぜて足す。7.5億〜30億で効果があり、大半は珍しいトークン。今の語彙なら表は小さいが、Muon や今の規模の結果はない。
-- [KromHC](../sources/kromhc.md)、mHC：残差の流れを複数に分ける。nanochat の x0 と resid の形と比べて、6層で −0.48%、12層で −0.35%（mHC）。流れの分だけ計算が増える。mHC は DeepSeek-V4 が採用している。
-- [Attention Residuals](../sources/attention-residuals.md)：前の層の値を注意で選ぶ。
+- [TIDE](../sources/tide.md) (Apple): holds several per-token tables, mixes them and adds the result at each layer. It works at 750 million to 3 billion, mostly on rare tokens. With the current vocabulary the tables are small, but there are no results with Muon or at the current scale.
+- [KromHC](../sources/kromhc.md), mHC: split the residual stream into several. Against nanochat's x0 and resid form, −0.48% at 6 layers and −0.35% at 12 layers (mHC). Computation grows with the number of streams. DeepSeek-V4 adopts mHC.
+- [Attention Residuals](../sources/attention-residuals.md): selects earlier layers' values with attention.
 
-## 今の見方
+## Current view
 
-2026-11時点の見方では、2番目の束に入れる。設定は autoresearch と同じにする（x0 は0.1から、学習率0.5、beta1 0.96。resid は1.0から、学習率0.005）。同じコストでの効果は0〜0.5%と見ている。理由は次の通り。
+The view as of 2026-11 is to put it in the second bundle. The settings are the same as autoresearch's (x0 from 0.1, learning rate 0.5, beta1 0.96; resid from 1.0, learning rate 0.005). We think the effect at the same cost is 0–0.5%. The reasons are these.
 
-- 比較はどれも良い向きで、悪くなった報告は見つけていない。
-- 1行の変更で、重みはほとんど増えない。
-- 束は測るのが1回なので、Muon で動いた例に揃える。autoresearch の学習率の組も、この形で動いている。
+- Every comparison points the good way, and no report of it making things worse has been found.
+- It is a one-line change and adds almost no weights.
+- A bundle is measured only once, so it follows an example that worked with Muon. autoresearch's set of learning rates also runs with this form.
 
-`x0` は埋め込みの直後の値なので、埋め込みを分離して RMSNorm をかける形が前提（embeddings.md）。
+`x0` is the value right after the embedding, so this assumes the form with separate embeddings and RMSNorm applied (embeddings.md).
 
-TIDE、mHC、Attention Residuals は候補に残す。
+TIDE, mHC and Attention Residuals stay candidates.
 
-## 見方が変わりそうな条件
+## Conditions likely to change the view
 
-- 形を変えて遅くなる量が変わった場合。5%より遅いなら、外すことを考える。5%は換算で約0.27%で、品質の利点の中くらいの値に近い。
-- Value embeddings との重なりが測れた場合。
-- 本来のバッチでも学習の初めに損失が大きく跳ねる場合。x0 の学習率を下げる。
-- TIDE を Muon と今の規模で比べた結果が出た場合。
-- 効果を項目ごとに測った場合。
+- When changing the shape changes how much slower it is. If it is more than 5% slower, consider removing it. 5% converts to about 0.27%, close to the middle value of the quality benefit.
+- When the overlap with value embeddings is measured.
+- When the loss jumps sharply early in training even with the real batch. Lower x0's learning rate.
+- When results for TIDE with Muon at the current scale come out.
+- When the effect is measured item by item.

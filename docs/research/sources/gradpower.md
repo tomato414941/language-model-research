@@ -1,42 +1,42 @@
 # GradPower
 
-Wang、Wang、Zhang ら、GradPower: Powering Gradients for Faster Language Model Pre-Training（arXiv 2505.24275、v4 は2026-06、ICML 2026）。
+Wang, Wang, Zhang et al., GradPower: Powering Gradients for Faster Language Model Pre-Training (arXiv 2505.24275, v4 in 2026-06, ICML 2026).
 
-オプティマイザに渡す前に、勾配を要素ごとに `sign(g)·|g|^p` にする1行の変更。勾配のクリップのあと、モーメントの前にかける。オプティマイザのほかの設定は変えない。
+A one-line change that turns the gradient into `sign(g)·|g|^p` element-wise before passing it to the optimizer. It is applied after gradient clipping and before the moments. The optimizer's other settings are unchanged.
 
-## 条件
+## Conditions
 
-- LLaMA 型（6,600万〜20億）と Qwen2MoE（5億〜20億）。C4 は文脈256、1回の更新512本（131,072トークン）。OpenWebText は文脈1,024、480本（491,520トークン）。C4 の読む量は1パラメータ約20トークン。
-- AdamW は β 0.9、0.95、weight decay 0.1、クリップ1.0、準備1,000ステップ、最後は最大の10分の1。学習率は AdamW で探した値を、GradPower にもそのまま使う。
-- p は LLaMA 2億（C4）で一度だけ探して1.2に決め、ほかでも同じ値を使う。
-- 種を変えた6回の繰り返しは、一部の図だけ（付録 B.4）。ほかは1回ずつ。
+- LLaMA-type (66 million to 2 billion) and Qwen2MoE (500 million to 2 billion). C4 uses context 256 and 512 sequences per update (131,072 tokens). OpenWebText uses context 1,024 and 480 sequences (491,520 tokens). The amount read on C4 is about 20 tokens per parameter.
+- AdamW uses β 0.9, 0.95, weight decay 0.1, clipping 1.0, 1,000 warmup steps, and ends at a tenth of the peak. The learning rate found for AdamW is used unchanged for GradPower.
+- p was searched once, on LLaMA 200 million (C4), and set to 1.2; the same value is used everywhere else.
+- Six repeats with different seeds appear only in some figures (Appendix B.4). The rest are single runs.
 
-## 結果（AdamW）
+## Results (AdamW)
 
-| 条件 | AdamW | p=1.2 |
+| Conditions | AdamW | p=1.2 |
 |---|---|---|
-| 6,600万、C4、cosine、1万ステップ（種6回の平均） | 3.366 | 3.351 |
-| 2億、C4、cosine、3万ステップ（種6回の平均） | 3.006 | 2.988 |
-| 4億、C4、cosine、6万ステップ | 2.794 | 2.775 |
-| 10億、C4、cosine、15万ステップ | 2.570 | 2.548 |
-| 20億、C4、WSD、30万ステップ | 2.421 | 2.403 |
-| 2.5億、OpenWebText、cosine、5万ステップ | 2.834 | 2.822 |
+| 66 million, C4, cosine, 10,000 steps (mean of 6 seeds) | 3.366 | 3.351 |
+| 200 million, C4, cosine, 30,000 steps (mean of 6 seeds) | 3.006 | 2.988 |
+| 400 million, C4, cosine, 60,000 steps | 2.794 | 2.775 |
+| 1 billion, C4, cosine, 150,000 steps | 2.570 | 2.548 |
+| 2 billion, C4, WSD, 300,000 steps | 2.421 | 2.403 |
+| 250 million, OpenWebText, cosine, 50,000 steps | 2.834 | 2.822 |
 
-- 最後の検証損失を、図の SVG から自分たちで読み取った値。本文では、20億で −0.022、Qwen2MoE 20億で −0.028。
-- 図1の注記は 0.157×FLOPs（cosine）と 0.162×FLOPs（WSD）で、同じ損失に要る計算が約16%少ないという意味と読んだ。
-- 20億の6課題の平均は47.72→48.26（表1）。ARC-C だけ26.45→26.28と下がる。
-- p の比較（2億、C4）は、p=0.6で3.120、0.8で3.050、1.0で3.002、1.2で2.985、1.4で3.000（図2から読んだ値）。この大きさの更新では、1より小さい p は大きく悪い。
-- β1、β2 を AdamW と GradPower の両方で12通り探すと、最良同士は2.8328と2.8287で、差は約0.15%（付録 B.5、2.5億、OpenWebText）。上の表の同じ条件の差は約0.4%。ただ、表の GradPower（既定の β）の2.822は B.5 の最良より低く、B.5 と表の行が同じ条件かは書かれていない。
+- Final validation losses, read by us from the figures' SVGs. The text gives −0.022 at 2 billion and −0.028 for Qwen2MoE 2 billion.
+- Figure 1's annotations are 0.157×FLOPs (cosine) and 0.162×FLOPs (WSD), which we read as meaning about 16% less compute for the same loss.
+- At 2 billion, the mean over 6 tasks goes 47.72→48.26 (Table 1). Only ARC-C falls, 26.45→26.28.
+- The comparison of p (200 million, C4): 3.120 at p=0.6, 3.050 at 0.8, 3.002 at 1.0, 2.985 at 1.2 and 3.000 at 1.4 (values read from Figure 2). At this update size, p below 1 is much worse.
+- Searching 12 combinations of β1 and β2 for both AdamW and GradPower, the two bests are 2.8328 and 2.8287, a difference of about 0.15% (Appendix B.5, 250 million, OpenWebText). The difference under the same conditions in the table above is about 0.4%. However, the table's 2.822 for GradPower (default β) is lower than B.5's best, and it is not stated whether B.5 and the table's row share the same conditions.
 
-## Muon との組み合わせ
+## Combined with Muon
 
-- Muon は Kimi の形（weight decay と、行列の形に合わせて更新を大きくする）で、学習率は AdamW と同じ。p=1.2 で、ほかの設定も Muon と同じ（付録 B.2）。モーメントの前にかけるかは書かれていない。
-- 図5から読んだ値で、2億（C4、cosine、3万ステップ）は2.965→2.952、4億（6万ステップ）は2.770→2.753。図に揺れの幅はなく、種の数は書かれていない。1回の更新は131,072トークン。
+- Muon is in Kimi's form (weight decay, and updates scaled up to match the matrix's shape), with the same learning rate as AdamW. p=1.2, and the other settings are the same as Muon's (Appendix B.2). Whether it is applied before the momentum is not stated.
+- Values read from Figure 5: 2.965→2.952 at 200 million (C4, cosine, 30,000 steps) and 2.770→2.753 at 400 million (60,000 steps). The figure shows no noise band, and the number of seeds is not stated. Each update is 131,072 tokens.
 
-## 1回の更新の大きさ
+## The size of one update
 
-- LLaMA 2億、C4、WSD で、1回の更新を512〜8,192本（131,072〜約210万トークン）に変えて p を0.8〜1.4で比べた（付録 B.3、図6）。どの大きさでも AdamW の学習率は1e-3が一番良かった。損失は、一番良い設定が約3.5に届いたところで比べる。
-- 図から読んだ値で、p=1.0と比べた p=1.2 の差は、512本で −0.024、2,048本（524,288トークン）で −0.010、4,096本で −0.001（一番良いのは1.1で −0.003）、8,192本で +0.003。8,192本では値が上下し、0.9と1.1がどちらも1.0より約0.01低い。
-- 論文は、最適な p は更新が大きいほど（勾配の揺れが小さいほど）下がり、大きい更新では1より小さくなりうるとする。画像（ResNet-34、CIFAR-10）では、更新128で p=0.8、64で0.85、32で1.0が一番良く、p=1.2 はどれでも1.0より正解率が低い（表2）。
+- On LLaMA 200 million, C4, WSD, it varied the update from 512 to 8,192 sequences (131,072 to about 2.1 million tokens) and compared p from 0.8 to 1.4 (Appendix B.3, Figure 6). At every size, 1e-3 was the best AdamW learning rate. The losses are compared at the point where the best setting reached about 3.5.
+- Values read from the figure: the difference of p=1.2 against p=1.0 is −0.024 at 512 sequences, −0.010 at 2,048 (524,288 tokens), −0.001 at 4,096 (the best is 1.1, at −0.003) and +0.003 at 8,192. At 8,192 the values go up and down, with 0.9 and 1.1 both about 0.01 lower than 1.0.
+- The paper says the optimal p falls as the update grows (as the gradient noise shrinks), and can go below 1 for large updates. On images (ResNet-34, CIFAR-10), p=0.8 is best at an update of 128, 0.85 at 64 and 1.0 at 32, and p=1.2 has lower accuracy than 1.0 at all of them (Table 2).
 
-読んだのは HTML の本文と付録 B（4.4、4.6節と付録 B.2〜B.5 は HTML から直接、残りは要約を通したもの）。図の数字は図の SVG から読み取った。証明（付録 C、D）は読んでいない。
+The HTML main text and Appendix B were read (sections 4.4 and 4.6 and Appendices B.2–B.5 directly from the HTML, the rest through summaries). The figures' numbers were read from their SVGs. The proofs (Appendices C, D) were not read.

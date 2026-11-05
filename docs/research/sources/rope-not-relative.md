@@ -1,8 +1,8 @@
-# RoPE は本当の相対位置ではないという論文
+# A paper arguing that RoPE is not truly relative position
 
-Oka、Nishida、Yokoi、RoPE Is Not a Proper Relative Position Embedding（NeurIPS 2026 のポスター）。
+Oka, Nishida, Yokoi, RoPE Is Not a Proper Relative Position Embedding (NeurIPS 2026 poster).
 
-- RoPE は相対位置の埋め込みと呼ばれることがあるが、距離とともに弱まるという性質を満たさないと示す立場の論文。文脈を伸ばすときに補間や追加の学習が要るのは、この見方と合うとしている。
-- 代わりの方式の提案はなく、学習の損失の数字もない。
+- RoPE is sometimes called a relative position embedding; this position paper shows that it does not satisfy the property of weakening with distance. It says that the need for interpolation or extra training when extending the context fits this view.
+- It proposes no alternative scheme, and gives no numbers for the training loss.
 
-読んだのは [NeurIPS のページ](https://neurips.cc/virtual/2026/poster/140089)の要旨を要約ツールを通したものだけ。
+Only the abstract on the [NeurIPS page](https://neurips.cc/virtual/2026/poster/140089) was read, through a summarizing tool.

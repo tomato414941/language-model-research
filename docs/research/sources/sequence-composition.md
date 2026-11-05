@@ -1,18 +1,18 @@
 # Sequence Composition
 
-Zhao ら、Analysing The Impact of Sequence Composition on Language Model Pre-Training（arXiv 2402.13991）。文書の詰め方と、文書の間の注意を比べた。行の途中から始める形との比較ではない。
+Zhao et al., Analysing The Impact of Sequence Composition on Language Model Pre-Training (arXiv 2402.13991). It compares ways of packing documents, and attention across documents. It is not a comparison with starting partway through a row.
 
-13億パラメータ、LLaMA の形、SlimPajama 1,500億トークン。テストの perplexity の7つのデータの平均（損失の差は、平均から出した自分たちの計算）：
+1.3 billion parameters, the LLaMA architecture, 150 billion tokens of SlimPajama. Test perplexity averaged over seven datasets (the loss differences are our own calculation from the averages):
 
-| 詰め方 | 文脈2,048 | 差 | 文脈8,192 | 差 |
+| Packing | Context 2,048 | Difference | Context 8,192 | Difference |
 |---|---|---|---|---|
-| ランダムな文書を詰める | 9.172 | | 9.065 | |
-| 同じ出どころの文書を詰める | 8.831 | −1.7% | 8.851 | −1.1% |
-| 似た文書を BM25 で選んで詰める | 8.550 | −3.2% | 8.289 | −4.1% |
-| 文書の中だけで注意を計算する | 8.410 | −3.9% | | |
+| Pack random documents | 9.172 | | 9.065 | |
+| Pack documents from the same source | 8.831 | −1.7% | 8.851 | −1.1% |
+| Pack similar documents chosen with BM25 | 8.550 | −3.2% | 8.289 | −4.1% |
+| Compute attention only within documents | 8.410 | −3.9% | | |
 
-- 文書の間の注意は邪魔になるとしている。文書の中だけの注意は計算が4%増える（著者の実装）。
-- BM25 の形は注意の計算を変えないので、学習の効率を落とさないとしている。
-- 下流の課題でも良くなるとしている。
+- It says attention across documents gets in the way. Attention only within documents costs 4% more compute (in the authors' implementation).
+- It says the BM25 approach does not change the attention computation, so it does not lower training efficiency.
+- It says downstream tasks improve as well.
 
-読んだのは導入、3節の始め、表1の文脈2,048の行と文脈8,192の一部。文脈8,192の文書の中だけの行は読めていない。
+The introduction, the start of Section 3, Table 1's rows at context 2,048 and part of those at context 8,192 were read. The within-document row at context 8,192 could not be read.

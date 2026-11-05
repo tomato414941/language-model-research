@@ -1,8 +1,8 @@
 # A quick(ish) Chinchilla check
 
-Giles Thomas のブログ記事（2026-08、https://www.gilesthomas.com/2026/08/chinchilla-check）。
+A blog post by Giles Thomas (2026-08, https://www.gilesthomas.com/2026/08/chinchilla-check).
 
-- GPT-2 の形の1億6,300万パラメータで、1パラメータ40トークンの学習と、同じ計算量でモデルを2倍にした学習を比べた。
-- 著者によると、モデルを大きくするほうがわずかに良かったが、差はノイズかもしれない程度だった。
+- With a GPT-2-shaped model of 163 million parameters, it compared training at 40 tokens per parameter with training a model twice the size at the same compute.
+- According to the author, the larger model was slightly better, but the difference was small enough that it might be noise.
 
-読んだのは記事の前半。数字の表は読んでいない。
+Only the first half of the post was read. The tables of numbers were not read.

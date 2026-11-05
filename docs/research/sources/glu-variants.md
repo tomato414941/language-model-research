@@ -1,11 +1,11 @@
 # GLU Variants
 
-Shazeer、GLU Variants Improve Transformer（arXiv 2002.05202）。SwiGLU の出どころ。
+Shazeer, GLU Variants Improve Transformer (arXiv 2002.05202). Where SwiGLU comes from.
 
-- 活性化を通した行列の出力と、もう1つの行列の出力を、要素ごとに掛ける。重みと計算を揃えるために、中の幅を4倍から8/3倍に減らす。
-- T5 の穴埋めの課題で、C4 の事前学習の heldout の log-perplexity（低いほど良い）。
+- The output of one matrix passed through the activation is multiplied elementwise by the output of another matrix. To keep the parameters and compute equal, the inner width is cut from 4× to 8/3×.
+- T5's fill-in-the-blank task; held-out log-perplexity of pretraining on C4 (lower is better).
 
-| MLP | 65,536回 | 524,288回 |
+| MLP | 65,536 updates | 524,288 updates |
 |---|---|---|
 | ReLU | 1.997 | 1.677 |
 | GELU | 1.983 | 1.679 |
@@ -16,6 +16,6 @@ Shazeer、GLU Variants Improve Transformer（arXiv 2002.05202）。SwiGLU の出
 | SwiGLU | 1.944 | 1.636 |
 | ReGLU | 1.953 | 1.645 |
 
-GELU から SwiGLU で −2.6%（自分たちの計算）。ReLU² は比べていない。自己回帰の言語モデルではなく、下流の課題の結果はばらつきが大きいと書いている。
+GELU to SwiGLU: −2.6% (our own calculation). ReLU² is not compared. The model is not an autoregressive language model, and the paper says the downstream task results vary widely.
 
-読んだのは本文と表1。
+The main text and Table 1 were read.

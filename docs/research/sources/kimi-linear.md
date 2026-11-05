@@ -1,10 +1,10 @@
 # Kimi Linear
 
-Kimi Team（arXiv 2510.26692、2025-10）。Gated DeltaNet をヘッドごとの細かいゲートに拡張し（KDA）、全注意と3:1で混ぜる。
+Kimi Team (arXiv 2510.26692, 2025-10). It extends Gated DeltaNet with finer-grained gates per head (KDA) and mixes it with full attention at 3:1.
 
-- 同じ計算量の比較（動くパラメータ6.5億、MoE、Muon）。全注意は学習の perplexity 9.45、検証5.77。3:1は9.23、5.65。7:1は検証5.70、15:1は5.82。
-- スケーリング則（動く6.5億〜17億、最適なトークン量）：全注意 2.3092·C^−0.0536、Kimi Linear 2.2879·C^−0.0527。計算量で約1.16倍分。全注意は grid search で調整し、Kimi Linear は同じ設定を使った。
-- 全体480億（動く30億）を1.4兆トークン。MMLU は全注意71.6、Kimi Linear 73.8。MMLU-Pro は47.2と51.0。
-- 主な利点は長い文脈で、KV キャッシュが最大75%減り、100万トークンの文脈で生成が最大6倍速い。文脈4,000トークンでは同じくらいの速度と示している。
+- Comparison at the same compute (650 million active parameters, MoE, Muon). Full attention has a training perplexity of 9.45 and a validation perplexity of 5.77. 3:1 has 9.23 and 5.65. 7:1 has 5.70 on validation, and 15:1 has 5.82.
+- Scaling laws (650 million to 1.7 billion active, compute-optimal token counts): full attention 2.3092·C^−0.0536, Kimi Linear 2.2879·C^−0.0527. The difference is worth about 1.16× in compute. Full attention was tuned by grid search, and Kimi Linear used the same settings.
+- 48 billion in total (3 billion active) on 1.4 trillion tokens. MMLU is 71.6 for full attention and 73.8 for Kimi Linear. MMLU-Pro is 47.2 and 51.0.
+- The main advantage is at long context: the KV cache shrinks by up to 75%, and generation at a 1 million token context is up to 6× faster. At a 4,000-token context, it shows about the same speed.
 
-読んだのは要旨、導入、実験の表、スケーリング則、効率の節の冒頭。KDA のアルゴリズムの詳細は読んでいない。
+The abstract, the introduction, the experiment tables, the scaling laws and the start of the efficiency section were read. The details of KDA's algorithm were not read.

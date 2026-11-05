@@ -1,9 +1,9 @@
-# 学習の安定の比較
+# A comparison of training-stability methods
 
-Methods of improving LLM training stability（arXiv 2410.16682）。
+Methods of improving LLM training stability (arXiv 2410.16682).
 
-- 8.3億パラメータで学習率を上げて発散させ、方法を比べた。
-- QK-norm と logit の softcap が基準の中で一番安定し、学習率60e-3で発散する。σReparam と LayerScale は40e-3で発散する。
-- QK-norm と softcap を組み合わせる形と、QKV のあとの正規化は、学習率をさらに1.5倍にできる。
+- At 830 million parameters, the learning rate was raised until training diverged, and the methods were compared.
+- QK-norm and the logit softcap are the most stable of the baseline methods, diverging at a learning rate of 60e-3. σReparam and LayerScale diverge at 40e-3.
+- Combining QK-norm and the softcap, and normalizing after QKV, allow the learning rate to go a further 1.5× higher.
 
-比べているのは発散の境目で、同じコストでの損失の差ではない。読んだのは要旨と結果の本文。
+What is compared is the point of divergence, not the difference in loss at the same cost. Read: the abstract and the body of the results.

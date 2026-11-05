@@ -1,34 +1,34 @@
-# speedrun の部品
+# Parts from the speedrun
 
-modded-nanogpt の記録で採用された部品のうち、2026-11-04 に3番目の束へ入れた4つ。束は同じ日に2番目の束より文書の頭から読む検証の BPB で約1%良かった（[3番目の束](../experiments/third-bundle.md)）が、1つずつの効果は分けていない。束はまとめて測るので、1つずつの効果が種による揺れ（約0.3%）より小さくても、効く見込みがあって安く入るものを入れた。中身は[記録の歴史](../sources/modded-nanogpt-records.md)にある。設定は `configs/bundle3.py` で、それぞれ外せる。
+Four of the parts adopted in modded-nanogpt's records, put into the third bundle on 2026-11-04. On the same day the bundle was about 1% better than the second bundle in validation BPB read from the start of documents ([the third bundle](../experiments/third-bundle.md)), but the effect of each one was not separated. Bundles are measured as a whole, so parts likely to help and cheap to add went in even if each one's effect is smaller than the seed noise (about 0.3%). Their details are in [the records' history](../sources/modded-nanogpt-records.md). The settings are in `configs/bundle3.py`, and each can be switched off.
 
-効果の見込みは、speedrun で減った時間や更新の回数を、計算量2倍で約3.9%という換算で今の規模に直したもの（自分たちの計算）。
+The expected effects convert the time or the number of updates saved in the speedrun to the current scale, using the conversion that 2× compute is worth about 3.9% (our own calculation).
 
-## 注意のゲート（`attention_gate`）
+## Attention gate (`attention_gate`)
 
-- **形：** 各ヘッドの出力に、注意の入力の最初の12チャンネルから作る0〜1のゲートを掛ける。重みは0から始め、最初はどのヘッドも半分開いている。重みは Value embeddings のゲートと同じく Muon で更新する（記録28と同じ）。
-- **理由：** 記録28で、3.28に届く更新が約3%減った（約0.15%）。著者は、ヘッドが何もしないことを選べるので、BOS を注意の向け先に使う必要が減るとしている。文書の途中から始まる行の弱さ（document-rows.md）も小さくなるかもしれない。
-- **弱いところ：** 1つの記録だけで、1回の時間が少し増える。
+- **Form:** Multiplies each head's output by a gate between 0 and 1, made from the first 12 channels of the attention input. Its weights start at 0, and at first every head is half open. The weights are updated with Muon, like the value embeddings' gate (as in record 28).
+- **Reason:** In record 28, the updates needed to reach 3.28 fell by about 3% (about 0.15%). The author says that since a head can choose to do nothing, there is less need to use BOS as a place to direct attention. The weakness on rows that start mid-document (document-rows.md) might shrink too.
+- **Weaknesses:** Only one record, and the time per update rises slightly.
 
-## Partial Key Offset（`key_offset`）
+## Partial Key Offset (`key_offset`)
 
-- **形：** 各ヘッドのチャンネルの組の半分を回転させず（残りの半分が回転の幅の全体を受け持つ）、回転しないチャンネルの key を1つ前の位置から取る。1つの層で「前に同じトークンが出たあとに来たもの」を見られるようにする。記録49は長い窓の層だけに使うが、全部の層に使うと損失が一番低かったとあるので、全部の層に使う。重みは増えない。
-- **理由：** 記録49で、5つの変更で約1.8%短くなり、その大半はこれによるとしている（約0.1%）。[Marin の記事](../sources/marin-moe.md)では計算量1.2倍分で、効果の半分は一部の次元だけ回転させる形から来るとしている（rope.md）。
-- **弱いところ：** Marin の数字は MoE の上のもの。一部の次元だけ回転させる形は、nanochat では少し悪かった。
+- **Form:** Leaves half of each head's channel pairs unrotated (the other half covers the whole range of rotation), and takes the keys of the unrotated channels from the previous position. This lets a single layer see "what came after the same token appeared before". Record 49 uses it only in the long-window layers, but says using it in all layers gave the lowest loss, so it is used in all layers. Adds no weights.
+- **Reason:** Record 49 got about 1.8% shorter with five changes, and says most of that is due to this (about 0.1%). [Marin's post](../sources/marin-moe.md) puts it at 1.2× the compute, and says half the effect comes from rotating only some dimensions (rope.md).
+- **Weaknesses:** Marin's number is on top of MoE. Rotating only some dimensions was slightly worse in nanochat.
 
-## MUDD（`dense_connections`）
+## MUDD (`dense_connections`)
 
-- **形：** 最後から2番目の層のあとで、小さい MLP（幅64）が位置ごとに、埋め込みの直後と、2つ前と自分の層の出力の重みを決める。1つの混ぜ方を流れに足し、もう1つを最後の層の V に足す。最後の層のあとは、埋め込みの直後と最後から2番目の層の出力を流れに足す。出口の重みは0から始め、最初は何もしない。層の選び方は記録81の11層の形を10層に直したもの。重みは AdamW で、ほかの重みの学習率の4分の1、β は0.9と0.99（記録81と同じ比と値）。
-- **理由：** 記録81で、同じ更新の回数で損失が0.26%下がり、1回の時間は1.8%増えた（差し引き約0.15%）。元の [MUDDFormer](https://arxiv.org/abs/2502.12170) を、この規模に合わせて削った形。
-- **弱いところ：** 記録81の作者は MUDDFormer の著者の1人。層の選び方や係数（1.15、0.2/√L）は記録のもので、今の形で選び直していない。
+- **Form:** After the second-to-last layer, a small MLP (width 64) decides, per position, weights for the stream right after the embeddings and for the outputs of the layer two before and of its own layer. One mixture is added to the stream, and another to the last layer's V. After the last layer, the stream right after the embeddings and the second-to-last layer's output are added to the stream. The exit weights start at 0, and at first it does nothing. The choice of layers is record 81's 11-layer form adapted to 10 layers. The weights use AdamW, at a quarter of the other weights' learning rate, with β of 0.9 and 0.99 (the same ratio and values as record 81).
+- **Reason:** In record 81, the loss fell by 0.26% at the same number of updates, and the time per update rose by 1.8% (about 0.15% net). It is the original [MUDDFormer](https://arxiv.org/abs/2502.12170) cut down to fit this scale.
+- **Weaknesses:** Record 81's author is one of MUDDFormer's authors. The choice of layers and the coefficients (1.15, 0.2/√L) are the record's, not re-chosen for our shape.
 
-## backout（`backout`）
+## backout (`backout`)
 
-- **形：** 7層目（10層のうち）のあとの流れを取っておき、最後の正規化の前に、学習する係数（0.5から）を掛けて引く。後の層の文脈のためだけに足した情報を、予測から外す考え。係数は x0 の重みと同じ学習率。
-- **理由：** 中くらいの部門の記録（PR #139）で、目標の損失に届く更新が5,590回から5,550回（約0.04%）。短い部門の記録40と、記録81の形にも入っている。
-- **弱いところ：** 効果は小さく、短い部門ではほかの調整と一緒で分けていない。
+- **Form:** Keeps the stream after the 7th layer (of 10), and before the final normalization subtracts it multiplied by a learned coefficient (starting at 0.5). The idea is to remove from the prediction the information added only as context for later layers. The coefficient has the same learning rate as the x0 weights.
+- **Reason:** In a record of the medium track (PR #139), the updates to reach the target loss went from 5,590 to 5,550 (about 0.04%). It is also in the short track's record 40 and in record 81's form.
+- **Weaknesses:** The effect is small, and in the short track it came together with other tuning, without being separated.
 
-## 見方が変わりそうな条件
+## What would change the view
 
-- 束を測って点が下がった場合。部品ごとには分けて測っていないので、まずここの4つを外して見直す。
-- 1回の更新の時間が見込みより大きく増えた場合。同じコストでは更新の回数が減る。
+- The bundle scoring worse when measured. The parts were not measured separately, so first remove these four and review.
+- The time per update rising much more than expected. At the same cost, the number of updates falls.

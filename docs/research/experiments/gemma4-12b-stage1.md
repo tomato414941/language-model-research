@@ -1,48 +1,48 @@
-# Gemma 4 12B の生成の設定と、公開の蒸留版を測った
+# Measured Gemma 4 12B's generation settings and a public distilled version
 
-2026-11-03 に、Gemma 4 12B の考え終わらない答えが学習なしで減るかを、Swallow の課題の一部で測った。試したのは、生成の設定を 2 通り変えることと、公開の蒸留版 12B を同じ問題で解かせることである。あわせて、元の 12B と蒸留版を tau2-bench の telecom で比べた。12B を蒸留で作り直す計画の最初の段階で、学習はしていない。スクリプトと、問題ごとの点の表は `open-models/gemma4-12b-stage1/` にある。
+On 2026-11-03, whether Gemma 4 12B's answers that never finish thinking decrease without training was measured on part of the Swallow tasks. Two things were tried: changing the generation settings in two ways, and having a public distilled 12B solve the same questions. The original 12B and the distilled version were also compared on tau2-bench's telecom. This is the first stage of a plan to rebuild the 12B by distillation; nothing was trained. The scripts and the per-question score tables are in `open-models/gemma4-12b-stage1/`.
 
-## 条件
+## Conditions
 
-- 機械：Vast.ai の RTX PRO 6000 Blackwell（96GB）を 1 枚、$1.36/時（GPU $1.333、ディスク $0.026）。ドライバ 595.84、CUDA 13.2。
-- 推論：vLLM 0.32.0、bf16、`--reasoning-parser gemma4`、同時 90 本（比べる相手を測ったときは指定なし）。文脈の上限は Swallow の課題で 32,768、tau2 では 65,536 で、tau2 では道具の呼び出しの解析を有効にした。
-- 採点：[swallow-evaluation-instruct](https://github.com/swallow-llm/swallow-evaluation-instruct) の v202604（lighteval の endpoint）。温度 0.6、top_p 0.95、考える部分あり。設定の変更は、評価ソフトと vLLM の間に置いたプロキシで、要求に書き足した。
-- 問題：各課題の一部だけを使った。JamC-QA 100 問、IFBench 100 問、M-IFEval（日本語）60 問、PolyMath（日本語）の high と top を 20 問ずつ（c2 は 10 問ずつ）、AIME 2024 と 2025 を 10 問ずつ 4 回。
-- 点：JamC-QA、PolyMath は抜き出した答えの一致、M-IFEval、IFBench は指示ごとの厳しい判定の正解率、AIME は 4 回の正解率の平均。
-- 比べる相手：2026-11-01 に、同じ評価ソフト、同じ vLLM、同じ生成の設定で測った元の 12B（`google/gemma-4-12B-it`）。同じ問題どうしで比べた。JamC-QA だけは回ごとに選ばれる 100 問が変わるので、元の 12B の 400 問と重なった 26〜33 問で比べた。
-- 考え終わらない答え：考える部分が閉じないまま終わった答え。評価ソフトが受け取った答えが `<think` で始まるもの。
-- 試した条件：
-  - c2：`repetition_penalty` 1.08。AIME は測っていない。
-  - c3：考え直しの語（wait、maybe、actually、however、but など）の形のうち 1 トークンになる 110 個に、`logit_bias` −2.0。
-  - c4：公開の蒸留版 [yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2](https://huggingface.co/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2)（リビジョン `af644ab`）を、設定を変えずに使った。
-  - 温度 1.0 の条件（c1）は測っていない。
-- tau2：[tau2-bench](https://github.com/sierra-research/tau2-bench) の `19f13ea` の text-v1。telecom の英語 50 問を 1 回ずつ動かした。問題を絞ったので、公式の点ではない。
-  - エージェント役は温度 0.6、top_p 0.95、考える部分あり。客役は元の 12B で、温度 0、考える部分なし。
-  - 打ち切りは、道具のエラー 10 回か 200 手。32 会話を同時に動かした。
-  - 蒸留版のときは、エージェント役と客役の 2 つのサーバーを GPU に半分ずつ載せた。元の 12B のときは、1 つのサーバーで両方の役を受けた。
-  - 元の 12B のときだけ、1 会話 20 分の上限（`--timeout 1200`）を付けた。
+- Machine: one RTX PRO 6000 Blackwell (96GB) on Vast.ai, $1.36/hour (GPU $1.333, disk $0.026). Driver 595.84, CUDA 13.2.
+- Inference: vLLM 0.32.0, bf16, `--reasoning-parser gemma4`, 90 concurrent sequences (not specified when the comparison was measured). The context limit was 32,768 for the Swallow tasks and 65,536 for tau2, and for tau2 tool-call parsing was enabled.
+- Scoring: v202604 of [swallow-evaluation-instruct](https://github.com/swallow-llm/swallow-evaluation-instruct) (lighteval's endpoint). Temperature 0.6, top_p 0.95, thinking on. The setting changes were added to the requests by a proxy placed between the evaluation software and vLLM.
+- Questions: only part of each task was used. JamC-QA 100 questions, IFBench 100, M-IFEval (Japanese) 60, PolyMath (Japanese) high and top 20 each (10 each for c2), AIME 2024 and 2025 10 each, 4 times.
+- Score: for JamC-QA and PolyMath, the match of the extracted answer; for M-IFEval and IFBench, the per-instruction accuracy under strict judging; for AIME, the mean accuracy over the 4 times.
+- Comparison: the original 12B (`google/gemma-4-12B-it`), measured on 2026-11-01 with the same evaluation software, the same vLLM and the same generation settings. The comparison was made on the same questions. For JamC-QA alone, the 100 questions chosen change from run to run, so the comparison used the 26–33 questions that overlapped with the original 12B's 400.
+- Answer that never finishes thinking: an answer that ended with its thinking part not closed, that is, one where the answer the evaluation software received starts with `<think`.
+- Conditions tried:
+  - c2: `repetition_penalty` 1.08. AIME was not measured.
+  - c3: `logit_bias` −2.0 on the 110 forms of rethinking words (wait, maybe, actually, however, but and so on) that are a single token.
+  - c4: the public distilled version [yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2](https://huggingface.co/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2) (revision `af644ab`), used with the settings unchanged.
+  - The temperature 1.0 condition (c1) was not measured.
+- tau2: text-v1 of [tau2-bench](https://github.com/sierra-research/tau2-bench) at `19f13ea`. The 50 English telecom questions were run once each. The questions were narrowed down, so these are not official scores.
+  - The agent role used temperature 0.6, top_p 0.95, thinking on. The customer role was the original 12B, temperature 0, thinking off.
+  - A conversation was cut off at 10 tool errors or 200 steps. 32 conversations ran at once.
+  - For the distilled version, two servers, one for the agent role and one for the customer role, each took half the GPU. For the original 12B, one server took both roles.
+  - Only for the original 12B, a limit of 20 minutes per conversation (`--timeout 1200`) was set.
 
-## 時間と費用
+## Time and cost
 
-| 段階 | 時刻（UTC） | 長さ |
+| Stage | Time (UTC) | Length |
 |---|---|---|
-| 借りてから、導入とモデルの取得が終わるまで | 04:55〜06:02 | 67 分 |
-| 承認待ちで、機械が何もしていなかった | 06:02〜07:34 | 92 分 |
-| c3 の 1 回目（GPU のエラーで使えず） | 07:34〜08:16 | 42 分 |
-| c4 | 08:16〜09:07 | 50 分 |
-| c2 | 09:07〜09:31 | 24 分 |
-| c3 の 2 回目（うち 34 分は固まっていた） | 09:31〜10:49 | 78 分 |
-| tau2、蒸留版 | 10:49〜11:35 | 46 分 |
-| tau2、元の 12B | 11:35〜12:11 | 36 分 |
-| tau2、元の 12B の 14 問の測り直し | 12:11〜13:22 | 71 分 |
+| From renting until setup and downloading the models finished | 04:55–06:02 | 67 min |
+| Waiting for approval, with the machine doing nothing | 06:02–07:34 | 92 min |
+| c3, first run (unusable because of a GPU error) | 07:34–08:16 | 42 min |
+| c4 | 08:16–09:07 | 50 min |
+| c2 | 09:07–09:31 | 24 min |
+| c3, second run (frozen for 34 minutes of it) | 09:31–10:49 | 78 min |
+| tau2, distilled version | 10:49–11:35 | 46 min |
+| tau2, original 12B | 11:35–12:11 | 36 min |
+| tau2, remeasuring 14 questions of the original 12B | 12:11–13:22 | 71 min |
 
-借りていた 8.45 時間で $11.64 だった。内訳は GPU $11.27、ディスク $0.22、取得 55.6GB の通信 $0.15 で、Vast の請求の記録による。導入そのもの（評価ソフト、vLLM、tau2、2 つのモデルの取得）は 9 分で終わった。
+The rental of 8.45 hours cost $11.64: GPU $11.27, disk $0.22 and $0.15 of traffic for the 55.6GB downloaded, according to Vast's billing records. The setup itself (the evaluation software, vLLM, tau2 and downloading the two models) finished in 9 minutes.
 
-## 点
+## Scores
 
-### c2：繰り返しを抑える
+### c2: suppressing repetition
 
-| 課題 | 問題数 | 考え終わらない割合 | 点 | 差（± 標準誤差） |
+| Task | Questions | Share that never finished thinking | Score | Difference (± standard error) |
 |---|---|---|---|---|
 | JamC-QA | 33 | 15.2% → 6.1% | 0.424 → 0.485 | +0.061 ± 0.106 |
 | M-IFEval | 60 | 6.7% → 1.7% | 0.778 → 0.797 | +0.019 ± 0.027 |
@@ -50,59 +50,59 @@
 | PolyMath high | 10 | 40% → 20% | 0.500 → 0.400 | −0.100 ± 0.100 |
 | PolyMath top | 10 | 50% → 10% | 0.300 → 0.800 | +0.500 ± 0.224 |
 
-数学以外の 3 課題では、考え終わらない割合が半分以下になった。この 3 課題の点の差は、どれも標準誤差の 2 倍より小さい。PolyMath は 10 問ずつで、top は上がり、high は下がった。
+On the three tasks other than math, the share of answers that never finished thinking fell to half or less. On these three tasks, every score difference was smaller than twice its standard error. PolyMath had 10 questions each; top rose and high fell.
 
-### c3：考え直しの語を出にくくする
+### c3: making rethinking words less likely
 
-| 課題 | 問題数 | 考え終わらない割合 | 点 | 差（± 標準誤差） |
+| Task | Questions | Share that never finished thinking | Score | Difference (± standard error) |
 |---|---|---|---|---|
 | JamC-QA | 31 | 16.1% → 16.1% | 0.452 → 0.419 | −0.032 ± 0.073 |
 | M-IFEval | 60 | 6.7% → 1.7% | 0.778 → 0.781 | +0.003 ± 0.022 |
 
-残りの 4 課題は、サーバーが固まって測れなかった。
+The other 4 tasks could not be measured because the server froze.
 
-### c4：公開の蒸留版
+### c4: the public distilled version
 
-| 課題 | 問題数 | 考え終わらない割合 | 点 | 差（± 標準誤差） |
+| Task | Questions | Share that never finished thinking | Score | Difference (± standard error) |
 |---|---|---|---|---|
 | JamC-QA | 26 | 7.7% → 11.5% | 0.538 → 0.346 | −0.192 ± 0.124 |
 | M-IFEval | 60 | 6.7% → 5.0% | 0.778 → 0.700 | −0.078 ± 0.052 |
 | IFBench | 100 | 16.0% → 18.0% | 0.635 → 0.500 | −0.135 ± 0.055 |
 | PolyMath high | 20 | 40% → 30% | 0.450 → 0.150 | −0.300 ± 0.105 |
 | PolyMath top | 20 | 45% → 45% | 0.300 → 0.100 | −0.200 ± 0.117 |
-| AIME 2024 | 10（4 回ずつ） | 0% → 12.5% | 0.975 → 0.600 | −0.375 ± 0.130 |
-| AIME 2025 | 10（4 回ずつ） | 27.5% → 25.0% | 0.625 → 0.225 | −0.400 ± 0.125 |
+| AIME 2024 | 10 (4 times each) | 0% → 12.5% | 0.975 → 0.600 | −0.375 ± 0.130 |
+| AIME 2025 | 10 (4 times each) | 27.5% → 25.0% | 0.625 → 0.225 | −0.400 ± 0.125 |
 
-7 項目すべてで点が下がった。考え終わらない割合は、増えた項目と減った項目があり、はっきりした向きはなかった。
+The score fell on all 7 items. The share of answers that never finished thinking rose on some items and fell on others, with no clear direction.
 
-### tau2 の telecom
+### tau2's telecom
 
-| | 元の 12B | 蒸留版 |
+| | Original 12B | Distilled version |
 |---|---|---|
-| 点の付いた会話（50 問のうち） | 48 | 47 |
-| 両方で点の付いた 45 問の正解 | 11（24.4%） | 6（13.3%） |
-| 片方だけが正解した問題 | 6 | 1 |
-| 45 問の終わり方 | 客が終えた 44、エラーで打ち切り 1 | 客が終えた 23、エラーで打ち切り 22 |
-| 1 会話でエージェントが道具を呼んだ回数 | 9.6 | 15.9 |
-| そのうち、エージェントにない道具を呼んだ回数 | 3.4 | 7.8 |
+| Conversations that got a score (of the 50 questions) | 48 | 47 |
+| Correct on the 45 questions scored for both | 11 (24.4%) | 6 (13.3%) |
+| Questions only one of the two got right | 6 | 1 |
+| How the 45 questions ended | 44 ended by the customer, 1 cut off by errors | 23 ended by the customer, 22 cut off by errors |
+| Tool calls by the agent per conversation | 9.6 | 15.9 |
+| Of these, calls to tools the agent does not have | 3.4 | 7.8 |
 
-片方だけが正解した問題の偏りは、符号検定で p = 0.12 だった。
+The imbalance in the questions only one of the two got right had p = 0.12 by a sign test.
 
-- **エージェントにない道具：** 2 つのモデルとも、45 問のうち 44 問で、エージェントにない道具を呼んだ。
-  - 多かったのは、客の電話を調べる道具（`check_status_bar`、`check_network_status`、`check_apn_settings`、`run_speed_test` など）である。
-  - 蒸留版は、tau2 にない `send_message` も 13 会話で呼んだ。
-  - 蒸留版は呼ぶ回数が多く、エラーが 10 回に達して打ち切られる会話が多かった。
-- **作者の報告：** 蒸留版の作者は [GGUF 版のモデルカード](https://huggingface.co/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF)に、tau2 の telecom 20 問で約 15% から約 55% に上がったと書いている。客役のモデルなどが今回と同じ条件かは、確かめていない。
+- **Tools the agent does not have:** Both models called tools the agent does not have in 44 of the 45 questions.
+  - The most common were tools that check the customer's phone (`check_status_bar`, `check_network_status`, `check_apn_settings`, `run_speed_test` and so on).
+  - The distilled version also called `send_message`, which tau2 does not have, in 13 conversations.
+  - The distilled version made more calls, and more of its conversations were cut off on reaching 10 errors.
+- **The author's report:** The distilled version's author writes in the [model card of the GGUF version](https://huggingface.co/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF) that it rose from about 15% to about 55% on 20 questions of tau2's telecom. Whether the customer-role model and other conditions were the same as here has not been checked.
 
-## 起きたこと
+## What happened
 
-- **GPU のエラーでサーバーが 4 回止まった：** 設定を変えていないサーバーでも起きた。
-  - 08:01、c3 の 1 回目の途中で、`CUDA error: unspecified launch failure` で落ちた。
-  - 10:15、c3 の 2 回目の途中で、エラーを出さずに固まった。出力が止まってから 34 分後に気づいて止めた。
-  - 11:00、tau2 の客役のサーバーが `CUDA error: unspecified launch failure` で落ちた。蒸留版の 2 問が測れなかった。
-  - 12:07、元の 12B の tau2 のサーバーが `CUDA error: an illegal memory access was encountered` で落ちた。14 問を測り直した。
-- **c3 の結果：** 1 回目の結果には、落ちたときの空の答えが混ざっていたので使わなかった。2 回目も、固まる前に終わった 2 課題だけを使った。
-- **終わらない会話：** 蒸留版の最後の 1 会話は 40 分を過ぎても終わらず、手で止めた。元の 12B の測り直しでは、`--timeout 1200` を付けていたのに 2 会話が 1 時間を過ぎても終わらなかった。費用の上限に達して機械を消したので、その 2 問は測れていない。
-- **M-IFEval の補助データ：** M-IFEval は最初、補助データ（NLTK）の壊れた zip を読んで落ちた。取り直してから、もう一度動かした。
-- **蒸留版の読み込み：** リビジョンを指定して取得すると、オフラインでの読み込みで `refs/main` が見つからなかった。取得したスナップショットの名前を `refs/main` に書いて読み込んだ。
-- **待ち時間：** 承認を待つあいだ、借りた機械が約 1 時間半なにもしていなかった。ほかに、つなぐスクリプトに実行権限を付け忘れて、約 20 分待った。
+- **GPU errors stopped the server 4 times:** This also happened to a server with unchanged settings.
+  - 08:01: crashed partway through c3's first run with `CUDA error: unspecified launch failure`.
+  - 10:15: froze without an error partway through c3's second run. It was noticed and stopped 34 minutes after the output stopped.
+  - 11:00: tau2's customer-role server crashed with `CUDA error: unspecified launch failure`. 2 questions of the distilled version could not be measured.
+  - 12:07: the original 12B's tau2 server crashed with `CUDA error: an illegal memory access was encountered`. 14 questions were measured again.
+- **c3's results:** The first run's results were not used, since they included empty answers from the crash. Of the second run, too, only the 2 tasks that finished before the freeze were used.
+- **Conversations that did not end:** The distilled version's last conversation had not ended after 40 minutes and was stopped by hand. In the original 12B's remeasurement, 2 conversations had not ended after an hour, even with `--timeout 1200` set. The machine was deleted on reaching the cost limit, so those 2 questions have not been measured.
+- **M-IFEval's auxiliary data:** M-IFEval first crashed reading a broken zip of its auxiliary data (NLTK). It was downloaded again and run once more.
+- **Loading the distilled version:** Downloaded with a revision specified, it could not be loaded offline because `refs/main` was not found. The name of the downloaded snapshot was written into `refs/main`, and it then loaded.
+- **Waiting:** While approval was awaited, the rented machine did nothing for about an hour and a half. Separately, the execute permission was left off the chaining script, which cost about 20 minutes of waiting.

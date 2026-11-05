@@ -1,29 +1,29 @@
-# modded-nanogpt の記録 #92（ANVIL2）
+# modded-nanogpt record #92 (ANVIL2)
 
-`KellerJordan/modded-nanogpt` の `records/track_1_short/2026-08-30_ANVIL2`。手法を1つずつ外して測った表は `language-model` の [メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/modded-nanogpt-anvil2.md)にあり、ここにはそこにない数字だけを書く。
+`records/track_1_short/2026-08-30_ANVIL2` of `KellerJordan/modded-nanogpt`. The table measured with the methods removed one at a time is in `language-model`'s [note](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/modded-nanogpt-anvil2.md); only the numbers that are not there are written here.
 
-## 表の行数と検証損失
+## Table rows and validation loss
 
-行数だけを変えた開発中の測定。各2回。表は2トークンと3トークンの2つの種類を持つ。
+Measurements during development that vary only the number of rows. Two runs each. The table has two kinds, one for 2 tokens and one for 3 tokens.
 
-| 行数 | 時間 | 検証損失 |
+| Rows | Time | Validation loss |
 |---|---|---|
-| 84,602,880 | 39.52秒 | 3.2791 |
-| 21,150,720 | 39.35秒、39.36秒 | 3.2825、3.2863 |
-| 377,280 | 39.00秒、38.98秒 | 3.3149、3.3152 |
+| 84,602,880 | 39.52 s | 3.2791 |
+| 21,150,720 | 39.35 s, 39.36 s | 3.2825, 3.2863 |
+| 377,280 | 39.00 s, 38.98 s | 3.3149, 3.3152 |
 
-- 最大の表は幅768で6.5e10パラメータ。8台に分け、1台15.13GiB。各更新はそのトークンが引く行だけを取ってきて、その行だけを Adam で更新する。
-- 表は0から始め、学習の時間の中で学ぶ。
-- PR では、表の大きさが記録の趣旨に合うのかを数人が問い、結論は出ていない。KellerJordan は変更を正当と見ているが、PR の時点で自分では再現しておらず、マージは大まかな確認のあとで行われた（2026-09-28）。
+- The largest table has width 768 and 6.5e10 parameters. It is split over 8 GPUs, 15.13 GiB each. Each update fetches only the rows its tokens look up, and updates only those rows with Adam.
+- The table starts at 0 and is learned within the training time.
+- In the PR, several people questioned whether the table's size fits the spirit of the record, and no conclusion was reached. KellerJordan regards the change as legitimate, but had not reproduced it personally at the time of the PR, and the merge came after a rough check (2026-09-28).
 
-## 学習の形
+## The shape of training
 
-- 3つの段階で1台あたりの本数を8、16、24、文書の長さの上限を896、2048、3072と増やし、最後に本数を減らす。8台なので1更新は約5.7万トークンから約59万トークンまで増える（1台あたりと読んだ、自分たちの計算）。全体は1,194更新。
-- 学習率は最後の80%で下げ、下限はピークの20%。
-- 最後の重みの作り方：最後の298ステップの EMA を表に0.65混ぜる、250ステップの平均を MLP と value に混ぜる、ほか。
-- 7つの注意の層を残し、1層を丸ごと、2層の注意を外す。
-- sampled softmax は学習の最初の約93%だけで、語彙50,304のうち候補10,240（681ステップから14,336、961ステップから24,576）。検証はいつも全部の語彙。
+- Over three stages, the sequences per GPU rise through 8, 16 and 24 and the cap on document length through 896, 2048 and 3072, and at the end the number of sequences is reduced. With 8 GPUs, an update grows from about 57,000 tokens to about 590,000 tokens (our own calculation, reading the counts as per GPU). 1,194 updates in all.
+- The learning rate falls over the last 80%, with a floor at 20% of the peak.
+- How the final weights are made: an EMA of the last 298 steps is mixed into the table at 0.65, an average of 250 steps is mixed into the MLPs and values, and more.
+- It keeps seven attention layers, removing one layer entirely and the attention of two layers.
+- Sampled softmax is used only in the first ~93% of training, with 10,240 candidates out of the vocabulary of 50,304 (14,336 from step 681, 24,576 from step 961). Validation always uses the whole vocabulary.
 
-## 読んだ範囲
+## What was read
 
-記録の README を全部読んだ。PR の説明と議論は要約を通して読んだ。コードは読んでいない。
+The record's README was read in full. The PR's description and discussion were read through summaries. The code was not read.

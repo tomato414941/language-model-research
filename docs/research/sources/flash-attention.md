@@ -1,9 +1,9 @@
 # FlashAttention
 
-`Dao-AILab/flash-attention` の README（2026-10-31 に読んだ）。
+The README of `Dao-AILab/flash-attention` (read on 2026-10-31).
 
-- FlashAttention-2：Ampere、Ada、Hopper（A100、RTX 3090、RTX 4090、H100 など）。fp16 と bf16。ヘッド次元は256まで。
-- FlashAttention-3：Hopper 向け。「H100 / H800、CUDA 12.3 以上が必要」とある。
-- FlashAttention-4：CuTeDSL で書かれ、Hopper と Blackwell 向け（H100、B200 の例）。RTX 5090 には触れていない。
+- FlashAttention-2: Ampere, Ada, Hopper (A100, RTX 3090, RTX 4090, H100 and others). fp16 and bf16. Head dimensions up to 256.
+- FlashAttention-3: for Hopper. It says it "requires H100 / H800 and CUDA 12.3 or later".
+- FlashAttention-4: written in CuTeDSL, for Hopper and Blackwell (H100 and B200 as examples). It does not mention the RTX 5090.
 
-読んだのは README の対応の部分だけ。速度の数字は論文のメモ（flashattention-3.md）にある。
+Only the README's part on supported hardware was read. The speed figures are in the paper's note (flashattention-3.md).

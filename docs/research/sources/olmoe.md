@@ -1,10 +1,10 @@
 # OLMoE
 
-Muennighoff ら、OLMoE: Open Mixture-of-Experts Language Models（arXiv 2409.02060）。動くパラメータ10億、全体70億の MoE。
+Muennighoff et al., OLMoE: Open Mixture-of-Experts Language Models (arXiv 2409.02060). An MoE with 1 billion active and 7 billion total parameters.
 
-- OLMo（arXiv 2402.00838）は、一番安全で速いという理由で、学習する重みのない LayerNorm を使った。
-- OLMoE では、これを学習する重みのある RMSNorm に替えると良くなった（図14）。重みのない形は勾配の急な跳ねが多く（図16）、勾配のクリップで真の勾配でなくなるのが理由と見ている。RMSNorm で処理量は15%落ちるが、最終モデルに採用した。
-- RMSNorm の重みに weight decay をかけるかどうかの差は小さい。
-- QK-norm は安定と性能を少し良くした（図18）。RMSNorm の形でも、学習の損失が少し下がり、勾配の大きな跳ねを防いだ。処理量は約10%落ちるが採用した。
+- OLMo (arXiv 2402.00838) used LayerNorm without learned weights, on the grounds that it is the safest and fastest.
+- In OLMoE, replacing it with RMSNorm with learned weights made results better (Figure 14). The form without weights has more sudden gradient spikes (Figure 16), and the authors think the reason is that gradient clipping then makes the gradient differ from the true gradient. RMSNorm lowers throughput by 15%, but it was adopted for the final model.
+- Whether weight decay is applied to the RMSNorm weights makes little difference.
+- QK-norm slightly improved stability and performance (Figure 18). In the RMSNorm form too, it slightly lowered the training loss and prevented large gradient spikes. Throughput drops by about 10%, but it was adopted.
 
-読んだのは4.2.3と QK-norm の節の本文。図の数字は読んでいない。最適化は AdamW。
+The text of 4.2.3 and of the QK-norm section was read. The numbers in the figures were not read. The optimizer is AdamW.

@@ -1,25 +1,25 @@
 # Terminal Shrinkage Averaging
 
-Terminal Shrinkage Averaging Reveals a Schedule-Estimator Interaction in LLM Pretraining（arXiv 2609.25482、2026-09）。最後の重みと、最後の数個の重みの平均を、係数 α で混ぜて返す（TSA）。
+Terminal Shrinkage Averaging Reveals a Schedule-Estimator Interaction in LLM Pretraining (arXiv 2609.25482, 2026-09). It returns a mix of the last weights and the average of the last few weights, with a coefficient α (TSA).
 
-## 条件
+## Setup
 
-- 返す重みは、最後の重み θ_T と、θ_T を含む K 個の重み θ_T, θ_{T−s}, …, θ_{T−(K−1)s} の平均 θ̄_T を混ぜた (1−α)θ_T + αθ̄_T（§3.1）。α=0 で最後の重み、α=1 で一様な平均（LAWA）。平均するのは重みで、オプティマイザの状態は扱っていない。
-- nanochat の12層が主な実験で、オプティマイザは nanochat の Muon と AdamW。学習率は元の下げ方に従って下げ、下限 ρ に届いたらそこで止め、0までは下げない。基準の下限は最大の5%（付録 A.1、§4.4）。
-- 学習は3,000更新で、最初の40更新がウォームアップ。平均するのは8個の重みで、32更新おき。8個は3,000更新で終わる224更新（学習の約7.5%）にまたがる（付録 A.1）。
+- The returned weights are (1−α)θ_T + αθ̄_T, a mix of the last weights θ_T and the average θ̄_T of the K weights θ_T, θ_{T−s}, …, θ_{T−(K−1)s}, which include θ_T (§3.1). α=0 gives the last weights, and α=1 the uniform average (LAWA). What is averaged is the weights; the optimizer state is not handled.
+- The main experiments use nanochat's 12 layers, with nanochat's Muon and AdamW as the optimizers. The learning rate falls along the original schedule, stops at the floor ρ once it reaches it, and does not go down to 0. The baseline floor is 5% of the maximum (Appendix A.1, §4.4).
+- Training is 3,000 updates, with the first 40 updates as warmup. 8 weights are averaged, 32 updates apart. The 8 span the 224 updates ending at update 3,000 (about 7.5% of training) (Appendix A.1).
 
-## 結果
+## Results
 
-- 12層、下限5%、5本の学習（§4.1）：α=0.40 で BPB が最後の重みより 0.000794 ± 0.000087 下がる。前もって決めた α=0.55 では 0.000711。平均だけを使う α=1（LAWA）は 0.000734 悪くなる。
-- 平均する数と間隔を変えた9通りでは、どれも最後の重みより良く、一番良いのは16個、32更新おきで 0.002363（付録 B.2）。
-- 下限を変えた比較（Table 1、下限5%の最後の重みに対する差、α=0.55）：
+- 12 layers, a 5% floor, 5 training runs (§4.1): with α=0.40, BPB falls by 0.000794 ± 0.000087 from the last weights. With α=0.55, fixed in advance, by 0.000711. α=1 (LAWA), which uses only the average, is worse by 0.000734.
+- Across 9 variants of the number of weights averaged and their spacing, every one was better than the last weights, and the best was 16 weights 32 updates apart, at 0.002363 (Appendix B.2).
+- A comparison of floors (Table 1; differences from the last weights at a 5% floor; α=0.55):
 
-| 下限 | 最後の重み | TSA |
+| Floor | Last weights | TSA |
 |---|---|---|
 | 10% | +0.000915 | −0.000487 |
 | 15% | +0.003757 | −0.000844 |
 
-  下限を上げると最後の重みは悪くなり、混ぜた重みは良くなる。AdamW だけでも同じ向きで、大きさは小さい。0%（0まで下げる）は試していない。
-- 22層、3つの種（Table 2）：下限15%で α=0.70 にすると、検証の BPB が 0.720235 から 0.719580（差 0.000654 ± 0.000184）。DCLM CORE は 0.2491 から 0.2579 だが、ばらつきが大きく、著者も暫定としている。
+  Raising the floor makes the last weights worse and the mixed weights better. With AdamW alone, the direction is the same and the size smaller. 0% (falling to 0) was not tried.
+- 22 layers, 3 seeds (Table 2): with a 15% floor and α=0.70, validation BPB goes from 0.720235 to 0.719580 (a difference of 0.000654 ± 0.000184). DCLM CORE goes from 0.2491 to 0.2579, but the noise is large, and the authors also treat it as provisional.
 
-読んだのは arXiv の要旨と、HTML 版の §3.1、§4.1〜4.5、Table 1、2、付録 A.1、B.2 の該当部分（ツールで抜き出した引用から）。理論の部分（局所的な二次近似）は読んでいない。
+Read: the abstract on arXiv, and the relevant parts of §3.1, §4.1–4.5, Tables 1 and 2, and Appendices A.1 and B.2 of the HTML version (from quotes extracted with a tool). The theoretical part (a local quadratic approximation) was not read.

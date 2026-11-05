@@ -1,39 +1,39 @@
-# 注意の計算の方式
+# Methods for computing attention
 
-H100 で注意の計算を何で動かすか。2026-11時点の、[最初の束の実測](../experiments/first-bundle.md)と読んだものからの見方で、測ったのは1台の機械、1つのモデルの形（10層・幅640、文脈1,024）だけ。
+Which method to run attention with on the H100. A view as of 2026-11, from [the first bundle's measurements](../experiments/first-bundle.md) and what was read; only one machine and one model shape (10 layers, width 640, context 1,024) were measured.
 
-## 測った結果
+## Measured results
 
-1回の更新の差は1.6%以内で、FlashAttention-3 が一番遅かった。ほかに差が出たのは、形が新しいときの最初の1回の準備で、FlashAttention-2 と 4 は既定の方式と FlashAttention-3 より約23秒短い。新しい機械で1回だけ学習するなら時間の約3%で、換算で BPB が約0.2%下がる程度。同じ機械の同じ形の2回目では、既定の方式でも短くなった。
+The time per update differed by at most 1.6%, and FlashAttention-3 was the slowest. The other difference was in the one-time preparation the first time a shape is new: FlashAttention-2 and 4 take about 23 seconds less than the default method and FlashAttention-3. For a single training run on a new machine, that is about 3% of the time, which converts to BPB falling by about 0.2%. On a second run of the same shape on the same machine, the preparation became shorter with the default method too.
 
-| 方式 | 入れ方 | 1回の更新 | 更新の外 |
+| Method | Setup | Per update | Outside updates |
 |---|---|---|---|
-| PyTorch の既定（`sdpa`） | そのまま | 0.557秒 | 34秒 |
-| FlashAttention-2（`fa2`） | cuDNN を切る | 0.558秒 | 11秒 |
-| FlashAttention-3（`fa3`） | [`kernels-community/flash-attn3`](../sources/hf-kernels.md) を直接呼ぶ。約550MB を取得する | 0.566秒 | 33秒 |
-| FlashAttention-4（`fa4`） | [`flash-attn-4`](../sources/flashattention-4.md) を PyTorch の呼び出しの裏に入れる。ベータ | 0.558秒 | 11秒 |
+| PyTorch's default (`sdpa`) | As is | 0.557 s | 34 s |
+| FlashAttention-2 (`fa2`) | Turn off cuDNN | 0.558 s | 11 s |
+| FlashAttention-3 (`fa3`) | Call [`kernels-community/flash-attn3`](../sources/hf-kernels.md) directly; fetches about 550MB | 0.566 s | 33 s |
+| FlashAttention-4 (`fa4`) | Put [`flash-attn-4`](../sources/flashattention-4.md) behind PyTorch's call; beta | 0.558 s | 11 s |
 
-PyTorch 2.15 の既定は、[読んだコード](../sources/pytorch-sdpa.md)では H100 で cuDNN を先に試す。この環境の cuDNN は 9.26 で条件に合うが、実際に cuDNN が動いたことは直接は確かめていない。cuDNN を切ると準備の時間が消えるので、cuDNN が形ごとに作るものの時間と見ているが、これも確かめていない。
+PyTorch 2.15's default, according to [the code we read](../sources/pytorch-sdpa.md), tries cuDNN first on the H100. The cuDNN in this environment is 9.26 and meets the conditions, but whether cuDNN actually ran was not checked directly. Turning off cuDNN removes the preparation time, so we think it is the time cuDNN takes to build what it makes for each shape, but this was not checked either.
 
-[2番目の束](../experiments/second-bundle.md)の形でも、既定の方式と FlashAttention-2 の1回の更新は同じ（0.639秒）で、更新の外は44秒と12秒だった。
+With the shape of [the second bundle](../experiments/second-bundle.md) too, the default method and FlashAttention-2 took the same time per update (0.639 seconds), and 44 and 12 seconds outside updates.
 
-## 読んだものとの違い
+## Differences from what was read
 
-[FlashAttention-3 の論文](../sources/flashattention-3.md)の注意の計算だけで1.5〜2倍、nanochat の学習で約9%（[LOG](https://github.com/karpathy/nanochat/blob/master/dev/LOG.md)、2026-01-11）という数字は、FlashAttention-2 からの比較。ここでは FlashAttention-2 と同じか少し遅かった。計算の式の上で注意は約19%なので、差が出るとしても全体では小さい。読み込んだビルド、CUDA 13.2、文脈の短さ、compile との相性のどれが効いているかは調べていない。
+The figures of 1.5–2× for the attention computation alone in [the FlashAttention-3 paper](../sources/flashattention-3.md) and about 9% for nanochat's training ([LOG](https://github.com/karpathy/nanochat/blob/master/dev/LOG.md), 2026-01-11) are comparisons against FlashAttention-2. Here it was the same as FlashAttention-2 or slightly slower. By the formula for the computation, attention is about 19% of it, so even if a difference appeared, it would be small overall. Which of the loaded build, CUDA 13.2, the short context or the interaction with compile is responsible was not investigated.
 
-## 今の見方
+## Current view
 
-追加のインストールが要らない FlashAttention-2 が一番手軽で、差は小さい。大きな改善の候補としては扱わない。形や文脈を変えるたびに、`speed.py` の短い計測で確かめれば足りる。
+FlashAttention-2, which needs no extra installation, is the easiest, and the differences are small. It is not treated as a candidate for a large improvement. Each time the shape or the context changes, a short measurement with `speed.py` is enough to check.
 
-使わなかった経路は次の通り。
+The routes not used were these.
 
-- **`varunneal/flash-attention-3`：** nanochat と autoresearch が使っていて、nanochat は H100 ではこちらが良いとしている（差の数字はない）。Torch 2.12 までで、`model` 型なので今の `kernels` では読めない。
-- **PyTorch の FlashAttention-3 への差し替え：** `torch.ops.flash_attn_3` を探すので、ソースからのビルドが要る（30〜60分、[TabPFN](../sources/tabpfn-fa4.md)）。`kernels-community` のビルドは名前が違う。
-- **[FlexAttention](../sources/flexattention-flashattention-4.md) の FLASH バックエンド：** 独自の注意のためのもので、因果の注意では FlashAttention-4 の組み込みより遅い。
+- **`varunneal/flash-attention-3`:** nanochat and autoresearch use it, and nanochat says it is the better one on the H100 (with no figure for the difference). It covers Torch only up to 2.12 and is of the `model` type, so the current `kernels` cannot load it.
+- **PyTorch's switch to FlashAttention-3:** it looks for `torch.ops.flash_attn_3`, so it needs a build from source (30–60 minutes, [TabPFN](../sources/tabpfn-fa4.md)). The `kernels-community` build has a different name.
+- **The FLASH backend of [FlexAttention](../sources/flexattention-flashattention-4.md):** it is meant for custom attention, and for causal attention it is slower than the built-in FlashAttention-4.
 
-## 見方が変わりそうな条件
+## Conditions likely to change the view
 
-- 文脈を大きく伸ばす場合。計算に占める注意の割合が増える。スライドウィンドウを試す場合は、nanochat の LOG によると PyTorch の呼び出しでは効果を得られず、FlashAttention-3 は `window_size` で扱える。
-- ヘッドの数を増やす、層の幅を変える場合。
-- PyTorch や cuDNN の版が変わる場合。
-- GPU を Blackwell に変える場合。FlashAttention-3 の kernel がない。
+- When the context is lengthened greatly. Attention's share of the computation grows. When trying a sliding window, according to nanochat's LOG, the PyTorch call gives no gain, while FlashAttention-3 handles it with `window_size`.
+- When the number of heads is increased or the layer width is changed.
+- When the PyTorch or cuDNN version changes.
+- When the GPU is changed to Blackwell. There is no FlashAttention-3 kernel for it.

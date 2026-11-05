@@ -1,20 +1,20 @@
 # Apertus
 
-Apertus v1 Technical Report（arXiv 2509.14233）。8B と 70B を公開したモデルで、70B は15兆トークンを学習した。xIELU の著者2人も著者に入っている。
+Apertus v1 Technical Report (arXiv 2509.14233). The models are released at 8B and 70B, and the 70B trained on 15 trillion tokens. Two of xIELU's authors are also among its authors.
 
-形と学習法は GQA、RoPE、RMSNorm、QK-norm、xIELU、Pre-Norm、AdEMAMix、WSD の学習率、Goldfish loss。QK-norm は注意の logit が大きくなりすぎるのを防いで学習を安定させるために入れたとしている。
+The architecture and training method are GQA, RoPE, RMSNorm, QK-norm, xIELU, Pre-Norm, AdEMAMix, a WSD learning rate and Goldfish loss. It says QK-norm was added to stabilize training by keeping the attention logits from growing too large.
 
-**項目ごとの比較（表3）：** 15億、1,000億トークン（1パラメータ約67トークン）、Llama の形が基準で、学習の損失。
+**Comparison item by item (Table 3):** 1.5 billion parameters, 100 billion tokens (about 67 tokens per parameter), the Llama architecture as the baseline; training loss.
 
-| 変更 | 損失 |
+| Change | Loss |
 |---|---|
-| 基準 | 2.037 |
-| 文書の間の注意を切る | 2.037 |
-| Cosine を WSD に、学習率を半分に | 2.033 |
-| AdamW を AdEMAMix に | 2.002 |
-| SwiGLU を xIELU に（中の幅を8,192から12,288に） | 1.997 |
+| Baseline | 2.037 |
+| Cut attention between documents | 2.037 |
+| Cosine to WSD, learning rate halved | 2.033 |
+| AdamW to AdEMAMix | 2.002 |
+| SwiGLU to xIELU (inner width from 8,192 to 12,288) | 1.997 |
 
-- SwiGLU から xIELU で −2.0%（自分たちの計算）。1回の学習で、検証の損失ではない。
-- 全部を入れた30億は、1.906 から 1.843。QK-norm 単独の行は表にない。安定と勾配の大きさも良くなり、同じ損失に30〜40%少ないトークンで届くとしている。
+- SwiGLU to xIELU: −2.0% (our own calculation). One run, and not the validation loss.
+- At 3 billion with everything in, the loss goes from 1.906 to 1.843. The table has no row for QK-norm alone. It says stability and gradient magnitudes also improve, and the same loss is reached with 30–40% fewer tokens.
 
-読んだのはモデルの形と学習法の節と項目の比較の節。データ、評価、ほかの節は読んでいない。
+The sections on the model's architecture and training method and on the item-by-item comparison were read. The data, the evaluation and the other sections were not read.

@@ -1,19 +1,19 @@
 # FineWeb
 
-Penedo ら、The FineWeb Datasets: Decanting the Web for the Finest Text Data at Scale（arXiv 2406.17557、2024）。データは `HuggingFaceFW/fineweb`。
+Penedo et al., The FineWeb Datasets: Decanting the Web for the Finest Text Data at Scale (arXiv 2406.17557, 2024). The data is `HuggingFaceFW/fineweb`.
 
-## 作り方
+## How it is made
 
-- Common Crawl の96スナップショットの WARC から、trafilatura で文字を取り出す（§3.2）。
-- fastText の英語の判定（0.65以上）、URL のブロックリスト、MassiveText の品質と繰り返しのフィルタ（§3.3）。続いて C4 のフィルタ（文末の句読点の規則を除く）と独自のヒューリスティック（§3.5、§3.6）。
-- MinHash の重複除去は、スナップショットごとに別々に行う（§3.4）。メールアドレスと IP アドレスは匿名化（§3.7）。
-- 処理を選ぶ実験は、CommonSense QA、HellaSwag、OpenBook QA、PIQA、SIQA、WinoGrande、ARC、MMLU の8課題の成績で比べた（§3.1）。
-- 評価の問題を除く処理は書かれていない。
+- Text is extracted with trafilatura from the WARC files of 96 Common Crawl snapshots (§3.2).
+- fastText English detection (0.65 or above), a URL blocklist, and MassiveText's quality and repetition filters (§3.3). Then C4's filters (except the rule on terminal punctuation) and their own heuristics (§3.5, §3.6).
+- MinHash deduplication is done separately for each snapshot (§3.4). Email addresses and IP addresses are anonymized (§3.7).
+- The experiments that chose the processing compared scores on 8 tasks: CommonSense QA, HellaSwag, OpenBook QA, PIQA, SIQA, WinoGrande, ARC and MMLU (§3.1).
+- No step that removes evaluation questions is described.
 
-## 公開
+## Release
 
-- 約15兆トークン（GPT-2 のトークナイザで数えた）。ライセンスは ODC-By 1.0 で、Common Crawl の利用規約にも従う。
-- 一様に抜いた標本（10BT、100BT、350BT）がある。10BT は15ファイル、約30.6GB（リビジョン `9bb295d`）。
-- FineWeb-Edu は、FineWeb から教育的な度合いの分類器（Llama-3-70B の注釈で学習）で選んだ1.3兆トークンの部分集合（§4）。
+- About 15 trillion tokens (counted with the GPT-2 tokenizer). The license is ODC-By 1.0, and Common Crawl's terms of use also apply.
+- There are uniformly drawn samples (10BT, 100BT, 350BT). 10BT is 15 files, about 30.6GB (revision `9bb295d`).
+- FineWeb-Edu is a 1.3-trillion-token subset of FineWeb selected with a classifier of educational value (trained on Llama-3-70B annotations) (§4).
 
-読んだのは HTML 版の §1、§3.1〜3.7、§4 の該当する文（ツールで抜き出した引用から）と、Hugging Face のファイルの一覧。
+Read: the relevant sentences of §1, §3.1–3.7 and §4 of the HTML version (from quotes extracted with a tool), and the file listing on Hugging Face.

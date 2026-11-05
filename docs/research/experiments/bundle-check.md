@@ -1,25 +1,25 @@
-# Muon と束のコードの確認
+# Checking the code of Muon and the bundle
 
-2026-11-01 に、`muon.py`、`model.py` の Value embeddings、`configs/muon.py`、`configs/bundle.py` が動くことを、GPU なしの処理用の機械（CPU）で確かめた。**効果は測っていない。** 小さいモデルでの動作確認で、損失の値は実際の学習の見込みにならない。
+On 2026-11-01, `muon.py`, the Value embeddings in `model.py`, `configs/muon.py` and `configs/bundle.py` were checked to run, on the processing machine without a GPU (CPU). **Their effect was not measured.** These checks ran a small model, so the loss values do not predict real training.
 
-| 確認 | 結果 |
+| Check | Result |
 |---|---|
-| テスト | 全52件が通過 |
-| 基準（AdamW、2層・幅64、6回の更新） | 変更の前後で損失が完全に一致 |
-| 基準の保存済みの重み | 変更後のコードで読めて、出力は正常 |
-| Muon（同じ小さいモデル、20回の更新） | 学習の損失が9.02から7.36。途中からの再開も動作 |
-| 束（同じ小さいモデル、20回の更新） | 学習の損失が9.03から7.51。途中からの再開も動作 |
-| 各項目を外す | Value embeddings、Polar Express、NorMuon、cautious weight decay のどれを外してもエラーなし |
+| Tests | All 52 passed |
+| Baseline (AdamW, 2 layers, width 64, 6 updates) | Loss exactly the same before and after the change |
+| The baseline's saved weights | Loaded by the changed code, with normal output |
+| Muon (the same small model, 20 updates) | Training loss from 9.02 to 7.36. Resuming from partway also worked |
+| Bundle (the same small model, 20 updates) | Training loss from 9.03 to 7.51. Resuming from partway also worked |
+| Removing each item | No error with any of Value embeddings, Polar Express, NorMuon or cautious weight decay removed |
 
-実サイズのパラメータは次の通り。
+The parameters at the real size are as follows.
 
-| | 計算に使う | 全体 | 1トークンの計算 |
+| | Used in the computation | Total | Computation per token |
 |---|---|---|---|
-| 基準 | 9,125万 | 9,200万 | 6億6,100万 |
-| 束 | 5,441万 | 8,130万 | 4億500万 |
+| Baseline | 91.25 million | 92 million | 661 million |
+| Bundle | 54.41 million | 81.3 million | 405 million |
 
-確かめていないこと：
+Not checked:
 
-- GPU での速度。Muon の計算の増加は上限0.7%という元の記事の計算だけで、実測はない。
-- 実サイズでの学習の安定性。行列の学習率0.04、表の学習率0.1は未調整。
-- CPU での実サイズの計測は、GPU の参考にならず時間もかかるので途中で止めた。
+- Speed on a GPU. For Muon's added computation there is only the original post's calculation, an upper bound of 0.7%, and no measurement.
+- Training stability at the real size. The matrix learning rate of 0.04 and the table learning rate of 0.1 are untuned.
+- A measurement at the real size on the CPU was stopped partway, since it says nothing about the GPU and takes long.

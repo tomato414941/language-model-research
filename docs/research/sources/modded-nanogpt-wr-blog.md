@@ -1,22 +1,22 @@
 # modded nanoGPT WR
 
-djdumpling の記事（2026-05-27、`djdumpling.github.io/2026/05/27/modded-nanoGPT-WR.html`）。ゲート付きの XSA で記録を縮めたときの報告で、試して効かなかったものの一覧が役に立つ。8枚の H200 または H100、語彙50,304。
+djdumpling's post (2026-05-27, `djdumpling.github.io/2026/05/27/modded-nanoGPT-WR.html`). A report on cutting the record with gated XSA; its list of what was tried and did not work is useful. 8 H200s or H100s, vocabulary 50,304.
 
-効いたもの：学習するゲート付きの XSA で、更新を1,440回から1,410回に減らしても検証損失が3.28を下回る（3.27865、10回）。
+What worked: with learned gated XSA, the validation loss stays below 3.28 even with the updates cut from 1,440 to 1,410 (3.27865, 10 runs).
 
-効かなかったもの（数字はほとんど書かれていない）。
+What did not work (numbers are mostly not given).
 
-| 試したもの | 結果 |
+| Tried | Result |
 |---|---|
-| AdEMAMix、AdaMuon、schedule-free Adam、Dion | 悪化。遅い状態の立ち上がりに1,500ステップ以上要るためとしている |
-| 学習率のべき乗の下げ方、schedule-free の平均、LAWA、学習率の下限の分離 | 変わらないか悪化 |
-| 文脈を短いものから伸ばす | ステップあたりでは効くが、`torch.compile` の作り直し3回の時間で負ける。ばらつきも増える |
-| 注意の温度の学習、SSMax | 1付近に収まり差がない |
-| 明示的な attention sink | 差がない。BOS がその役割をしている |
-| GQA、register トークンなど | compile やカーネルの形の費用で消える |
-| Dynamic Tanh | どの初期値でも発散 |
-| xIELU | 3回のカーネルの改良のあとでも約10%遅い |
-| MLP を2倍に狭める | 約15%速いが、損失が0.04悪い |
-| mHC | 悪化 |
+| AdEMAMix, AdaMuon, schedule-free Adam, Dion | Worse. Attributed to the slow state needing 1,500 or more steps to ramp up |
+| Power-law learning-rate decay, schedule-free averaging, LAWA, a separate learning-rate floor | Unchanged or worse |
+| Growing the context from short to long | Helps per step, but loses to the time of 3 `torch.compile` recompilations. The variability also grows |
+| Learning the attention temperature, SSMax | Settles near 1, no difference |
+| An explicit attention sink | No difference. BOS plays that role |
+| GQA, register tokens and others | Cancelled out by the cost of compile and kernel shapes |
+| Dynamic Tanh | Diverges at every initial value |
+| xIELU | About 10% slower even after 3 rounds of kernel improvement |
+| Narrowing the MLP by 2× | About 15% faster, but the loss is 0.04 worse |
+| mHC | Worse |
 
-読んだのは要約を通した記事の本文で、コードは読んでいない。
+The post's main text was read through a summary; the code was not read.

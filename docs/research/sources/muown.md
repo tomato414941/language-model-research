@@ -1,37 +1,37 @@
 # Muown
 
-Lion ら、Muown: Row-Norm Control for Muon Optimization（arXiv 2605.10797、2026-05）。
+Lion et al., Muown: Row-Norm Control for Muon Optimization (arXiv 2605.10797, 2026-05).
 
-重みの各行を大きさ（行のノルム）と向きに分け、向きを Muon で、大きさを Adam で更新する。オプティマイザの中で weight normalization をする形で、順伝播は変わらない。著者は、Muon で重みのスペクトルノルムが育つのは行の大きさが育つためだとし、それを直接動かせる変数にした。
+It splits each row of a weight into a magnitude (the row norm) and a direction, and updates the direction with Muon and the magnitude with Adam. It is weight normalization done inside the optimizer, and the forward pass does not change. The authors argue that the weights' spectral norm grows under Muon because the row magnitudes grow, and they made the magnitudes variables that can be moved directly.
 
-## 条件
+## Settings
 
-- nanoGPT に RoPE、RMSNorm、SwiGLU を足した形（埋め込みと出力は共有）。FineWeb-Edu、1回の更新524,288トークン、WSD（準備2%、最後の20%で下げる）。
-- 1.24億（12層、幅768）は文脈1,024で50億トークン（1パラメータ約40トークン）。5億は100億、10億は200億、27億は530億トークンで、文脈2,048。
-- Muon と Muown は Kimi の形で学習率を揃える（更新に 0.2·√max(m, n) を掛ける）。Muown は既定で weight decay を使わない。Muon は0.1で、1.24億で探して一番良かった値。
-- 増えるメモリは、行の数の長さのベクトル4つ（報告の実行で約2MB）。更新の時間は、各 GPU で全部の行列を処理すると1.5%増え、行列を GPU に分けると Muon と同じ。
-- 行が0の重みは大きさと向きに分けられない。0から始める出力の射影などは、小さい値で始めるか、対象から外す必要があると著者は書いている。
+- nanoGPT with RoPE, RMSNorm and SwiGLU added (shared embedding and output). FineWeb-Edu, 524,288 tokens per update, WSD (2% warmup, decaying over the last 20%).
+- 124 million (12 layers, width 768) trains on 5 billion tokens at context 1,024 (about 40 tokens per parameter). 500 million trains on 10 billion, 1 billion on 20 billion and 2.7 billion on 53 billion tokens, at context 2,048.
+- Muon and Muown match their learning rates in Kimi's way (multiplying the update by 0.2·√max(m, n)). Muown uses no weight decay by default. Muon uses 0.1, the best value found in a search at 124 million.
+- The extra memory is four vectors as long as the number of rows (about 2MB in the reported runs). The update time grows by 1.5% when each GPU processes every matrix, and is the same as Muon's when the matrices are split across GPUs.
+- Weights whose rows are 0 cannot be split into magnitude and direction. The authors write that output projections that start at 0 and the like must either start at small values or be left out.
 
-## 結果
+## Results
 
-perplexity。差は loss に直したもの（自分たちの計算）。
+Perplexity. The differences are converted to loss (our own calculation).
 
-| 大きさ | 種 | Muown | 一番良い Muon | 差 |
+| Size | Seeds | Muown | Best Muon | Difference |
 |---|---|---|---|---|
-| 1.24億 | 2 | 20.04 | 20.43（weight decay 0.1） | −0.6% |
-| 5億 | 3 | 14.13 | 14.37（weight decay 0.1） | −0.6% |
-| 10億 | 1 | 11.90 | 12.20（weight decay 0） | −1.0% |
-| 27億 | 1 | 9.57 | 9.82（weight decay 0） | −1.1% |
+| 124 million | 2 | 20.04 | 20.43 (weight decay 0.1) | −0.6% |
+| 500 million | 3 | 14.13 | 14.37 (weight decay 0.1) | −0.6% |
+| 1 billion | 1 | 11.90 | 12.20 (weight decay 0) | −1.0% |
+| 2.7 billion | 1 | 9.57 | 9.82 (weight decay 0) | −1.1% |
 
-- 1.24億は図3から読んだ値。ほかは表1、2。
-- 学習率を上げても発散しにくく、良い学習率の幅が広い。Muon は学習率を上げると発散する（10億の3e-3で110.19、27億の2e-3は中止）。
-- modded-nanogpt のコードでも、幅768と1,280で、Muon より loss が約0.4%、0.6%低い（図8から読んだ値）。
-- Qwen2 0.5B 型でも、一番良い同士で14.57と14.82（表4）。
+- The 124 million values were read off Figure 3. The others come from Tables 1 and 2.
+- It rarely diverges even at higher learning rates, and the range of good learning rates is wide. Muon diverges at higher learning rates (110.19 at 3e-3 for 1 billion; the 2e-3 run at 2.7 billion was stopped).
+- In modded-nanogpt's code too, the loss is about 0.4% and 0.6% lower than Muon's at widths 768 and 1,280 (values read off Figure 8).
+- In a Qwen2 0.5B-style model too, best against best gives 14.57 and 14.82 (Table 4).
 
-## NorMuon との比較（1.24億、付録 A.3）
+## Comparison with NorMuon (124 million, Appendix A.3)
 
-- 11の学習率で比べた。図9から読んだ一番良い値は、Muown が20.03（学習率0.01）、NorMuon が20.11（0.02）で、loss で約0.13%の差。どちらも weight decay なしで、種の数は書かれていない。
-- 同じ条件の普通の Muon（weight decay なし）は20.52で、Muon との差の大半は NorMuon でも取れている（自分たちの計算）。
-- 著者は、最適の近くでは NorMuon と同じか少し良く、安定する学習率の幅が広いとしている。weight decay ありの NorMuon とは比べていない。
+- Compared at 11 learning rates. The best values read off Figure 9 are 20.03 for Muown (learning rate 0.01) and 20.11 for NorMuon (0.02), a difference of about 0.13% in loss. Neither uses weight decay, and the number of seeds is not stated.
+- Plain Muon under the same settings (no weight decay) gives 20.52, so NorMuon also captures most of the gap to Muon (our own calculation).
+- The authors say that near the optimum it is as good as NorMuon or slightly better, with a wider range of learning rates that stay stable. It is not compared with NorMuon with weight decay.
 
-読んだのは HTML の本文と付録 A、C（表は HTML から直接）。図の値は図の SVG から読み取った。証明（付録 B）は読んでいない。
+The HTML main text and Appendices A and C were read (the tables directly from the HTML). The values in the figures were read from the figures' SVGs. The proofs (Appendix B) were not read.

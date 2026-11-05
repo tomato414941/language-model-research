@@ -1,27 +1,27 @@
-# 層を流れる値の精度
+# Precision of the values flowing through the layers
 
-各層を流れる値（活性）を何ビットで持つか。モデルの形も重みも変わらず、速さの話。重みの精度については `language-model` に[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/training-precision.md)がある。
+How many bits to hold the values flowing through each layer (the activations) in. Neither the model's shape nor its weights change; it is a matter of speed. On the precision of the weights, `language-model` has a [note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/training-precision.md).
 
-autocast の下では行列の積と注意が bf16 で、層を流れる値は既定で fp32 のまま。[PyTorch のコード](../sources/pytorch-autocast.md)では GPU の autocast で `rms_norm` が fp32 を返すので、流れる値を bf16 にしても、RMSNorm のたびに fp32 に戻るはず（GPU では確かめていない）。値が大きいほどメモリの読み書きが増える。
+Under autocast, matrix products and attention run in bf16, and the values flowing through the layers stay in fp32 by default. In [PyTorch's code](../sources/pytorch-autocast.md), `rms_norm` returns fp32 under GPU autocast, so even if the flowing values are made bf16, they should return to fp32 at every RMSNorm (not checked on the GPU). The larger the values, the more memory is read and written.
 
-## 分かっていること
+## What is known
 
-- **測った結果：** [2番目の束](../experiments/second-bundle.md)の H100 で、流れる値を bf16 にすると1回の更新が3.7%速い（0.639秒と0.615秒。換算で約 −0.21%）。出力と勾配の確認も通った。
-- **[modded-nanogpt の記録10](../sources/modded-nanogpt-records.md)：** 12層、幅768、語彙50,304で、活性を bf16 にして autocast をやめた。1回の更新が6.5%短くなり、3.28 に届く更新は1.3%増え（val 3.2791 と 3.2781 で揃ってはいない）、全体で5.3%短い。換算で約 −0.31%。
-- **[nanochat](../sources/nanochat-log.md)（03-04）：** autocast をやめて型を明示した。速さの数字はない。
-- **GPU の使用率：** nanochat の LOG は約46%で、autocast のままの autoresearch と最初の束は約39%。計算の式が同じでも形は違い、原因は調べていない。この差の一部かもしれない（自分たちの読み）。
-- **品質：** 丸めが増える。nanochat は「たぶん問題ない」としている。記録10の更新の増えは、丸めのせいか種のばらつきかは分からない。
-- **勾配：** 同じ重みで fp32 と比べると、幅640、4層で行列の勾配のコサイン類似度は0.9999以上、x0 の重みは0.98。幅32の小さいモデルでは x0 と resid の重みの勾配が丸めに埋もれる（0.82、0.56。[確認の記録](../experiments/second-bundle-code-check.md)）。CPU の autocast での比較。
-- **確かめやすさ：** 速さは `speed.py` の短い計測で分かり、出力と勾配が合うかも `attention_check.py` と同じ方法で確かめられる。読むだけで決めなくてよい。
+- **Measured result:** On the H100 in [the second bundle](../experiments/second-bundle.md), making the flowing values bf16 made an update 3.7% faster (0.639 seconds and 0.615 seconds; about −0.21% converted). The checks of the output and the gradients passed too.
+- **[modded-nanogpt's record 10](../sources/modded-nanogpt-records.md):** At 12 layers, width 768 and vocabulary 50,304, it made the activations bf16 and dropped autocast. An update became 6.5% shorter, the updates needed to reach 3.28 rose by 1.3% (val 3.2791 and 3.2781, so not matched), and overall it was 5.3% shorter. About −0.31% converted.
+- **[nanochat](../sources/nanochat-log.md) (03-04):** Dropped autocast and made the types explicit. No speed numbers.
+- **GPU utilization:** About 46% in nanochat's LOG, and about 39% for autoresearch and the first bundle, which keep autocast. Even with the same formula for it, the shapes differ, and the cause has not been looked into. This may be part of the difference (our own reading).
+- **Quality:** Rounding increases. nanochat says it is "probably fine". Whether record 10's increase in updates comes from rounding or from seed-to-seed variation is unknown.
+- **Gradients:** Compared with fp32 on the same weights, at width 640 and 4 layers the cosine similarity of the matrices' gradients is 0.9999 or more, and 0.98 for the x0 weights. In a small model of width 32, the gradients of the x0 and resid weights are buried in rounding (0.82, 0.56; [record of the check](../experiments/second-bundle-code-check.md)). A comparison under CPU autocast.
+- **Ease of checking:** The speed shows in a short measurement with `speed.py`, and whether the output and the gradients match can be checked the same way as in `attention_check.py`. There is no need to decide by reading alone.
 
-## 今の見方
+## Current view
 
-2026-11時点の見方では、使う。流れる値を bf16 に揃え、RMSNorm は入力と同じ型で返す。重みと保存の形は変えず、autocast も残す。形を変えるたびに `speed.py` でありなしを測り、速くて出力が合うときだけ使う。同じコストでの効果は約0.2%。
+In the view as of 2026-11, use it. Make the flowing values bf16 throughout, and have RMSNorm return the same type as its input. The weights and the saved format do not change, and autocast stays. Each time the shape changes, measure with and without it using `speed.py`, and use it only when it is faster and the output matches. The effect at the same cost is about 0.2%.
 
-autocast をやめて型を明示する形（記録10、nanochat）は、変更が大きいので後に回す。記録10の6.5%や nanochat の使用率の約46%には届いていないので、さらに速くなる余地はあるかもしれない。
+Dropping autocast and making the types explicit (record 10, nanochat) is a large change, so it is postponed. We have not reached record 10's 6.5% or nanochat's utilization of about 46%, so there may be room to get faster still.
 
-## 見方が変わりそうな条件
+## What would change the view
 
-- 形を変えて速くならなくなった場合。
-- 学習が不安定になる場合。丸めを疑う。x0 と resid の重みの勾配が一番影響を受けやすい。
-- autocast をやめた形を測り、もっと速い場合。
+- It no longer being faster after the shape changes.
+- Training becoming unstable. Suspect rounding. The gradients of the x0 and resid weights are the most easily affected.
+- Measuring the form without autocast and finding it faster still.

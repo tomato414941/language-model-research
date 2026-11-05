@@ -1,8 +1,8 @@
-# modded-nanogpt の最初のコミット
+# modded-nanogpt's first commit
 
-`KellerJordan/modded-nanogpt` の最初のコミット `4a452a2`（2024-06-01）。
+The first commit `4a452a2` of `KellerJordan/modded-nanogpt` (2024-06-01).
 
-- ファイルは `train_gpt2.py`（419行）、`fineweb.py`（126行）、`run.sh`（24行）、`README.md` の4つ。
-- README によると、コードは Karpathy の llm.c の PyTorch の学習コードが元で、それが nanoGPT の流れを汲むので、この名前になった。目標の損失3.28は llm.c の GPT-2 の再現が45分で届いた値。
+- Four files: `train_gpt2.py` (419 lines), `fineweb.py` (126 lines), `run.sh` (24 lines) and `README.md`.
+- According to the README, the code is based on the PyTorch training code of Karpathy's llm.c, which descends from nanoGPT, hence the name. The target loss of 3.28 is the value that llm.c's reproduction of GPT-2 reached in 45 minutes.
 
-読んだのは最初のコミットのファイルの一覧と、今の README の冒頭。
+The list of files in the first commit and the opening of the current README were read.

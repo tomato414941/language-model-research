@@ -1,23 +1,23 @@
-# nanochat の LOG の詳細
+# Details of nanochat's LOG
 
-`karpathy/nanochat` の dev/LOG.md と scripts/base_train.py（2026-11-01 に読み直した）。全体の表は `language-model` の[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/nanochat-log.md)にあり、ここにはそこにない数字だけを書く。d は層の数で、幅は層の64倍。
+dev/LOG.md and scripts/base_train.py in `karpathy/nanochat` (reread on 2026-11-01). The overall table is in `language-model`'s [note](https://github.com/tomato414941/language-model/blob/main/docs/research/sources/nanochat-log.md); only the numbers it lacks are written here. d is the number of layers, and the width is 64× the number of layers.
 
-- **x0 lambdas（01-11）：** 入れないときと、学習率が一番良いときの検証 BPB。
+- **x0 lambdas (01-11):** validation BPB without them, and with them at the best learning rate.
 
-| 深さ | 入れない | 入れる | 差 |
+| Depth | Without | With | Difference |
 |---|---|---|---|
 | d8 | 1.0885 | 1.0782 | −0.0103 |
 | d12 | 0.9770 | 0.9693 | −0.0077 |
 | d16 | 0.9059 | 0.9002 | −0.0057 |
 | d20 | 0.8565 | 0.8526 | −0.0039 |
 
-- **Weight decay（01-10）：** 一番良い値は d8（幅512）で約0.40、d12（幅768）で約0.22、d16 で約0.10、d20 で約0.08。幅の2乗に反比例するとしている。cautious な形が普通の形より良く、1.0から0へ線形に下げるほうが固定より良かった。Polar Express は誤差の範囲、NorMuon はごく小さい改善とある。
-- **最適化の値の掃引（01-19〜22）：** 約320回。d12 で良かった細かい調整は d20 で悪くなり、改善の幅は d12 で約0.002、d20 で約0.0007。小さい代理で調整しすぎないようにと書いている。
-- **文書の頭に揃える（01-13）：** 行を BOS から始め、文書を詰める。文脈2,048で約35%のトークンを捨てる。長い文書の後ろが必ず捨てられるのでデータが少し偏るが、下流の性能には影響しないようだとしている。途中から始まる文脈は採点のときには起きないことを理由に挙げている。検証の損失は下がるが、この変更で以前と直接比べられなくなり、下がった分の一部は見かけだとしている。文書の間の注意を切っても差はほとんどない（d16 で 0.85427 と 0.85407）。
-- **Value embeddings（01-17）：** 表の大きさを減らす工夫はどれも失敗し、ゲートは効き、1層おきが一番良い。
-- **Softcap（01-16、03-02）：** 24層で5〜30を比べ、5はひどく、ほかはほぼ同じで、20が一番良い（検証の損失 0.716 から 0.715）。softcap なしとの比較はない。`23 * sigmoid((x + 5) / 7.5)` は `15 * tanh(x / 15)` より少し悪く、FP8 でしか効かないかもしれないとしている。
-- **Autocast をやめる（03-04）：** 実質は重みを bf16 に変えるだけだったとして、型を明示した。速さの数字はない。
-- **データ（02-17、03-04）：** FineWeb-Edu に5回勝てなかったあと、ClimbMix で GPT-2 の性能までが2時間46分から2時間1分になった。
-- **学習率の換算（`base_train.py`）：** 更新のトークン数 B に対して学習率は √B に比例させる（Muon については確かめていないと書いている）。Weight decay は √B と、学習トークン数 D の逆数に比例させる。基準は d12、B は2の19乗。
+- **Weight decay (01-10):** the best value is about 0.40 at d8 (width 512), about 0.22 at d12 (width 768), about 0.10 at d16 and about 0.08 at d20. It says the value is inversely proportional to the square of the width. The cautious form was better than the ordinary one, and lowering it linearly from 1.0 to 0 was better than keeping it fixed. It says Polar Express is within the error, and NorMuon a very small improvement.
+- **Sweep of the optimizer settings (01-19 to 22):** about 320 runs. Fine tuning that helped at d12 hurt at d20, and the gain was about 0.002 at d12 and about 0.0007 at d20. It warns against tuning too much on a small proxy.
+- **Aligning to the starts of documents (01-13):** each row starts with BOS and is packed with documents. With a context of 2,048, about 35% of the tokens are discarded. Since it is always the ends of long documents that are discarded, the data is slightly skewed, but it says this does not seem to affect downstream performance. It gives as the reason that contexts starting partway through a document do not occur at scoring time. The validation loss falls, but the change makes direct comparison with earlier runs impossible, and it says part of the drop is only apparent. Cutting attention between documents makes almost no difference (0.85427 and 0.85407 at d16).
+- **Value embeddings (01-17):** every attempt to shrink the tables failed, the gate helps, and every other layer is best.
+- **Softcap (01-16, 03-02):** comparing 5 to 30 at 24 layers, 5 is terrible, the rest are about the same, and 20 is the best (validation loss from 0.716 to 0.715). There is no comparison with no softcap. `23 * sigmoid((x + 5) / 7.5)` is slightly worse than `15 * tanh(x / 15)`, and it says it may help only with FP8.
+- **Dropping autocast (03-04):** on the grounds that in effect it only converted the weights to bf16, the types were made explicit. There are no numbers on speed.
+- **Data (02-17, 03-04):** after five failed attempts to beat FineWeb-Edu, ClimbMix cut the time to reach GPT-2's performance from 2 hours 46 minutes to 2 hours 1 minute.
+- **Learning-rate conversion (`base_train.py`):** the learning rate is made proportional to √B, where B is the number of tokens per update (it says this has not been checked for Muon). Weight decay is made proportional to √B and to the inverse of the number of training tokens D. The baseline is d12, with B at 2^19.
 
-読んだのは上に挙げた日付の項と `base_train.py` の換算の部分。
+Read: the entries for the dates above, and the conversion part of `base_train.py`.

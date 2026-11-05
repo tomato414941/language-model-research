@@ -1,8 +1,8 @@
-# 文書を読む順番の研究の条件
+# The conditions of the studies on the order in which documents are read
 
-Zhang ら（arXiv 2506.11300）と、arXiv 2601.21698。主な数字は `language-model` の[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/curriculum-learning.md)にあり、ここにはそこにないことだけを書く。
+Zhang et al. (arXiv 2506.11300) and arXiv 2601.21698. The main figures are in `language-model`'s [note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/curriculum-learning.md); only what is not there is written here.
 
-- **Zhang ら：** 評価は8つのベンチマークの正解率の平均で、損失や BPB の結果はない。損失は汎化を捉えにくいという理由で使っていない。主な比較は5億パラメータに100億トークンで、1パラメータ20トークン。順番を決める点は軽く計算でき、学習の計算は増えないとしている。
-- **2601.21698：** 1,400万〜10億パラメータを3,000億トークン学習した。ランダムな順番は勾配の雑音が大きく、差は1,400万〜7,000万で強く、大きいモデルでは小さい。順番を逆にすると、正解率の利点の多くを失う。
+- **Zhang et al.:** The evaluation is the mean accuracy over 8 benchmarks; there are no loss or BPB results. Loss is not used, on the grounds that it captures generalization poorly. The main comparison is 500 million parameters on 10 billion tokens, 20 tokens per parameter. It says the scores that set the order are cheap to compute and do not add to the training compute.
+- **2601.21698:** It trained 14 million to 1 billion parameters on 300 billion tokens. A random order has large gradient noise; the difference is strong at 14 million–70 million and small for larger models. Reversing the order loses most of the accuracy benefit.
 
-読んだのは Zhang らの結果と結論の本文、2601.21698 の要旨と導入。
+The main text of Zhang et al.'s results and conclusion, and the abstract and introduction of 2601.21698, were read.

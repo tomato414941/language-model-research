@@ -1,10 +1,10 @@
 # FlashAttention-4
 
-Zadouri ら、FlashAttention-4: Algorithm and Kernel Pipelining Co-Design for Asymmetric Hardware Scaling（arXiv 2603.05451）と、`Dao-AILab/flash-attention` の README、`flash_attn/cute/interface.py`、PyPI の `flash-attn-4`（2026-11-01 に読んだ）。
+Zadouri et al., FlashAttention-4: Algorithm and Kernel Pipelining Co-Design for Asymmetric Hardware Scaling (arXiv 2603.05451), with the README of `Dao-AILab/flash-attention`, `flash_attn/cute/interface.py` and `flash-attn-4` on PyPI (read on 2026-11-01).
 
-- 論文の対象は Blackwell（B200、GB200）。B200 の bf16 で cuDNN 9.13 の最大1.3倍、Triton の2.7倍、最大 1613 TFLOPs/s（使用率71%）。FlashAttention-3 は主に H100 向けとしている。
-- CuTeDSL（Python）で書かれ、コンパイルは C++ より20〜30倍速いとしている。
-- `pip install flash-attn-4` で入る。CUDA 13 では `[cu13]` を勧める。読んだ時点は 4.0.0b37（2026-10-28）のベータ。依存は `nvidia-cutlass-dsl`、`apache-tvm-ffi`、`torch-c-dlpack-ext`、`quack-kernels` など。
-- Hopper の kernel もある（`flash_fwd_sm90.py`、`flash_bwd_sm90.py`）。入口の `flash_attn_func` は `torch.autograd.Function` を使う。
+- The paper targets Blackwell (B200, GB200). In bf16 on B200 it is up to 1.3× cuDNN 9.13 and 2.7× Triton, up to 1613 TFLOPs/s (71% utilization). It describes FlashAttention-3 as mainly for H100.
+- It is written in CuTeDSL (Python), and it says compilation is 20–30× faster than with C++.
+- It installs with `pip install flash-attn-4`. `[cu13]` is recommended for CUDA 13. At the time of reading it was the 4.0.0b37 beta (2026-10-28). Its dependencies include `nvidia-cutlass-dsl`, `apache-tvm-ffi`, `torch-c-dlpack-ext` and `quack-kernels`.
+- There are Hopper kernels too (`flash_fwd_sm90.py`, `flash_bwd_sm90.py`). The entry point `flash_attn_func` uses `torch.autograd.Function`.
 
-H100 で FlashAttention-3 と比べた数字は、読んだ範囲にはなかった。読んだのは論文の要旨、README、`interface.py` の一部。論文の本文は読んでいない。
+What was read had no numbers comparing it with FlashAttention-3 on H100. The paper's abstract, the README and part of `interface.py` were read. The paper's main text was not read.

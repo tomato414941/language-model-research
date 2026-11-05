@@ -1,17 +1,17 @@
-# 学習データ
+# Training data
 
-**ルール：2026-11-04 から、学習データは FineWeb にする。** modded-nanogpt が読む、FineWeb の一様な10Bトークンの標本（`HuggingFaceFW/fineweb` の `sample/10BT`、リビジョン `9bb295d`）。ライセンスは ODC-By 1.0 で、商用でも使える（[FineWeb](../sources/fineweb.md)）。
+**Rule: from 2026-11-04, the training data is FineWeb.** The uniform 10B-token sample of FineWeb that modded-nanogpt reads (`sample/10BT` of `HuggingFaceFW/fineweb`, revision `9bb295d`). The license is ODC-By 1.0, and commercial use is allowed ([FineWeb](../sources/fineweb.md)).
 
-- **前のデータ：** ClimbMix は、元が非商用なのでやめた（climbmix.md）。代わりに language-model の v6 の日英のデータも検討したが、扱いを簡単にするため FineWeb にした。英語だけなので、日本語での効果はこのデータでは測れない。
-- **トークナイザ：** 語彙8,192のまま、FineWeb の学習の文章で学習し直す（`prepare.py`）。配られている GPT-2 のトークン（語彙約5万）は、モデルの形が変わるので使わない。
-- **分け方：** 15ファイルのうち、最後のファイルを検証に（2,000万トークン）、その手前から後ろ向きに学習に使う（20億トークン）。COUNT の表の文章は先頭のファイルから取る（`count_data.py`）ので、表は学習の文章を数えない。
-- **点の比べ方：** データとトークナイザが変わったので、ClimbMix での基準と束の点とは比べない。2番目と3番目の束を、この新しいデータで学習し直して比べた（[3番目の束](../experiments/third-bundle.md)）。
+- **Previous data:** ClimbMix was dropped because its source is non-commercial (climbmix.md). language-model's v6 Japanese-English data was also considered as a replacement, but FineWeb was chosen to keep handling simple. It is English only, so effects in Japanese cannot be measured with this data.
+- **Tokenizer:** Keeps the vocabulary of 8,192 and is retrained on FineWeb's training text (`prepare.py`). The distributed GPT-2 tokens (vocabulary of about 50,000) are not used, since they would change the model's shape.
+- **Split:** Of the 15 files, the last file goes to validation (20 million tokens), and training uses the files before it, going backward (2 billion tokens). The text for the COUNT tables is taken from the first file (`count_data.py`), so the tables do not count the training text.
+- **Comparing scores:** The data and the tokenizer changed, so scores are not compared with those of the baseline and the bundles on ClimbMix. The second and third bundles were retrained on this new data and compared ([the third bundle](../experiments/third-bundle.md)).
 
-## 作ったデータ（2026-11-04）
+## The data made (2026-11-04)
 
-処理用の機械（CPU）で約3時間11分かかった。追加の費用はない。
+It took about 3 hours 11 minutes on the processing machine (CPU). No extra cost.
 
-- **学習と検証：** 学習20億トークン、検証2,000万トークン、語彙8,192。取得、トークナイザ、トークンにするまでで35分。
-- **COUNT の文章：** 先頭のファイルから2,475,100文書を読み、評価の問題を含む1,157文書（0.047%）を除いた20億トークン。同じ20億トークンで読む文書は、ClimbMix で学習したトークナイザのとき（2,410,588文書）より2.7%多い。5プロセスで43分。
-- **COUNT の表：** 下限4回、上位8候補で、1億6,591万行、5.31GB。履歴1〜5の行は、8,142、927万、4,997万、6,374万、4,292万。1スレッドで1時間54分。
-- **送る時間：** 日本の H100 へ、表以外の4.0GBが187秒、表が232秒。
+- **Training and validation:** 2 billion training tokens, 20 million validation tokens, vocabulary 8,192. Downloading, the tokenizer and tokenizing took 35 minutes.
+- **COUNT text:** 2 billion tokens from 2,475,100 documents read from the first file, minus 1,157 documents (0.047%) that contain evaluation questions. For the same 2 billion tokens, 2.7% more documents are read than with the tokenizer trained on ClimbMix (2,410,588 documents). 43 minutes with 5 processes.
+- **COUNT tables:** With a minimum count of 4 and the top 8 candidates, 165.91 million rows, 5.31GB. Rows for histories 1–5: 8,142, 9.27 million, 49.97 million, 63.74 million, 42.92 million. 1 hour 54 minutes on one thread.
+- **Transfer time:** To the H100 in Japan, 187 seconds for the 4.0GB other than the tables, and 232 seconds for the tables.

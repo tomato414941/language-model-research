@@ -1,11 +1,11 @@
-# 採点
+# Scoring
 
-変更が効いたかを見るのに、何を測るか。
+What to measure to see whether a change worked.
 
-- 普段は、公開ベンチマークの正解の BPB と、検証データの BPB を測る。H100 で20秒ほどで済み、学習の費用に比べて小さい（[基準の学習](../experiments/baseline.md)）。
-- 種を変えるだけで、検証データの BPB は約0.3%、正解の BPB の平均は約1.3%動いた。ベンチマーク1つでは最大6%動いた。種は2つなので、まだ粗い。
-- そこから、2026-11時点では、学習1回の比較で検証データの BPB が0.01、正解の BPB の平均が0.05を超えれば効果があるとみている。種を増やして測ったら見直す。
-- 2026-11-02 から、束を学習するたびに、採点ソフトで6課題の全問の正解率も測る。増える費用は1回 $0.1 ほどで（RTX 4090 で1モデル約4分）、節目がいつかを決めなくて済む。
-- [全問の測定](../experiments/harness-milestone.md)では、基準から最初の束への伸びは正解率でもはっきり見えたが、最初の束から2番目の束への差は誤差の範囲だった（正解の BPB は4.4%下がっている）。2026-11時点では、正解の BPB の数%の差を正解率の上がりとは読まない。
-- MMLU の作者の形式（5例を付けて記号で答える）は、当面測らない。同じ測定で4つのモデルとも当てずっぽうの .25 と区別できず、差がつかなかった。記号を選ぶ力が見えそうな大きさのモデルを作るときに、測り直す。
-- 検証データの BPB は、決まった位置から切った行を読む。文書の途中から始まる行が多く、文書の頭から読むように学習したモデルには不利になる。[2番目の束](../experiments/second-bundle.md)は、この測り方で +2.2%、文書の頭から読む行で −4.2%だった。1つの物差しだけで判断しない。
+- Normally, measure the correct-answer BPB on public benchmarks and validation BPB. This takes about 20 seconds on the H100, small compared with the cost of training ([the baseline's training](../experiments/baseline.md)).
+- Just changing the seed moved validation BPB by about 0.3% and the mean correct-answer BPB by about 1.3%. A single benchmark moved by up to 6%. With only two seeds, this is still rough.
+- From this, as of 2026-11, we take a difference in a one-run comparison of more than 0.01 in validation BPB, and of more than 0.05 in the mean correct-answer BPB, to be an effect. Revisit after measuring with more seeds.
+- From 2026-11-02, every time a bundle is trained, the accuracy on all questions of six tasks is also measured with the scoring harness. The extra cost is about $0.1 per run (about 4 minutes per model on an RTX 4090), and it saves deciding when the milestones are.
+- In [the measurement on all questions](../experiments/harness-milestone.md), the gain from the baseline to the first bundle was clearly visible in accuracy too, but the difference from the first bundle to the second bundle was within the error (correct-answer BPB fell by 4.4%). As of 2026-11, a difference of a few percent in correct-answer BPB is not read as a rise in accuracy.
+- The format of MMLU's authors (five examples, answering with a letter) is not measured for now. In the same measurement, none of the four models could be told apart from guessing's .25, and there was no difference between them. Measure again when building a model large enough that the ability to choose a letter might show.
+- Validation BPB reads rows cut at fixed positions. Many rows start mid-document, which puts models trained to read from the start of documents at a disadvantage. [The second bundle](../experiments/second-bundle.md) was +2.2% by this measure and −4.2% on rows read from the start of documents. Do not judge by a single yardstick.

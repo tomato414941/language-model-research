@@ -1,9 +1,9 @@
-# BLOOM の形の比較
+# BLOOM's architecture comparisons
 
-Le Scao ら、What Language Model to Train if You Have One Million GPU Hours?（arXiv 2210.15424）。BLOOM の形を決めるための比較。
+Le Scao et al., What Language Model to Train if You Have One Million GPU Hours? (arXiv 2210.15424). Comparisons made to decide BLOOM's architecture.
 
-活性化関数については、The Pile を1,120億トークン学習したモデルの EAI の結果の平均で、GELU 42.79、SwiGLU 42.95。SwiGLU が少し良い。
+For activation functions, the mean of the EAI results of models trained on 112 billion tokens of The Pile is 42.79 for GELU and 42.95 for SwiGLU. SwiGLU is slightly better.
 
-BLOOM 自身は GELU にした。SwiGLU の遅さに見えたものは、中の幅5,456が GPU に合わないためと後から分かったので、次のモデルには SwiGLU を勧めている。
+BLOOM itself used GELU. What looked like SwiGLU's slowness was later found to come from the inner width of 5,456 not suiting the GPU, so the paper recommends SwiGLU for the next models.
 
-ReLU² は比べていない。読んだのは活性化関数の節だけ。
+It does not compare ReLU². Only the section on activation functions was read.

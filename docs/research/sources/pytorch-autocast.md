@@ -1,11 +1,11 @@
-# PyTorch の自動の16ビット計算
+# PyTorch's automatic 16-bit computation
 
-PyTorch のコードに書いてあること。
+What PyTorch's code says.
 
-- GPU の autocast で32ビットにする一覧（`AT_FORALL_FP32`）に、`pow`、`layer_norm`、`rms_norm` がある。16ビットにする一覧には `scaled_dot_product_attention` などがある。
-- `square` は `at::pow(self, 2)` を呼ぶ。
-- `rms_norm` は中で32ビットに上げて計算し、入力と同じ型で返す。
+- The list that GPU autocast runs in 32 bits (`AT_FORALL_FP32`) includes `pow`, `layer_norm` and `rms_norm`. The list it runs in 16 bits includes `scaled_dot_product_attention`, among others.
+- `square` calls `at::pow(self, 2)`.
+- `rms_norm` raises the input to 32 bits internally for the computation and returns the same type as its input.
 
-CPU の autocast は一覧が別で、torch 2.14.1 で試すと、16ビットを入れた `rms_norm` と `square` は16ビットのまま。32ビットの0次元の値と16ビットの配列の積は16ビットになる。GPU の autocast の動きは試していない。
+CPU autocast has separate lists; tried with torch 2.14.1, `rms_norm` and `square` given 16-bit inputs stay in 16 bits. The product of a 32-bit 0-dimensional value and a 16-bit array is 16-bit. The behavior of GPU autocast was not tried.
 
-読んだのは torch 2.14.1 の配布物の `autocast_mode.h` の一覧と、v2.9.0 の `UnaryOps.cpp` の `square`、`layer_norm.cpp` の `rms_norm`。
+Read: the lists in `autocast_mode.h` in the torch 2.14.1 distribution, and `square` in `UnaryOps.cpp` and `rms_norm` in `layer_norm.cpp` at v2.9.0.

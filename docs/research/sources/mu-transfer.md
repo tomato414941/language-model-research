@@ -1,10 +1,10 @@
-# μ-Transfer の論文
+# The μ-Transfer paper
 
-Lingle、An Empirical Study of μP Learning Rate Transfer（arXiv 2404.05728）。学習率を別の規模に持ち越せるかを調べた研究で、モデルは最大10億パラメータ、1,900億トークン。
+Lingle, An Empirical Study of μP Learning Rate Transfer (arXiv 2404.05728). A study of whether the learning rate carries over to other scales, with models of up to 1 billion parameters and 190 billion tokens.
 
-- `lm_head` の初期値を小さくする μP の設定で、RMSNorm の重みの有無を比べた（4.2.3）。一番大きいモデルで、学習率が最適のとき、重みは品質を下げた。μP でも重みのない形が、重みのある普通の形を上回った（4.5）。
-- 重みがあると、学習率を別の規模に持ち越しにくい。
-- Q の重みを0から始める形も比べている（表4、表9）。一番良い学習率の検証の損失は、幅128で 3.695 から 3.692、幅512で 2.953 から 2.949、幅2,048で 2.511 から 2.510。著者は「わずかだが一貫して良い」としている。
-- 表11は、残差のブロックを0から始めた96層（幅128、512）で、一番良い値は 3.456、2.753。同じ96層で0でない形との比較はない。
+- Under the μP setting that makes `lm_head`'s initial values small, RMSNorm with and without weights was compared (4.2.3). In the largest model at the optimal learning rate, the weights lowered quality. Under μP too, the form without weights beat the usual form with weights (4.5).
+- With the weights, the learning rate is harder to carry over to other scales.
+- It also compares starting the Q weights at zero (Tables 4 and 9). The validation loss at the best learning rate goes from 3.695 to 3.692 at width 128, from 2.953 to 2.949 at width 512 and from 2.511 to 2.510 at width 2,048. The author calls it "a slight yet consistent improvement".
+- Table 11 has 96 layers with the residual blocks starting at zero (widths 128 and 512), with best values of 3.456 and 2.753. There is no comparison with a nonzero start at the same 96 layers.
 
-読んだのは4.2.3の本文、モデルの条件の部分、表4の基準と Q の行、表9、表11。
+The text of 4.2.3, the part on the model settings, Table 4's baseline and Q rows, Table 9 and Table 11 were read.

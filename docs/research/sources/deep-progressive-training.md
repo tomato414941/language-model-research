@@ -1,34 +1,34 @@
 # Deep Progressive Training
 
-Zhiqi Bu（arXiv 2511.04981、ICML 2026 の題は Scaling Depth Capacity via Zero/One-Layer Model Expansion）。
+Zhiqi Bu (arXiv 2511.04981; the ICML 2026 title is Scaling Depth Capacity via Zero/One-Layer Model Expansion).
 
-0層か1層のモデルを学習し、学習の途中で一度に目標の深さへ広げる。
+It trains a 0-layer or 1-layer model and expands it to the target depth all at once partway through training.
 
-## 仕組み
+## How it works
 
-- 新しい層はランダムな初期値が既定。1層のときはコピー（w → [w, w, w]）も効く。0初期化は学習が進まないので使わない。新しい層は下に足すほうが、上に入れるより損失の跳ねが小さい（付録 A.3）。
-- オプティマイザの状態は、引き継いで新しい層を0にする、コピーする、引き継がない、のどれでも最終の損失はほぼ同じ（コピーはやや不安定。付録 C.2）。
-- 学習率の予定は WSD で、広げるのは学習率が一定の期間の中。広げる前後でハイパーパラメータは同じ。
-- オプティマイザは Muon-NSGD（行列は Muon、それ以外は正規化した SGD で、学習率は1つ）。WSD の学習率は0.01（cosine では0.05）、weight decay 0.01、勾配のクリップなし。AdamW より良いとする。
-- 広げる時期は、一定の期間の終わりから、追いつくのに要る時間（混ざる時間）を引いて決める。その時間は、深いままの学習と、準備の直後に広げる学習の、短い2回で測る（7節）。
+- New layers are randomly initialized by default. From one layer, copying (w → [w, w, w]) also works. Zero initialization is not used because training does not progress. Adding the new layers below gives a smaller loss spike than inserting them above (Appendix A.3).
+- For the optimizer state, carrying it over with the new layers' state at zero, copying it, or not carrying it over all give nearly the same final loss (copying is slightly unstable; Appendix C.2).
+- The learning-rate schedule is WSD, and the expansion happens within the constant-learning-rate phase. The hyperparameters are the same before and after the expansion.
+- The optimizer is Muon-NSGD (Muon for matrices, normalized SGD for the rest, with a single learning rate). The learning rate is 0.01 with WSD (0.05 with cosine), weight decay 0.01, no gradient clipping. It says this works better than AdamW.
+- The expansion time is set by subtracting the time needed to catch up (the mixing time) from the end of the constant phase. That time is measured with two short runs: one that is deep throughout and one that expands right after the warmup (Section 7).
 
-## 追いつくまでの時間
+## Time to catch up
 
-- 1層の GPT を学習の10%と60%で広げると、どちらも12層に追いつくのに約160億トークン（3万更新）かかった（5.2節、図7）。WSD の一定の期間の中なら、広げる時期によらない。学習率を下げ始めてから広げると追いつかない。cosine では広げる時期で大きく変わり、50%以降は追いつかない（4.2節）。
-- この時間はトークンの量で決まり（1回の更新を4倍にすると、更新の数は大きく減った。付録 C.4）、モデルの大きさ（1.24億、4億、10億）にもほとんどよらない（付録 C.1）。
-- 図1では、一定の期間52.8万更新（準備2%、下げる期間10%）から約4万更新を引き、48万更新目（80%）に広げた。
+- A one-layer GPT expanded at 10% and at 60% of training both took about 16 billion tokens (30,000 updates) to catch up with the 12-layer model (Section 5.2, Figure 7). Within WSD's constant phase, this does not depend on when the expansion happens. Expanding after the learning rate starts to fall never catches up. With cosine, it varies a lot with the expansion time, and expanding after 50% never catches up (Section 4.2).
+- This time is set by the number of tokens (with each update made 4× larger, the number of updates fell sharply; Appendix C.4), and it barely depends on model size (124 million, 400 million, 1 billion; Appendix C.1).
+- In Figure 1, about 40,000 updates were subtracted from a constant phase of 528,000 updates (2% warmup, 10% decay), and the expansion came at update 480,000 (80%).
 
-## 結果
+## Results
 
-- 図1（GPT-2、OpenWebText、文脈1,024）：最終の検証損失の差は1.24億で0.5%未満、70億（60層）で0.2%未満。計算は70億で約80%減。
-- 1回の更新は既定で512本（約52万トークン）。約60万更新なので、1.24億なら約3,100億トークン、1パラメータ約2,500トークン（自分たちの計算）。0層は3,900万、1層は4,600万パラメータで、大半は埋め込み。論文のパラメータで数える式なら、節約はこの大きさで約5割（自分たちの計算）。
-- スケーリング則（図2）：LLaMA3 は2.5億〜20億で1パラメータ50トークン、DeepSeekV3 は有効2億〜5億で1パラメータ100トークン。どちらも80%で広げる。計算の効率は3〜5倍で、大きいほど差が開く。
-- 150回の学習（図10、12・24・36層へ）：0層と1層から広げる形が、損失と計算の関係でほぼ最良。2層以上から広げる形は計算が多くかかる。
-- 小さいモデルの計算を数えない比較は、速さを過大に見せると指摘している。
-- 下流の点の結果はない。
+- Figure 1 (GPT-2, OpenWebText, context 1,024): the gap in final validation loss is under 0.5% at 124 million and under 0.2% at 7 billion (60 layers). Compute falls by about 80% at 7 billion.
+- Each update is 512 sequences by default (about 520,000 tokens). With about 600,000 updates, that is about 310 billion tokens at 124 million, or about 2,500 tokens per parameter (our own calculation). The 0-layer model has 39 million parameters and the 1-layer model 46 million, mostly embeddings. With the paper's formula that counts by parameters, the saving at this size is about 50% (our own calculation).
+- Scaling laws (Figure 2): LLaMA3 at 250 million to 2 billion with 50 tokens per parameter, and DeepSeekV3 at 200 million to 500 million active with 100 tokens per parameter. Both expand at 80%. Compute efficiency is 3–5×, and the gap widens with size.
+- 150 runs (Figure 10, expanding to 12, 24 and 36 layers): expanding from 0 or 1 layers is close to the best in loss against compute. Expanding from 2 or more layers costs more compute.
+- It points out that comparisons that do not count the small model's compute overstate the speedup.
+- There are no downstream scores.
 
-## 今の学習に当てはめると（自分たちの見方）
+## Applied to the current training (our own view)
 
-今の学習は全部で約6.7億トークン（1,281更新）で、追いつくのに要る約160億トークンの約24分の1。追いつく時間が今の大きさでも同じなら、広げたモデルは学習の終わりまで、初めから深いモデルに追いつかない。1層の計算は今の10層の約18%なので、2%で広げても浮く計算は約1.6%。
+The current training reads about 670 million tokens in all (1,281 updates), about 1/24 of the roughly 16 billion tokens needed to catch up. If the catch-up time is the same at our size, an expanded model does not catch up with a model that is deep from the start before training ends. A one-layer model's compute is about 18% of the current 10 layers', so expanding at 2% saves only about 1.6% of the compute.
 
-読んだのは要旨と、HTML の本文を要約を通したもの（1、4.2、5.2、6、7節、付録 A.3、B、C.1、C.2、C.4、図の説明）。図の数字は読めていない。
+The abstract was read, and the HTML main text through a summary (Sections 1, 4.2, 5.2, 6 and 7, Appendices A.3, B, C.1, C.2 and C.4, and the figure captions). The numbers in the figures could not be read.

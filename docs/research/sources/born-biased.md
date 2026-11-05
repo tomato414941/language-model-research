@@ -1,9 +1,9 @@
 # Transformers Are Born Biased
 
-Transformers Are Born Biased: Structural Inductive Biases at Random Initialization and Their Practical Consequences（arXiv 2602.05927）。
+Transformers Are Born Biased: Structural Inductive Biases at Random Initialization and Their Practical Consequences (arXiv 2602.05927).
 
-- ランダムな初期値のモデルは、特定のトークンを強く好む。12億の GPT-2 の形では、一番好まれるトークンが文脈1,024で10.2%。原因は MLP の非対称な活性化と注意の集約で、MLP だけでも起きる。
-- 種ごとの偏りは、弱くなるが学習のあとも残る。論文はこれをモデルの指紋に使う。
-- 初期値は GPT-2 の形で、出力の重みは 0.02/√(2×層の数)。出力の重みを0にした比較はない。
+- A model at its random initialization strongly prefers particular tokens. In GPT-2's shape at 1.2 billion, the most preferred token takes 10.2% at a context of 1,024. The causes are the MLPs' asymmetric activations and attention's aggregation, and it happens with the MLPs alone as well.
+- The bias of each seed weakens but remains after training. The paper uses it as the model's fingerprint.
+- The initialization is GPT-2's, with the output weights at 0.02/√(2×number of layers). There is no comparison with the output weights set to 0.
 
-読んだのは1、3、4.1、5節の始め、6.2.2、7節、付録の初期値の部分。
+Sections 1, 3 and 4.1, the start of section 5, 6.2.2, section 7 and the appendix's part on initialization were read.

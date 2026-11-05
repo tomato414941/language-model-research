@@ -1,48 +1,48 @@
-# Logit の softcap
+# Logit softcap
 
-予測の値（ロジット）を `c * tanh(logits / c)` で滑らかに抑える。重みは増えない。`language-model` にも短い[メモ](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/logit-softcap.md)がある。
+Smoothly bounds the predicted values (logits) with `c * tanh(logits / c)`. Adds no weights. `language-model` also has a short [note](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/logit-softcap.md).
 
-## 分かっていること
+## What is known
 
-**品質：** なしと比べた比較は1つだけで、差は小さい。差は自分たちの計算。
+**Quality:** There is only one comparison against none, and the difference is small. The differences are our own calculations.
 
-| 出典 | 比べたもの | 結果 |
+| Source | Compared | Result |
 |---|---|---|
-| [modded-nanogpt の記録9](../sources/modded-nanogpt-records.md) | なし → 30（QK-norm あり、3,200回） | 3.2844 から 3.2791（−0.16%） |
-| 記録18 | 30 → 15 | 同じ損失に要る更新が1,490回から1,390回（換算で約 −0.4%） |
-| [nanochat](../sources/nanochat-log.md)（24層） | 5〜30 | 5はひどく、ほかはほぼ同じ。一番良い20で約 −0.14% |
+| [modded-nanogpt's record 9](../sources/modded-nanogpt-records.md) | None → 30 (with QK-norm, 3,200 steps) | 3.2844 to 3.2791 (−0.16%) |
+| Record 18 | 30 → 15 | Updates needed for the same loss went from 1,490 to 1,390 (about −0.4% converted) |
+| [nanochat](../sources/nanochat-log.md) (24 layers) | 5 to 30 | 5 is terrible, the others about the same. About −0.14% at the best, 20 |
 
-記録18の著者は、小さい規模で効く構造の押しつけと見ている。
+Record 18's author sees it as an imposed structure that helps at small scale.
 
-**安定：** [発散の比較](../sources/training-stability-methods.md)（8.3億）では QK-norm と並んで一番安定し、2つを組み合わせると学習率をさらに1.5倍にできる。2番目の束には QK-norm が入っている。
+**Stability:** In [the comparison of divergence](../sources/training-stability-methods.md) (830 million), it was the most stable along with QK-norm, and combining the two allows a further 1.5× learning rate. The second bundle includes QK-norm.
 
-**費用：** [2番目の束](../experiments/second-bundle.md)の H100 で、1回の更新が2.7%遅い（0.599秒と0.615秒。換算で +0.15%）。記録9（語彙50,304）は2.0%で、語彙が小さければもっと小さいという読みは外れた。
+**Cost:** On the H100 in [the second bundle](../experiments/second-bundle.md), an update was 2.7% slower (0.599 seconds and 0.615 seconds; +0.15% converted). Record 9 (vocabulary 50,304) had 2.0%, so the guess that it would be even smaller with a smaller vocabulary was wrong.
 
-**出だし：** 2番目の束の形で、本来の約500分の1のバッチで試すと、x0、resid の重みで見えた4回目の更新の損失の跳ね（9.36）が、softcap ありでは出なかった（8.44。[確認の記録](../experiments/second-bundle-code-check.md)）。品質の比較ではない。
+**Start of training:** Tried in the second bundle's shape with a batch about 1/500 of the real one, the loss spike at the fourth update (9.36) seen with the x0 and resid weights did not appear with the softcap (8.44; [record of the check](../experiments/second-bundle-code-check.md)). This is not a comparison of quality.
 
-**採用：** [Gemma 2](../sources/gemma-soft-capping.md) は最後の層に30を使い、Gemma 3 は QK-norm に置き換えた。autoresearch と modded-nanogpt の最適化の部門は15を使い、最適化の部門は普通でない部品を外したあとでも残している。
+**Adoption:** [Gemma 2](../sources/gemma-soft-capping.md) uses 30 on the last layer, and Gemma 3 replaced it with QK-norm. autoresearch and modded-nanogpt's optimization track use 15, and the optimization track keeps it even after removing its unusual parts.
 
-**ほかの形：**
+**Other forms:**
 
-- modded-nanogpt の最適化の部門の `15 * x / √(x² + 15²)`。tanh より軽いが、比較は見つけていない。
-- `23 * sigmoid((x + 5) / 7.5)` は、nanochat では少し悪く、FP8 でしか効かないかもしれない。
-- [z-loss](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/z-loss.md)：損失の罰で大きさを抑える。IMU-1 などが使っているが、効果の比較は読んでいない。
+- `15 * x / √(x² + 15²)` in modded-nanogpt's optimization track. Lighter than tanh, but we have not found a comparison.
+- `23 * sigmoid((x + 5) / 7.5)` was slightly worse in nanochat, and may help only with FP8.
+- [z-loss](https://github.com/tomato414941/language-model/blob/main/docs/research/topics/z-loss.md): bounds the size with a penalty in the loss. IMU-1 and others use it, but comparisons of its effect have not been read.
 
-## 今の見方
+## Current view
 
-2026-11時点の見方では、2番目の束に入れる。autoresearch と同じ `15 * tanh(logits / 15)` にする。同じコストでの効果は0〜0.4%と見ている。理由は次の通り。
+In the view as of 2026-11, it goes into the second bundle, as `15 * tanh(logits / 15)`, the same as autoresearch. We think its effect at the same cost is 0–0.4%. The reasons:
 
-- 比較はどれも良い向きで、悪くなった報告は見つけていない。
-- 1行の変更で、測った費用は下の境目より小さい。
-- 束は測るのが1回なので、Muon で動いた例に揃える。
+- Every comparison points the better way, and we have not found reports of it making things worse.
+- It is a one-line change, and the measured cost is under the cutoff given below.
+- A bundle is measured once, so it follows the examples that ran with Muon.
 
-ただし根拠は modded-nanogpt の流れにほぼ限られ、Gemma 3 は QK-norm があれば要らないと判断した形になっている。
+However, the evidence comes almost entirely from the modded-nanogpt lineage, and Gemma 3 in effect judged it unnecessary when QK-norm is present.
 
-`tanh` は bf16 だと精度が足りないので、nanochat と autoresearch のように fp32 に戻してからかける。
+`tanh` lacks precision in bf16, so, as in nanochat and autoresearch, it is applied after casting back to fp32.
 
-## 見方が変わりそうな条件
+## What would change the view
 
-- 形を変えて遅くなる量が変わった場合。3%より遅いなら、外すことを考える。3%は換算で約0.17%で、見込みの中くらいの値に近い。測った2.7%はこの近くにある。
-- softcap のあるなしを今の規模で比べた結果が出た場合。Gemma 3 の判断が小さい規模でも当てはまるなら、要らない。
-- 語彙を大きくする場合。費用が増える。
-- 効果を項目ごとに測った場合。
+- A change of shape changing how much it slows things down. If it is more than 3% slower, consider removing it. 3% is about 0.17% converted, close to the middle of the expected range. The measured 2.7% is near this.
+- Results comparing with and without the softcap at the current scale. If Gemma 3's judgment holds at small scale too, it is not needed.
+- A larger vocabulary. The cost grows.
+- Measuring the effect of each change separately.
