@@ -29,7 +29,7 @@ Losing here does not mean it fails at production scale. v6's training reads abou
 
 ## Current status: on hold
 
-Not adopted, but not dropped either. We think it lost because the H-Net here has not caught up yet. It has yet to catch up in three things:
+Not adopted, but not dropped either. Reconsider this status by 2026-11-19. We think it lost because the H-Net here has not caught up yet. It has yet to catch up in three things:
 
 - Improvements since the paper. Cartesia's post ([From Tokens to Bytes](https://cartesia.ai/blog/from-tokens-to-bytes-part-1), 2026-10-28) compares an improved H-Net (unpublished) that replaces only the tokenizer part of a BPE Transformer, and says its loss was lower at every size. The smallest tier in its table is 8 layers, width 640 and a main network of 56.4 million parameters, about the same size as the main network here. The comparison was by compute and amount of data; time is not given. The improvements are not described either, but the post says the paper's H-Net places a chunk boundary only after seeing the first byte of the next chunk, and that this weakened next-byte prediction and the stacking of stages. With the paper's H-Net as is, given where the overtaking happens above, its chances of winning in this frame are slim.
 - Speed. Per amount read, it is about 1.5× slower than research-v4 (2026-11-05). The frame matches time, so the slower it is, the less it reads.
