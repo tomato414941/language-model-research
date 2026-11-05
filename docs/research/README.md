@@ -11,7 +11,8 @@ Everything trained and measured in this repository, from any window, follows thi
 - **Training:** 30 minutes per run, from scratch to the end. Never continue an earlier run.
 - **Other models:** Do not use other models in training: no distillation, and no other model's weights or outputs.
 - **GPU:** One H100 SXM. Each rental lasts at most 1 hour and holds the setup, the training and the evaluation. Every rental needs the user's approval.
-- **Acceptance:** Adopt a candidate when its CORE is higher than the current best's.
+- **Acceptance:** Adopt a candidate when its CORE is higher than the current best's. Measure each candidate once and accept the noise: never repeat a run, add seeds or average runs to make a number more certain. Later bundles and retried changes correct wrong calls.
+- When the measurement itself changes (the data, the evaluation, the training time or the GPU), measure the current best once under the new measurement before comparing candidates.
 - Keep the frame in one place in the code.
 
 ## What is free
