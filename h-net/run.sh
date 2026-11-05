@@ -47,9 +47,11 @@ mkdir -p /root/mamba-ssm
 cp -r "$mamba" /root/mamba-ssm/
 olmes_python() { PATH=/root/olmes-venv/bin:$PATH PYTHONPATH=/root/mamba-ssm python "$@"; }
 (
-    python -m venv /root/olmes-venv
-    /root/olmes-venv/bin/pip install -q --no-cache-dir torch==2.8.0 --index-url https://download.pytorch.org/whl/cu128
-    /root/olmes-venv/bin/pip install -q --no-cache-dir --no-deps -r olmes.txt
+    # The image's Python has no ensurepip, so the environment is made without pip and the image's pip fills it.
+    python -m venv --without-pip /root/olmes-venv
+    pip --python /root/olmes-venv/bin/python install -q --no-cache-dir torch==2.8.0 \
+        --index-url https://download.pytorch.org/whl/cu128
+    pip --python /root/olmes-venv/bin/python install -q --no-cache-dir --no-deps -r olmes.txt
     wait_for data/olmes.sent
     olmes_python frame.py data out/olmes-data data/olmes-requests
     olmes_python h-net/check_gpu.py mamba2
