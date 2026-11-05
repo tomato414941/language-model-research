@@ -45,6 +45,32 @@ class TinyRun:
         return torch.load(self.out.joinpath(*parts, "ckpt.pt"), map_location="cpu")
 
 
+class CurrentBestTest(TinyRun, unittest.TestCase):
+    def train_best(self, *options):
+        """train.py's defaults, the current best, cut down to run here."""
+        return subprocess.run(
+            [sys.executable, "-u", "train.py", "--device=cpu", "--dtype=float32", "--compile=False", "--n_layer=3",
+             "--n_embd=32", "--n_head=1", "--block_size=16", "--batch_size=2", "--gradient_accumulation_steps=1",
+             "--count_table=", "--eval_iters=1", "--evaluate=False", f"--dataset={self.directory / 'data'}",
+             f"--out_dir={self.out}", *options],
+            cwd=REPOSITORY, capture_output=True, text=True, timeout=300,
+        )
+
+    def test_trains_until_its_time_budget_is_spent_and_writes_a_summary(self):
+        done = self.train_best("--time_budget=1")
+        self.assertEqual(done.returncode, 0, done.stderr[-800:])
+        summary = json.loads((self.out / "summary.json").read_text())
+        self.assertGreaterEqual(summary["training_seconds"], 1)
+        self.assertGreater(summary["updates"], 10)
+        self.assertEqual(summary["tokens"], summary["updates"] * 2 * 16)
+        self.assertEqual(self.saved()["iter_num"], summary["updates"])
+
+    def test_refuses_to_average_weights_with_a_time_budget(self):
+        done = self.train_best("--time_budget=1", "--average_last=2")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("time_budget=0", done.stderr)
+
+
 class TrainingPartsTest(TinyRun, unittest.TestCase):
     def test_trains_with_document_attention_stem_triples_xielu_and_cautious_adamw(self):
         done = self.train("--document_attention=True", "--stem=True", "--bigram_table=True", "--trigram_table=True",

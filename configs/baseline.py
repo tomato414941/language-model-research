@@ -5,6 +5,36 @@
 # non-commercial at its source.
 dataset = 'fineweb'
 out_dir = 'out/baseline'
+# train.py's defaults are research's current best; this run, and those built on it, set back nanoGPT's.
+# They run their updates without frame.py's time budget or evaluation, as they did before the frame.
+time_budget = 0
+evaluate = False
+n_layer = 12
+n_head = 12
+n_embd = 768
+value_embeddings = False
+rotary = False
+rms_norm = False
+qk_norm = False
+relu_squared = False
+zero_output = False
+separate_embeddings = False
+residual_weights = False
+logit_softcap = 0.0
+stream_bfloat16 = False
+rows_from_document_heads = False
+count_table = ''
+dispersion = 0.0
+bigram_table = False
+attention_gate = False
+key_offset = False
+dense_connections = False
+backout = False
+optimizer_name = 'adamw'
+grad_clip = 1.0
+muon_other_lr = 0.004
+muon_embedding_lr = 0.6
+attention = 'sdpa'
 batch_size = 64
 gradient_accumulation_steps = 8
 block_size = 1024

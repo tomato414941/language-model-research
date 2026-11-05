@@ -1,12 +1,12 @@
 """Rents a GPU on Vast.ai, an H100 unless another is named, sends it this repository and the data, starts
 a script, fetches what it made and removes the machine.
 
-Commands: offers [GPU], rent [GPU], send [HOST:DIRECTORY [PATH...]], start SCRIPT [ARGUMENT...], shell COMMAND,
-fetch, destroy, guard MINUTES. `send` sends the committed code, and the data if given the machine and directory
-that hold it: prepare.py's fineweb directory, count_table.py's count-fineweb directory, harness.py's questions.jsonl,
-the harness's datasets cache and constraints.txt, the versions that a try without a GPU ran with, unless other
-paths are named. `guard`, left
-running in the background, removes the machine after that long if nothing else has.
+Commands: offers [GPU], rent [GPU], send [HOST:DIRECTORY [PATH...]], data HOST:DIRECTORY PATH..., start SCRIPT
+[ARGUMENT...], shell COMMAND, fetch, destroy, guard MINUTES. `send` sends the committed code, and the data if given
+the machine and directory that hold it: prepare.py's fineweb directory, count_table.py's count-fineweb directory,
+harness.py's questions.jsonl, the harness's datasets cache and constraints.txt, the versions that a try without a
+GPU ran with, unless other paths are named. `data` sends only the named data, so that a second stream can run beside
+`send`. `guard`, left running in the background, removes the machine after that long if nothing else has.
 
 It rents through runs/vast_rental.py of the language-model repository, checked out next to this one,
 so that both projects follow one rental policy and share one record of the machines that failed. That
@@ -120,8 +120,11 @@ def stream(source, target_command):
 
 def send(data_source=None, *paths):
     stream(["git", "-C", str(REPOSITORY), "archive", "HEAD"], f"mkdir -p {REMOTE} && tar -x -C {REMOTE}")
-    if data_source is None:
-        return
+    if data_source is not None:
+        send_data(data_source, *paths)
+
+
+def send_data(data_source, *paths):
     host, directory = data_source.split(":", 1)
     names = " ".join(shlex.quote(path) for path in paths or DATA)
     remote_tar = f"tar -C {shlex.quote(directory)} -cf - {names}"
@@ -183,8 +186,8 @@ def main():
         print(done.stdout, end="")
         print(rental.hide_addresses(done.stderr), end="", file=sys.stderr)
         return done.returncode
-    actions = {"offers": show_offers, "rent": rent, "send": send, "start": start, "shell": shell, "fetch": fetch,
-               "destroy": destroy, "guard": lambda minutes: guard(int(minutes))}
+    actions = {"offers": show_offers, "rent": rent, "send": send, "data": send_data, "start": start, "shell": shell,
+               "fetch": fetch, "destroy": destroy, "guard": lambda minutes: guard(int(minutes))}
     return actions[command](*arguments) or 0
 
 

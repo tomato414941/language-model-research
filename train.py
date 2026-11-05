@@ -18,6 +18,7 @@ $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123
 
 import os
 import time
+import json
 import math
 import pickle
 from contextlib import nullcontext
@@ -30,16 +31,21 @@ from torch.distributed import init_process_group, destroy_process_group
 from averaging import WeightAverage, averaged_updates
 from count_table import CountTable
 from model import GPTConfig, GPT, choose_attention
-from muon import configure_muon, set_schedule
+from frame import TIME_BUDGET, UNCOUNTED_UPDATES, CoreTokenizer, evaluate_bpb, evaluate_core, save_core_results
+from muon import configure_muon, set_schedule_at
 from rows import bos_token, document_heads, whole_row_heads
 
+started = time.time()
+
 # -----------------------------------------------------------------------------
-# default config values designed to train a gpt2 (124M) on OpenWebText
+# The defaults are research's current best (docs/research/README.md), the run that a candidate must beat. A candidate
+# changes them here, directly. The frame that every run follows, its data, training time and evaluation, is frame.py's.
+# configs/ holds earlier runs, which set back what they need.
 # I/O
-out_dir = 'out'
-eval_interval = 2000
-log_interval = 1
-eval_iters = 200
+out_dir = 'out/run'
+eval_interval = 1000000 # with a time budget, the loss is estimated at the start and at the end
+log_interval = 10
+eval_iters = 20
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -51,35 +57,37 @@ wandb_log = False # disabled by default
 wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
-dataset = 'openwebtext'
+dataset = 'fineweb' # frame.py's allowed data
 decay_dataset = '' # with Muon's schedule, the dataset that training reads once the learning rate begins to fall
-gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
-batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 4 # used to simulate larger batch sizes
+batch_size = 128 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
+time_budget = TIME_BUDGET # seconds of training, frame.py's; at or below zero, max_iters updates instead
+evaluate = True # does the run end with frame.py's evaluation, CORE and the reference validation BPB?
 # model
-n_layer = 12
-n_head = 12
-n_embd = 768
+n_layer = 10
+n_head = 5
+n_embd = 640
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
-value_embeddings = False # do we add a table per token to the values of some layers?
-rotary = False # do positions come from rotary embeddings instead of a table?
-rms_norm = False # do we use RMSNorm with no weights instead of LayerNorm?
-qk_norm = False # do we normalize queries and keys before they meet?
-relu_squared = False # do we use ReLU squared in the MLP instead of GELU?
-zero_output = False # do the last weights of attention and the MLP start at zero?
-separate_embeddings = False # does one table read the tokens and another predict them?
-residual_weights = False # does each block take the stream and the embedded tokens by weights it learns?
-logit_softcap = 0.0 # above zero, the logits are squashed smoothly into plus or minus this
-stream_bfloat16 = False # do the values through the layers stay in bfloat16, when training in it on a GPU?
-rows_from_document_heads = False # do training rows begin at the head of a document, and read on from there?
-count_table = '' # the directory of a COUNT table that count_table.py built, which the input then takes; '' for none
-dispersion = 0.0 # above zero, the weight of Dispersion Loss on the directions of each row's token vectors
-bigram_table = False # does a table looked up by each token and the one before it add to every block's input?
-attention_gate = False # is each head's output scaled by a gate read from the first channels of the input?
-key_offset = False # do half of each head's channel pairs stay unturned, the keys taking them from the token before?
-dense_connections = False # do the last two blocks add mixtures of earlier outputs, weighted per position (MUDD)?
-backout = False # is a share of the stream after two thirds of the layers taken out before the prediction?
+value_embeddings = True # do we add a table per token to the values of some layers?
+rotary = True # do positions come from rotary embeddings instead of a table?
+rms_norm = True # do we use RMSNorm with no weights instead of LayerNorm?
+qk_norm = True # do we normalize queries and keys before they meet?
+relu_squared = True # do we use ReLU squared in the MLP instead of GELU?
+zero_output = True # do the last weights of attention and the MLP start at zero?
+separate_embeddings = True # does one table read the tokens and another predict them?
+residual_weights = True # does each block take the stream and the embedded tokens by weights it learns?
+logit_softcap = 15.0 # above zero, the logits are squashed smoothly into plus or minus this
+stream_bfloat16 = True # do the values through the layers stay in bfloat16, when training in it on a GPU?
+rows_from_document_heads = True # do training rows begin at the head of a document, and read on from there?
+count_table = 'data/count-fineweb' # the directory of a COUNT table that count_table.py built, which the input then takes; '' for none
+dispersion = 0.1 # above zero, the weight of Dispersion Loss on the directions of each row's token vectors
+bigram_table = True # does a table looked up by each token and the one before it add to every block's input?
+attention_gate = True # is each head's output scaled by a gate read from the first channels of the input?
+key_offset = True # do half of each head's channel pairs stay unturned, the keys taking them from the token before?
+dense_connections = True # do the last two blocks add mixtures of earlier outputs, weighted per position (MUDD)?
+backout = True # is a share of the stream after two thirds of the layers taken out before the prediction?
 bigram_rows_per_token = 5 # the rows of the tables of pairs and of triples, per token of the vocabulary
 trigram_table = False # does a table looked up by each token and the two before it add to every block's input?
 stem = False # do half of the MLPs scale their widened values by a table looked up by each token (STEM)?
@@ -87,22 +95,22 @@ xielu = False # is xIELU the MLP's activation, in the place of ReLU squared or G
 document_attention = False # does attention stay within each document, which begins with the tokenizer's BOS?
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
-max_iters = 600000 # total number of training iterations
+max_iters = 1000000 # total number of training iterations; with a time budget, only a bound
 weight_decay = 1e-1
 beta1 = 0.9
 beta2 = 0.95
-grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
+grad_clip = 0.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
 lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # 'adamw' is the recipe above; 'muon' uses the settings below, and its schedule comes from muon.py
-optimizer_name = 'adamw'
+optimizer_name = 'muon'
 muon_lr = 0.04 # learning rate of the matrices of the blocks
-muon_other_lr = 0.004 # learning rate of every other weight, except for the value embeddings
+muon_other_lr = 0.0044 # learning rate of every other weight, except for the value embeddings
 muon_value_embedding_lr = 0.1
-muon_embedding_lr = 0.6 # learning rate of a token table that only reads
+muon_embedding_lr = 0.66 # learning rate of a token table that only reads
 muon_scalar_lr = 0.5 # learning rate of the x0 weights; the resid weights take a hundredth of it
 muon_weight_decay = 0.2 # at the start of training, falling to zero at the end
 muon_polar_express = True
@@ -117,13 +125,15 @@ seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
-attention = 'sdpa' # how attention runs on a GPU: 'sdpa', 'fa2', 'fa3' or 'fa4'; see choose_attention in model.py
+attention = 'fa2' # how attention runs on a GPU: 'sdpa', 'fa2', 'fa3' or 'fa4'; see choose_attention in model.py
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 # the updates after which training keeps the weights that the mixed weights average, checked before any work
+if average_last and time_budget > 0:
+    raise ValueError("averaging the last weights needs a run of max_iters updates; set time_budget=0")
 averaged = averaged_updates(max_iters, average_last, average_every) if average_last else set()
 
 # various inits, derived attributes, I/O setup
@@ -345,13 +355,21 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+# the seconds of training that count toward the time budget, which leave out the first updates
+training_seconds = 0.0
 # all the names of the parameters, as the state dictionary holds them, tied ones too
 average = WeightAverage(name for name, _ in raw_model.named_parameters(remove_duplicate=False))
 while True:
+    if time_budget > 0:
+        progress = training_seconds / time_budget
+        last = local_iter_num > UNCOUNTED_UPDATES and training_seconds >= time_budget
+    else:
+        progress = iter_num / max_iters
+        last = iter_num == max_iters
 
     # determine and set the learning rate for this iteration
     if optimizer_name == 'muon':
-        lr = muon_lr * set_schedule(optimizer, iter_num, max_iters, muon_weight_decay, muon_warmdown_share)
+        lr = muon_lr * set_schedule_at(optimizer, iter_num, progress, muon_weight_decay, muon_warmdown_share)
         if decay_dataset and lr < muon_lr and train_dir == data_dir:
             train_dir = os.path.join('data', decay_dataset)
             row_heads = row_starts(train_dir)
@@ -362,7 +380,7 @@ while True:
             param_group['lr'] = lr
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
+    if (iter_num % eval_interval == 0 or last) and master_process:
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
@@ -400,7 +418,7 @@ while True:
             print(f"saving the last weights mixed with the average of {average.count} to {mixed_dir}")
             torch.save(mixed, os.path.join(mixed_dir, 'ckpt.pt'))
             mixed = None
-    if iter_num == 0 and eval_only:
+    if (iter_num == 0 and eval_only) or (last and time_budget > 0):
         break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
@@ -430,9 +448,13 @@ while True:
     optimizer.zero_grad(set_to_none=True)
 
     # timing and logging
+    if time_budget > 0 and device_type == 'cuda':
+        torch.cuda.synchronize()
     t1 = time.time()
     dt = t1 - t0
     t0 = t1
+    if local_iter_num >= UNCOUNTED_UPDATES:
+        training_seconds += dt
     if iter_num % log_interval == 0 and master_process:
         # get loss as float. note: this is a CPU-GPU sync point
         # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
@@ -447,6 +469,26 @@ while True:
     # termination conditions
     if iter_num > max_iters:
         break
+
+# frame.py's evaluation of the last weights, and a summary of the run beside them
+if master_process:
+    summary = {'updates': iter_num, 'training_seconds': training_seconds, 'total_seconds': time.time() - started,
+               'tokens': iter_num * tokens_per_iter}
+    if evaluate:
+        tokenizer_path = os.path.join(data_dir, 'tokenizer.json')
+        with ctx:
+            summary['val_bpb'] = evaluate_bpb(raw_model, os.path.join(data_dir, 'val.bin'), tokenizer_path, device)
+            core = evaluate_core(raw_model, CoreTokenizer(tokenizer_path), device)
+        save_core_results(core, out_dir)
+        summary['core_metric'] = core['core_metric']
+        summary['total_seconds'] = time.time() - started
+    if device_type == 'cuda':
+        summary['peak_vram_mb'] = torch.cuda.max_memory_allocated() / 1024 / 1024
+    with open(os.path.join(out_dir, 'summary.json'), 'w') as f:
+        json.dump(summary, f, indent=2)
+    print("---")
+    for key, value in summary.items():
+        print(f"{key + ':':<18}{value:.17g}" if key == 'core_metric' else f"{key + ':':<18}{value}")
 
 if ddp:
     destroy_process_group()

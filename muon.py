@@ -168,9 +168,15 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
 
 
 def set_schedule(optimizer, update, total_updates, weight_decay, warmdown_share=WARMDOWN_SHARE):
-    """Sets the values for this update and returns the share of the full learning rate in use, which falls in a
-    straight line to zero over the last `warmdown_share` of training."""
-    progress = min(update / total_updates, 1.0)
+    """Sets the values for this update of a run of total_updates and returns the share of the full learning rate in
+    use, which falls in a straight line to zero over the last `warmdown_share` of training."""
+    return set_schedule_at(optimizer, update, min(update / total_updates, 1.0), weight_decay, warmdown_share)
+
+
+def set_schedule_at(optimizer, update, progress, weight_decay, warmdown_share=WARMDOWN_SHARE):
+    """Sets the values for this update, `progress` of the way through training, as set_schedule does. A run with a
+    time budget passes the share of its time spent."""
+    progress = min(progress, 1.0)
     share = min((1 - progress) / warmdown_share, 1.0)
     rise = min(update / MOMENTUM_RISE_UPDATES, 1.0)
     momentum = MOMENTUM_START + rise * (MOMENTUM_END - MOMENTUM_START)

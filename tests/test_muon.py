@@ -251,6 +251,12 @@ class ScheduleTest(unittest.TestCase):
         module.set_schedule(self.optimizer, 1000, 1000, 0.2)
         self.assertEqual(self.muon['weight_decay'], 0.0)
 
+    def test_follows_the_share_of_the_time_spent_when_given_it(self):
+        self.assertEqual(module.set_schedule_at(self.optimizer, 10, 0.4, 0.2), 1.0)
+        self.assertAlmostEqual(module.set_schedule_at(self.optimizer, 20, 0.75, 0.2), 0.5)
+        self.assertAlmostEqual(self.muon['weight_decay'], 0.05)
+        self.assertEqual(module.set_schedule_at(self.optimizer, 30, 1.2, 0.2), 0.0)
+
     def test_lowers_the_learning_rate_over_the_share_of_training_it_is_given(self):
         self.assertEqual(module.set_schedule(self.optimizer, 250, 1000, 0.2, warmdown_share=0.75), 1.0)
         self.assertAlmostEqual(module.set_schedule(self.optimizer, 625, 1000, 0.2, warmdown_share=0.75), 0.5)
