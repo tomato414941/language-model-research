@@ -60,6 +60,9 @@ wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'fineweb' # frame.py's allowed data
 decay_dataset = '' # with Muon's schedule, the dataset that training reads once the learning rate begins to fall
+# Other datasets that training reads beside `dataset`, as NAME:SHARE of the rows, comma-separated; the rest of the rows
+# come from `dataset`. FineMath's highest scored subset and Common Pile's educational code, as SmolLM2 mixes them.
+data_mix = 'finemath-4plus:0.1,stackv2-edu:0.1'
 gradient_accumulation_steps = 4 # used to simulate larger batch sizes
 batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
@@ -182,20 +185,40 @@ def row_starts(directory):
 
 train_dir = data_dir
 row_heads = row_starts(train_dir)
+# the other datasets in the mix, each with its share of the rows and where its rows may begin
+mix_sources = [(os.path.join('data', name), float(share)) for name, share in
+         (part.split(':') for part in data_mix.split(',') if part)]
+if mix_sources and decay_dataset:
+    raise ValueError("a mix of datasets and a decay dataset cannot be read together")
+mix_heads = [row_starts(directory) for directory, _ in mix_sources]
+shares = [1 - sum(share for _, share in mix_sources)] + [share for _, share in mix_sources]
+if min(shares) < 0:
+    raise ValueError(f"the shares of data_mix add up to more than one: {data_mix}")
 
-def get_batch(split):
+def read_rows(path, heads, count):
     # We recreate np.memmap every batch to avoid a memory leak, as per
     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
-    if split == 'train':
-        data = np.memmap(os.path.join(train_dir, 'train.bin'), dtype=np.uint16, mode='r')
+    data = np.memmap(path, dtype=np.uint16, mode='r')
+    if heads is not None:
+        ix = heads[torch.randint(len(heads), (count,)).numpy()]
     else:
-        data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
-    if split == 'train' and row_heads is not None:
-        ix = row_heads[torch.randint(len(row_heads), (batch_size,)).numpy()]
-    else:
-        ix = torch.randint(len(data) - block_size, (batch_size,))
+        ix = torch.randint(len(data) - block_size, (count,))
     x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
     y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+    return x, y
+
+def get_batch(split):
+    if split == 'train':
+        counts = [batch_size]
+        if mix_sources:
+            counts = torch.bincount(torch.multinomial(torch.tensor(shares), batch_size, replacement=True),
+                                    minlength=len(shares)).tolist()
+        sources = [(os.path.join(train_dir, 'train.bin'), row_heads)]
+        sources += [(os.path.join(directory, 'train.bin'), heads) for (directory, _), heads in zip(mix_sources, mix_heads)]
+        parts = [read_rows(path, heads, count) for (path, heads), count in zip(sources, counts) if count]
+        x, y = torch.cat([part[0] for part in parts]), torch.cat([part[1] for part in parts])
+    else:
+        x, y = read_rows(os.path.join(data_dir, 'val.bin'), None, batch_size)
     if device_type == 'cuda':
         # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
         x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)

@@ -56,5 +56,34 @@ class DecayDatasetTest(unittest.TestCase):
         self.assertNotIn("iter 6: loss", done.stdout)
 
 
+class DataMixTest(DecayDatasetTest.__bases__[0]):
+    setUp = DecayDatasetTest.setUp
+    dataset = DecayDatasetTest.dataset
+
+    def train(self, mix, updates=4):
+        return subprocess.run(
+            [sys.executable, "-u", "train.py", "--device=cpu", "--dtype=float32", "--compile=False", "--n_layer=3",
+             "--n_embd=32", "--n_head=1", "--block_size=8", "--batch_size=8", "--gradient_accumulation_steps=1",
+             "--time_budget=0", f"--max_iters={updates}", "--eval_interval=1000", "--eval_iters=1", "--count_table=",
+             "--dispersion=0.0", f"--dataset={self.dataset('main')}", f"--data_mix={mix}",
+             f"--out_dir={self.directory / 'out'}"],
+            cwd=REPOSITORY, capture_output=True, text=True, timeout=300,
+        )
+
+    def test_trains_on_rows_from_every_dataset_in_the_mix(self):
+        done = self.train(f"{self.dataset('math')}:0.3,{self.dataset('code')}:0.3")
+        self.assertEqual(done.returncode, 0, done.stderr[-800:])
+
+    def test_reads_rows_from_a_dataset_in_the_mix(self):
+        # A token beyond the vocabulary stops training once a row holds it.
+        done = self.train(f"{self.dataset('code', last_token=VOCABULARY + 100)}:0.5")
+        self.assertNotEqual(done.returncode, 0)
+
+    def test_refuses_shares_that_add_up_to_more_than_one(self):
+        done = self.train(f"{self.dataset('math')}:0.7,{self.dataset('code')}:0.4")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("add up to more than one", done.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

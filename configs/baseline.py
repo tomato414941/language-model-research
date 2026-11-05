@@ -41,6 +41,7 @@ xielu = False
 document_attention = False
 muon_cautious_adamw = False
 muon_warmdown_share = 0.5
+data_mix = ''
 batch_size = 64
 gradient_accumulation_steps = 8
 block_size = 1024
