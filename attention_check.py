@@ -43,12 +43,13 @@ def agree(first, second):
 
 
 def check_documents():
-    """Attention within documents, each beginning with token 0, through varlen attention and through a mask."""
+    """Attention within documents, each beginning with token 0, through varlen attention and through a mask, over
+    whole documents and within windows of 32 positions (SkyLadder's shortest)."""
     torch.manual_seed(0)
     model = GPT(GPTConfig(block_size=512, vocab_size=512, n_layer=2, n_head=5, n_embd=640, bias=False,
                           value_embeddings=True, rotary=True, rms_norm=True, qk_norm=True, relu_squared=True,
                           separate_embeddings=True, residual_weights=True, logit_softcap=15.0, key_offset=True,
-                          document_bos=0)).cuda()
+                          document_bos=0, smallest_window=32)).cuda()
     batch = fixed_batch()
     # documents of uneven lengths, one of them crossing from the first row's end into nothing
     for row, heads in enumerate(([0, 40, 300], [0, 7, 8, 200, 480], [0], [0, 256])):
@@ -56,17 +57,19 @@ def check_documents():
     if model_module.varlen_attn is None:
         print("documents cannot run here")
         return 2
-    through_varlen = outputs(model, batch)
-    kept = model_module.varlen_attn
-    model_module.varlen_attn = None
-    try:
-        through_mask = outputs(model, batch)
-    finally:
-        model_module.varlen_attn = kept
-    if not agree(through_varlen, through_mask):
-        print("documents through varlen attention do not agree with the mask")
-        return 1
-    print("documents through varlen attention agree with the mask")
+    for window in (512, 32):
+        model.attention_window.fill_(window)
+        through_varlen = outputs(model, batch)
+        kept = model_module.varlen_attn
+        model_module.varlen_attn = None
+        try:
+            through_mask = outputs(model, batch)
+        finally:
+            model_module.varlen_attn = kept
+        if not agree(through_varlen, through_mask):
+            print(f"documents through varlen attention do not agree with the mask, in windows of {window}")
+            return 1
+    print("documents through varlen attention agree with the mask, whole and in windows")
     return 0
 
 

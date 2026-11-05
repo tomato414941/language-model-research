@@ -60,19 +60,31 @@ class DataMixTest(DecayDatasetTest.__bases__[0]):
     setUp = DecayDatasetTest.setUp
     dataset = DecayDatasetTest.dataset
 
-    def train(self, mix, updates=4):
+    def train(self, mix, late="", updates=4, *options):
         return subprocess.run(
             [sys.executable, "-u", "train.py", "--device=cpu", "--dtype=float32", "--compile=False", "--n_layer=3",
              "--n_embd=32", "--n_head=1", "--block_size=8", "--batch_size=8", "--gradient_accumulation_steps=1",
              "--time_budget=0", f"--max_iters={updates}", "--eval_interval=1000", "--eval_iters=1", "--count_table=",
-             "--dispersion=0.0", f"--dataset={self.dataset('main')}", f"--data_mix={mix}",
-             f"--out_dir={self.directory / 'out'}"],
+             "--dispersion=0.0", "--attention_window_start=0", "--log_interval=1", f"--dataset={self.dataset('main')}",
+             f"--data_mix={mix}", f"--data_mix_late={late}", f"--out_dir={self.directory / 'out'}", *options],
             cwd=REPOSITORY, capture_output=True, text=True, timeout=300,
         )
 
     def test_trains_on_rows_from_every_dataset_in_the_mix(self):
         done = self.train(f"{self.dataset('math')}:0.3,{self.dataset('code')}:0.3")
         self.assertEqual(done.returncode, 0, done.stderr[-800:])
+
+    def test_reads_the_late_mix_over_the_last_share_of_training(self):
+        math_, code = self.dataset("math"), self.dataset("code")
+        done = self.train(f"{math_}:0.3,{code}:0.3", f"{math_}:0.4,{code}:0.4", 8, "--data_mix_late_share=0.25")
+        self.assertEqual(done.returncode, 0, done.stderr[-800:])
+        self.assertIn("iter 6: reading the late mix", done.stdout)
+        self.assertNotIn("iter 5: reading the late mix", done.stdout)
+
+    def test_refuses_a_late_mix_of_other_datasets(self):
+        done = self.train(f"{self.dataset('math')}:0.3", f"{self.dataset('code')}:0.3")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("data_mix_late must name the datasets of data_mix", done.stderr)
 
     def test_reads_rows_from_a_dataset_in_the_mix(self):
         # A token beyond the vocabulary stops training once a row holds it.

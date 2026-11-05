@@ -12,7 +12,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from model import (GPT, MLP, XIELU, GPTConfig, bigram_rows, document_ids, has_stem_table, segment_bounds,
-                   trigram_rows)
+                   trigram_rows, window_segments)
 from muon import configure_muon
 
 BOS = 31
@@ -89,6 +89,35 @@ class SegmentBoundsTest(unittest.TestCase):
         with unittest.mock.patch('model.SEGMENTS_PER_ROW', 2):
             bounds = segment_bounds(document_ids(tokens, BOS))
         self.assertEqual(bounds.tolist(), [0, 2, 8])
+
+
+class WindowTest(unittest.TestCase):
+    def test_cuts_each_document_where_the_rows_positions_cross_a_multiple_of_the_window(self):
+        tokens = torch.tensor([[BOS, 1, 2, 3, BOS, 4, 5, 6]])
+        segments = window_segments(document_ids(tokens, BOS), torch.tensor(3))
+        heads = (segments[0, 1:] != segments[0, :-1]).nonzero().flatten() + 1
+        self.assertEqual(heads.tolist(), [3, 4, 6])
+
+    def test_keeps_later_windows_blind_to_the_tokens_of_earlier_ones(self):
+        network = model(document_bos=BOS, smallest_window=4, key_offset=True, bigram_table=True, trigram_table=True)
+        fill_tables(network)
+        tokens = torch.tensor([[BOS, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]])
+        changed = tokens.clone()
+        changed[0, 1] = 20
+        network.attention_window.fill_(4)
+        self.assertTrue(torch.allclose(all_logits(network, tokens)[:, 4:], all_logits(network, changed)[:, 4:]))
+        network.attention_window.fill_(32)
+        self.assertFalse(torch.allclose(all_logits(network, tokens)[:, 4:], all_logits(network, changed)[:, 4:]))
+
+    def test_reads_the_whole_row_unless_a_window_is_set(self):
+        tokens = torch.tensor([[BOS, 3, 4, 5, 6, 7, BOS, 9, 10, 11, 12, 13]])
+        windowed = all_logits(model(document_bos=BOS, smallest_window=4), tokens)
+        self.assertTrue(torch.allclose(windowed, all_logits(model(document_bos=BOS), tokens)))
+
+    def test_begins_a_segment_for_attention_over_variable_lengths_at_every_piece(self):
+        tokens = torch.tensor([[BOS] + list(range(1, 16))])
+        segments = window_segments(document_ids(tokens, BOS), torch.tensor(4))
+        self.assertEqual(segment_bounds(segments, 8 + 16 // 4).tolist(), [0, 4, 8, 12] + [16] * 9)
 
 
 class TokenTupleTablesTest(unittest.TestCase):

@@ -58,6 +58,18 @@ class PrepareExtraTest(unittest.TestCase):
         self.assertEqual(manifest["files"], self.names[:2])
         self.assertEqual(manifest["tokens"], len(expected))
 
+    def test_reads_the_first_documents_of_every_file_as_they_arrive(self):
+        manifest = prepare_extra.prepare("stackv2-edu", self.directory / "out", self.tokenizer_path,
+                                         list_files=lambda name: self.names, documents_per_file=1,
+                                         open_file=lambda name, path: open(self.sources / path, "rb"))
+        bos = self.tokenizer.token_to_id(BOS)
+        expected = []
+        for documents in DOCUMENTS:
+            expected += [bos, *self.tokenizer.encode(documents[0], add_special_tokens=False).ids]
+        written = np.fromfile(self.directory / "out" / "train.bin", dtype=np.uint16).tolist()
+        self.assertEqual(written, expected)
+        self.assertEqual((manifest["files"], manifest["documents_per_file"]), (self.names, 1))
+
     def test_reads_the_files_in_the_order_it_is_given(self):
         manifest = prepare_extra.prepare("stackv2-edu", self.directory / "out", self.tokenizer_path, 1,
                                          fetch=self.fetch, list_files=lambda name: list(reversed(self.names)))

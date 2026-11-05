@@ -61,11 +61,17 @@ wandb_run_name = 'gpt2' # 'run' + str(time.time())
 dataset = 'fineweb' # frame.py's allowed data
 decay_dataset = '' # with Muon's schedule, the dataset that training reads once the learning rate begins to fall
 # Other datasets that training reads beside `dataset`, as NAME:SHARE of the rows, comma-separated; the rest of the rows
-# come from `dataset`. FineMath's highest scored subset and Common Pile's educational code, as SmolLM2 mixes them.
-data_mix = 'finemath-4plus:0.1,stackv2-edu:0.1'
+# come from `dataset`. FineMath's highest scored subset and Common Pile's educational code, the first documents of
+# each of its files, which hold one language each (prepare_extra.py), near Llama 3's quarter of math and the quarter
+# of code after which To Code or Not To Code finds natural language no better.
+data_mix = 'finemath-4plus:0.25,stackv2-edu-all:0.25'
+# The mix of the last data_mix_late_share of training, of the same datasets: domain upsampling at the end of training
+# (arXiv 2406.03476), 30% web and 35% each of the others; '' to keep data_mix to the end.
+data_mix_late = 'finemath-4plus:0.35,stackv2-edu-all:0.35'
+data_mix_late_share = 0.2
 gradient_accumulation_steps = 4 # used to simulate larger batch sizes
-batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
-block_size = 1024
+batch_size = 32 # if gradient_accumulation_steps > 1, this is the micro-batch size
+block_size = 2048
 time_budget = TIME_BUDGET # seconds of training, frame.py's; at or below zero, max_iters updates instead
 # model
 n_layer = 10
@@ -96,6 +102,10 @@ trigram_table = True # does a table looked up by each token and the two before i
 stem = True # do half of the MLPs scale their widened values by a table looked up by each token (STEM)?
 xielu = True # is xIELU the MLP's activation, in the place of ReLU squared or GELU?
 document_attention = True # does attention stay within each document, which begins with the tokenizer's BOS?
+# SkyLadder (arXiv 2503.15450): attention keeps to windows of the row this long at the start, which grow in a straight
+# line to the whole row at attention_window_full of training; 0 reads the whole row throughout.
+attention_window_start = 32
+attention_window_full = 0.6
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations; with a time budget, only a bound
@@ -186,14 +196,29 @@ def row_starts(directory):
 train_dir = data_dir
 row_heads = row_starts(train_dir)
 # the other datasets in the mix, each with its share of the rows and where its rows may begin
-mix_sources = [(os.path.join('data', name), float(share)) for name, share in
-         (part.split(':') for part in data_mix.split(',') if part)]
+def mix_shares(mix):
+    """Each dataset's share of the rows in a mix written as data_mix is, by name."""
+    return {name: float(share) for name, share in (part.split(':') for part in mix.split(',') if part)}
+
+mix_sources = [(os.path.join('data', name), share) for name, share in mix_shares(data_mix).items()]
 if mix_sources and decay_dataset:
     raise ValueError("a mix of datasets and a decay dataset cannot be read together")
 mix_heads = [row_starts(directory) for directory, _ in mix_sources]
 shares = [1 - sum(share for _, share in mix_sources)] + [share for _, share in mix_sources]
 if min(shares) < 0:
     raise ValueError(f"the shares of data_mix add up to more than one: {data_mix}")
+if attention_window_start and not (document_attention and 0 < attention_window_start <= block_size
+                                   and attention_window_full > 0):
+    raise ValueError("attention's windows need attention within documents, a first window no longer than a row "
+                     "and a share of training to grow over")
+late_shares = None
+if data_mix_late:
+    late = mix_shares(data_mix_late)
+    if sorted(late) != sorted(mix_shares(data_mix)):
+        raise ValueError("data_mix_late must name the datasets of data_mix")
+    late_shares = [1 - sum(late.values())] + [late[name] for name in mix_shares(data_mix)]
+    if min(late_shares) < 0:
+        raise ValueError(f"the shares of data_mix_late add up to more than one: {data_mix_late}")
 
 def read_rows(path, heads, count):
     # We recreate np.memmap every batch to avoid a memory leak, as per
@@ -250,6 +275,7 @@ model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=bloc
                   backout=backout, bigram_rows_per_token=bigram_rows_per_token, trigram_table=trigram_table,
                   stem=stem, xielu=xielu,
                   document_bos=bos_token(os.path.join(data_dir, 'tokenizer.json')) if document_attention else -1,
+                  smallest_window=attention_window_start,
                   ) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
@@ -274,7 +300,7 @@ elif init_from == 'resume':
               'residual_weights', 'logit_softcap', 'count', 'dispersion', 'bigram_table', 'attention_gate',
               'key_offset', 'dense_connections', 'backout', 'trigram_table', 'stem', 'xielu']:
         model_args[k] = checkpoint_model_args.get(k, False)
-    for k in ['bigram_rows_per_token', 'document_bos']:
+    for k in ['bigram_rows_per_token', 'document_bos', 'smallest_window']:
         model_args[k] = checkpoint_model_args.get(k, getattr(GPTConfig, k))
     # create the model
     gptconf = GPTConfig(**model_args)
@@ -401,6 +427,14 @@ while True:
         lr = get_lr(iter_num) if decay_lr else learning_rate
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
+
+    # the late mix for the last share of training, and attention's window for this update
+    if late_shares is not None and progress >= 1 - data_mix_late_share and shares != late_shares:
+        shares = late_shares
+        print(f"iter {iter_num}: reading the late mix {data_mix_late}")
+    if attention_window_start:
+        grown = int((block_size - attention_window_start) * min(progress / attention_window_full, 1.0))
+        raw_model.attention_window.fill_(attention_window_start + grown)
 
     # evaluate the loss on train/val sets and write checkpoints
     if (iter_num % eval_interval == 0 or last) and master_process:

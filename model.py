@@ -96,11 +96,12 @@ def document_ids(idx, bos):
     """Each position's document within its row: how many BOS tokens the row has read up to and including it."""
     return torch.cumsum((idx == bos).int(), dim=1)
 
-def segment_bounds(documents):
+def segment_bounds(documents, per_row=None):
     """The flat positions at which a row or a document begins, then the end, as the cumulative sequence positions
-    of attention over variable lengths. The list has a fixed length, SEGMENTS_PER_ROW per row and one, so that
-    a compiled model takes every batch alike: the room left over repeats the end. Every row's beginning is kept,
-    so that no segment runs past a row."""
+    of attention over variable lengths. The list has a fixed length, `per_row` (SEGMENTS_PER_ROW unless given) per
+    row and one, so that a compiled model takes every batch alike: the room left over repeats the end. Every row's
+    beginning is kept, so that no segment runs past a row."""
+    per_row = SEGMENTS_PER_ROW if per_row is None else per_row
     b, t = documents.shape
     end = b * t
     positions = torch.arange(end, device=documents.device)
@@ -109,11 +110,19 @@ def segment_bounds(documents):
     rows = positions % t == 0
     # rows first, then documents in order, then everything else, with room for a pass shorter than the list
     keys = torch.where(rows, positions - end, torch.where(heads.flatten(), positions, 2 * end))
-    room = b * SEGMENTS_PER_ROW
+    room = b * per_row
     keys = torch.cat([keys, keys.new_full((max(room - end, 0),), 2 * end)])
     kept = torch.sort(keys).values[:room]
     kept = torch.where(kept < 0, kept + end, torch.clamp(kept, max=end))
     return torch.cat([torch.sort(kept).values, kept.new_full((1,), end)]).int()
+
+def window_segments(documents, window):
+    """The segments that attention keeps to while it reads within windows: each document cut where the row's
+    positions cross a multiple of `window`, SkyLadder's block-wise mask over a packed row (arXiv 2503.15450). Each
+    position then attends at most `window` positions back, and to all of its document once `window` covers the row.
+    `window` is a tensor, so that a compiled model takes every size alike."""
+    t = documents.size(1)
+    return documents * (t + 1) + torch.arange(t, device=documents.device) // window
 
 DENSE_INNER = 64 # the width of the small MLP that weighs the earlier outputs, as in modded-nanogpt's record 81
 DENSE_VALUE_SCALE = 1.15 # the record's scale on the mixture added to the values
@@ -233,9 +242,10 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x, value_embedding=None, value_mixture=None, documents=None, bounds=None):
-        """With `documents` (document_ids), each position attends only within its document. On a GPU this takes
-        `bounds` (segment_bounds) for attention over variable lengths; elsewhere a mask does the same."""
+    def forward(self, x, value_embedding=None, value_mixture=None, documents=None, bounds=None, segments=None):
+        """With `documents` (document_ids), each position attends only within its document, or within its piece of
+        it when `segments` (window_segments) are given. On a GPU this takes `bounds` (segment_bounds) for attention
+        over variable lengths; elsewhere a mask does the same."""
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -252,11 +262,13 @@ class CausalSelfAttention(nn.Module):
             q, k = rotate(q, self.rotary_cos, self.rotary_sin), rotate(k, self.rotary_cos, self.rotary_sin)
         if self.qk_norm is not None:
             q, k = self.qk_norm(q), self.qk_norm(k)
+        # the pieces that attention keeps to: documents, or their pieces within windows
+        kept = documents if segments is None else segments
         if self.key_offset:
             first = None
-            if documents is not None:
-                first = torch.ones_like(documents, dtype=torch.bool)
-                first[:, 1:] = documents[:, 1:] != documents[:, :-1]
+            if kept is not None:
+                first = torch.ones_like(kept, dtype=torch.bool)
+                first[:, 1:] = kept[:, 1:] != kept[:, :-1]
             k = offset_keys(k, self.still, first)
         if documents is not None and bounds is not None:
             # (-1, 0) is a causal window with no limit to the left
@@ -264,7 +276,7 @@ class CausalSelfAttention(nn.Module):
                             bounds, bounds, T, T, window_size=(-1, 0)).view(B, T, self.n_head, C // self.n_head)
         elif documents is not None:
             causal = torch.ones(T, T, dtype=torch.bool, device=x.device).tril()
-            mask = (documents[:, None, :, None] == documents[:, None, None, :]) & causal
+            mask = (kept[:, None, :, None] == kept[:, None, None, :]) & causal
             k, q, v = k.transpose(1, 2), q.transpose(1, 2), v.transpose(1, 2) # (B, nh, T, hs)
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v.to(q.dtype), attn_mask=mask).transpose(1, 2)
         elif self.flash_attention is not None:
@@ -367,8 +379,9 @@ class Block(nn.Module):
         self.ln_2 = make_norm(config)
         self.mlp = MLP(config)
 
-    def forward(self, x, value_embedding=None, value_mixture=None, documents=None, bounds=None, stem_row=None):
-        x = x + self.attn(self.ln_1(x), value_embedding, value_mixture, documents, bounds)
+    def forward(self, x, value_embedding=None, value_mixture=None, documents=None, bounds=None, stem_row=None,
+                segments=None):
+        x = x + self.attn(self.ln_1(x), value_embedding, value_mixture, documents, bounds, segments)
         x = x + self.mlp(self.ln_2(x), stem_row)
         return x
 
@@ -402,6 +415,7 @@ class GPTConfig:
     stem: bool = False # True: half of the MLPs scale their widened values by a table looked up by each token (STEM)
     xielu: bool = False # True: xIELU in the MLP, in the place of ReLU squared or GELU
     document_bos: int = -1 # at least zero: attention stays within each document, which begins with this token
+    smallest_window: int = 0 # above zero: attention may keep to windows (GPT.attention_window) at least this long
 
 class GPT(nn.Module):
 
@@ -459,6 +473,10 @@ class GPT(nn.Module):
             self.backout_weight = nn.Parameter(torch.full((1,), 0.5))
         # set through GPT.use_count_table
         self.count_table = None
+        # how far back attention reads, which training may shorten (SkyLadder); the whole context unless set
+        if config.smallest_window:
+            assert config.document_bos >= 0, "windows cut documents, so attention must keep to documents"
+        self.register_buffer("attention_window", torch.tensor(config.block_size), persistent=False)
         # only the direction of each token's vector in a separate reading table goes on into the blocks
         self.input_norm = RMSNorm() if config.separate_embeddings else None
         # set through GPT.keep_stream_in
@@ -596,11 +614,15 @@ class GPT(nn.Module):
             x = x.to(self.stream_dtype)
         x = self.transformer.drop(x)
         x0 = x
-        documents = bounds = None
+        documents = bounds = segments = None
         if self.config.document_bos >= 0:
             documents = document_ids(idx, self.config.document_bos)
+            per_row = SEGMENTS_PER_ROW
+            if self.config.smallest_window:
+                segments = window_segments(documents, self.attention_window)
+                per_row += self.config.block_size // self.config.smallest_window
             if idx.is_cuda and varlen_attn is not None:
-                bounds = segment_bounds(documents)
+                bounds = segment_bounds(documents if segments is None else segments, per_row)
         pairs = triples = None
         if self.config.bigram_table:
             pairs = self.bigram_table(bigram_rows(idx, self.bigram_table.num_embeddings, documents)).to(x.dtype)
@@ -623,7 +645,7 @@ class GPT(nn.Module):
             table = self.value_embeds[str(layer)] if str(layer) in self.value_embeds else None
             stem = self.stem_tables[str(layer)] if str(layer) in self.stem_tables else None
             x = block(x, table(idx).to(x.dtype) if table is not None else None, value_mixture, documents, bounds,
-                      stem(idx) if stem is not None else None)
+                      stem(idx) if stem is not None else None, segments)
             value_mixture = None
             if layer in kept:
                 outputs[layer] = x
