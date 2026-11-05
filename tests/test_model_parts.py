@@ -1,4 +1,5 @@
 import importlib.util
+import math
 import sys
 import unittest
 import unittest.mock
@@ -11,7 +12,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from model import (GPT, MLP, XIELU, GPTConfig, bigram_rows, document_ids, has_stem_table, segment_bounds,
+from model import (GPT, MLP, XIELU, Experts, GPTConfig, bigram_rows, document_ids, has_stem_table, segment_bounds,
                    trigram_rows, window_segments)
 from muon import configure_muon
 
@@ -118,6 +119,63 @@ class WindowTest(unittest.TestCase):
         tokens = torch.tensor([[BOS] + list(range(1, 16))])
         segments = window_segments(document_ids(tokens, BOS), torch.tensor(4))
         self.assertEqual(segment_bounds(segments, 8 + 16 // 4).tolist(), [0, 4, 8, 12] + [16] * 9)
+
+
+def experts(count=4, chosen=2, shared=0):
+    torch.manual_seed(0)
+    config = GPTConfig(block_size=32, vocab_size=32, n_layer=4, n_head=2, n_embd=16, bias=False, experts=count,
+                       experts_per_token=chosen, expert_width=8, shared_experts=shared)
+    return Experts(config)
+
+
+class ExpertsTest(unittest.TestCase):
+    def test_takes_the_mlps_of_the_layers_without_stems_tables(self):
+        network = model(stem=True, experts=4, experts_per_token=2, expert_width=8)
+        kinds = [type(block.mlp) for block in network.transformer.h]
+        self.assertEqual(kinds, [MLP, Experts, MLP, Experts])
+        self.assertEqual(kinds, [MLP if has_stem_table(layer, 4) else Experts for layer in range(4)])
+
+    def test_routes_by_affinity_and_bias_and_weighs_by_affinity_alone(self):
+        layer = experts()
+        torch.nn.init.zeros_(layer.router.weight)
+        layer.balance.copy_(torch.tensor([0.0, 0.0, 1.0, 2.0]))
+        chosen, weights = layer.route(torch.randn(3, 16))
+        self.assertEqual(sorted(chosen[0].tolist()), [2, 3])
+        self.assertTrue(torch.allclose(weights, torch.full((3, 2), 0.5)))
+
+    def test_gives_in_training_what_it_gives_outside_while_no_expert_overflows(self):
+        layer = experts(shared=1)
+        torch.nn.init.normal_(layer.w_out, std=0.1)
+        x = torch.randn(2, 6, 16)
+        with unittest.mock.patch('model.EXPERT_CAPACITY', 100.0):
+            trained = layer.train()(x)
+        self.assertTrue(torch.allclose(trained, layer.eval()(x), atol=1e-5))
+
+    def test_drops_the_routes_past_an_experts_capacity_the_later_tokens_first(self):
+        layer = experts(count=2, chosen=1)
+        torch.nn.init.normal_(layer.w_out, std=0.1)
+        layer.balance.copy_(torch.tensor([10.0, 0.0])) # every token to the first expert
+        x = torch.randn(1, 8, 16)
+        trained, whole = layer.train()(x), layer.eval()(x)
+        kept = math.ceil(8 / 2 * 1.25)
+        self.assertTrue(torch.allclose(trained[0, :kept], whole[0, :kept], atol=1e-5))
+        self.assertEqual(trained[0, kept:].abs().sum().item(), 0.0)
+
+    def test_counts_the_load_in_training_and_moves_each_bias_toward_the_mean(self):
+        layer = experts(count=4, chosen=1)
+        layer.balance.copy_(torch.tensor([10.0, 0.0, 0.0, 0.0]))
+        layer.eval()(torch.randn(1, 5, 16))
+        self.assertEqual(layer.load.sum().item(), 0.0)
+        layer.train()(torch.randn(1, 5, 16))
+        self.assertEqual(layer.load.tolist(), [5.0, 0.0, 0.0, 0.0])
+        layer.rebalance(0.1)
+        self.assertTrue(torch.allclose(layer.balance, torch.tensor([9.9, 0.1, 0.1, 0.1])))
+        self.assertEqual(layer.load.sum().item(), 0.0)
+
+    def test_starts_adding_nothing_when_the_outputs_start_at_zero(self):
+        network = model(experts=4, experts_per_token=2, expert_width=8, shared_experts=1, zero_output=True)
+        layer = network.transformer.h[0].mlp
+        self.assertEqual(layer.train()(torch.randn(1, 4, 32)).abs().sum().item(), 0.0)
 
 
 class TokenTupleTablesTest(unittest.TestCase):

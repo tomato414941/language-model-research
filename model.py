@@ -347,16 +347,19 @@ class XIELU(nn.Module):
         negative = (torch.expm1(torch.clamp(input, max=self.eps)) - input) * alpha_n
         return torch.where(input > 0, alpha_p * input * input, negative) + self.beta * input
 
+def make_activation(config):
+    if config.xielu:
+        return XIELU()
+    return ReLUSquared() if config.relu_squared else nn.GELU()
+
 class MLP(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, width=None):
         super().__init__()
-        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        if config.xielu:
-            self.activation = XIELU()
-        else:
-            self.activation = ReLUSquared() if config.relu_squared else nn.GELU()
-        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        width = width or 4 * config.n_embd
+        self.c_fc    = nn.Linear(config.n_embd, width, bias=config.bias)
+        self.activation = make_activation(config)
+        self.c_proj  = nn.Linear(width, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x, stem_row=None):
@@ -370,6 +373,102 @@ class MLP(nn.Module):
         x = self.dropout(x)
         return x
 
+# In training, the routed tokens that each expert takes, as a share of its even part; the rest are dropped, as Switch
+# Transformer and ST-MoE train (arXiv 2101.03961, 2202.08906). Evaluation drops none.
+EXPERT_CAPACITY = 1.25
+
+def has_experts(layer, config):
+    """Experts take the MLPs of the layers without STEM's tables, every other layer as GShard and Switch place them,
+    so that each layer keeps one kind of table looked up by the token."""
+    return config.experts > 0 and not (config.stem and has_stem_table(layer, config.n_layer))
+
+class Experts(nn.Module):
+    """A mixture of experts in the place of the MLP: DeepSeekMoE's fine-grained routed experts beside shared ones
+    (arXiv 2401.06066). Each token goes to the experts_per_token routed experts of highest sigmoid affinity, as
+    DeepSeek-V3 routes (arXiv 2412.19437), weighed by their affinities brought to a sum of one. The router runs in
+    float32, as Switch Transformer's does. A bias per expert, which only the choice sees, balances the load without an
+    auxiliary loss (Loss-Free Balancing, arXiv 2408.15664): `rebalance` moves it after each update by the load that
+    the update's tokens put on each expert."""
+
+    def __init__(self, config):
+        super().__init__()
+        width, n_embd = config.expert_width, config.n_embd
+        self.count, self.chosen = config.experts, config.experts_per_token
+        assert 0 < self.chosen <= self.count and width > 0
+        self.router = nn.Linear(n_embd, self.count, bias=False)
+        # each expert's two matrices, held as nn.Linear holds its weight (out, in)
+        self.w_in = nn.Parameter(torch.empty(self.count, width, n_embd).normal_(0.0, 0.02))
+        self.w_out = nn.Parameter(torch.empty(self.count, n_embd, width))
+        if config.zero_output:
+            torch.nn.init.zeros_(self.w_out)
+        else:
+            torch.nn.init.normal_(self.w_out, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
+        self.activation = make_activation(config)
+        self.shared = MLP(config, width * config.shared_experts) if config.shared_experts else None
+        self.register_buffer("balance", torch.zeros(self.count))
+        self.register_buffer("load", torch.zeros(self.count), persistent=False)
+
+    def route(self, flat):
+        """Each token's chosen experts and their weights."""
+        with torch.autocast(device_type=flat.device.type, enabled=False):
+            affinity = torch.sigmoid(F.linear(flat.float(), self.router.weight.float()))
+        chosen = torch.topk(affinity + self.balance, self.chosen, dim=-1).indices
+        weights = affinity.gather(1, chosen)
+        return chosen, weights / weights.sum(-1, keepdim=True)
+
+    def forward(self, x, stem_row=None):
+        shape = x.shape
+        flat = x.reshape(-1, shape[-1])
+        chosen, weights = self.route(flat)
+        if self.training:
+            self.load.index_add_(0, chosen.flatten(), torch.ones(chosen.numel(), device=flat.device))
+            routed = self.dropping(flat, chosen, weights)
+        else:
+            routed = self.dropless(flat, chosen, weights)
+        if self.shared is not None:
+            routed = routed + self.shared(flat)
+        return routed.view(shape)
+
+    def dropping(self, flat, chosen, weights):
+        """The routed experts' outputs in fixed shapes, which a compiled model needs: each expert takes up to
+        EXPERT_CAPACITY times its even share of the routed tokens, the earlier tokens first."""
+        n, n_embd = flat.shape
+        routes = n * self.chosen
+        capacity = math.ceil(routes / self.count * EXPERT_CAPACITY)
+        expert = chosen.flatten()
+        order = torch.argsort(expert, stable=True)
+        counts = torch.zeros(self.count, dtype=torch.long, device=flat.device).index_add_(0, expert, torch.ones_like(expert))
+        starts = counts.cumsum(0) - counts
+        place = torch.empty_like(expert).scatter_(0, order, torch.arange(routes, device=flat.device) - starts[expert[order]])
+        kept = place < capacity
+        # the last row of the experts' inputs takes the routes that do not fit, and gives back nothing
+        slot = torch.where(kept, expert * capacity + place, self.count * capacity)
+        token = torch.arange(n, device=flat.device).repeat_interleave(self.chosen)
+        inputs = flat.new_zeros(self.count * capacity + 1, n_embd).index_copy(0, slot, flat[token])
+        hidden = self.activation(torch.bmm(inputs[:-1].view(self.count, capacity, n_embd), self.w_in.mT))
+        outputs = torch.bmm(hidden, self.w_out.mT).reshape(-1, n_embd)
+        outputs = torch.cat([outputs, outputs.new_zeros(1, n_embd)])
+        share = (weights.flatten() * kept).to(outputs.dtype)
+        return (outputs[slot] * share[:, None]).view(n, self.chosen, n_embd).sum(1).to(flat.dtype)
+
+    def dropless(self, flat, chosen, weights):
+        """The routed experts' outputs for every route, an expert at a time."""
+        routed = torch.zeros_like(flat)
+        for expert in range(self.count):
+            tokens, places = (chosen == expert).nonzero(as_tuple=True)
+            if len(tokens):
+                hidden = self.activation(flat[tokens] @ self.w_in[expert].mT)
+                output = (hidden @ self.w_out[expert].mT) * weights[tokens, places, None]
+                routed.index_add_(0, tokens, output.to(flat.dtype))
+        return routed
+
+    @torch.no_grad()
+    def rebalance(self, rate):
+        """Raises the bias of each expert that took fewer than the mean of the routes since the last call by `rate`,
+        and lowers the others', as Loss-Free Balancing does after each batch."""
+        self.balance += rate * torch.sign(self.load.mean() - self.load)
+        self.load.zero_()
+
 class Block(nn.Module):
 
     def __init__(self, config, layer):
@@ -377,7 +476,7 @@ class Block(nn.Module):
         self.ln_1 = make_norm(config)
         self.attn = CausalSelfAttention(config, layer)
         self.ln_2 = make_norm(config)
-        self.mlp = MLP(config)
+        self.mlp = Experts(config) if has_experts(layer, config) else MLP(config)
 
     def forward(self, x, value_embedding=None, value_mixture=None, documents=None, bounds=None, stem_row=None,
                 segments=None):
@@ -416,6 +515,10 @@ class GPTConfig:
     xielu: bool = False # True: xIELU in the MLP, in the place of ReLU squared or GELU
     document_bos: int = -1 # at least zero: attention stays within each document, which begins with this token
     smallest_window: int = 0 # above zero: attention may keep to windows (GPT.attention_window) at least this long
+    experts: int = 0 # above zero: the routed experts of the MLPs that has_experts gives a mixture of experts
+    experts_per_token: int = 0 # the routed experts that each token goes to
+    expert_width: int = 0 # the width of each expert's widened values
+    shared_experts: int = 0 # the experts that every token goes to, as one MLP that many times as wide as an expert
 
 class GPT(nn.Module):
 

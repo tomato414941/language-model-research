@@ -218,6 +218,38 @@ class StepTest(unittest.TestCase):
         self.assertTrue(torch.equal(run(reload=False), run(reload=True)))
 
 
+class ExpertsTest(unittest.TestCase):
+    def setUp(self):
+        torch.manual_seed(0)
+        self.model = GPT(GPTConfig(block_size=16, vocab_size=32, n_layer=2, n_head=2, n_embd=32, bias=False,
+                                   experts=4, experts_per_token=2, expert_width=16, shared_experts=1))
+
+    def kinds(self):
+        optimizer = configure(self.model)
+        return {id(p): group['kind'] for group in optimizer.param_groups for p in group['params']}
+
+    def test_gives_the_experts_to_muon_and_the_router_to_adamw(self):
+        kinds, experts = self.kinds(), self.model.transformer.h[0].mlp
+        self.assertEqual(kinds[id(experts.w_in)], 'muon')
+        self.assertEqual(kinds[id(experts.w_out)], 'muon')
+        self.assertEqual(kinds[id(experts.shared.c_fc.weight)], 'muon')
+        self.assertEqual(kinds[id(experts.router.weight)], 'adamw')
+
+    def test_steps_each_experts_matrix_as_a_matrix_of_its_own(self):
+        held = torch.nn.Parameter(torch.randn(3, 16, 32, generator=torch.Generator().manual_seed(1)))
+        apart = [torch.nn.Parameter(matrix.detach().clone()) for matrix in held]
+        gradient = torch.randn(3, 16, 32, generator=torch.Generator().manual_seed(2))
+        held.grad = gradient.clone()
+        for matrix, part in zip(apart, gradient):
+            matrix.grad = part.clone()
+        settings = dict(kind='muon', lr=0.04, momentum=0.9, weight_decay=0.1, beta2=0.95, polar_express=True,
+                        normalize_neurons=True, cautious_decay=True, chunks=1)
+        module.MuonAdamW([dict(settings, params=[held])]).step()
+        module.MuonAdamW([dict(settings, params=apart)]).step()
+        for matrix, together in zip(apart, held):
+            self.assertTrue(torch.allclose(matrix, together, atol=1e-5))
+
+
 class ScheduleTest(unittest.TestCase):
     def setUp(self):
         self.optimizer = configure(small_model())

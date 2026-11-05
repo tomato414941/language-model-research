@@ -1,6 +1,6 @@
 # The fifth bundle (research-v5)
 
-Chosen on 2026-11-05, after research-v4 became the current best. The three OLMES suites weigh QA, math and code equally, so this bundle works on what the model reads and how far it reads; v4's model and optimizer stay as they are.
+Chosen on 2026-11-05, after research-v4 became the current best. The three OLMES suites weigh QA, math and code equally, so the first five changes work on what the model reads and how far it reads. At the user's request the bundle then took a mixture of experts, as the last three changes, to make eight.
 
 ## What v4 read as code
 
@@ -15,6 +15,16 @@ In the tokenizer trained on FineWeb, code takes 1.7–2.0 bytes a token (Markdow
 3. **More math and code at the end.** The last 20% of training reads 30% FineWeb and 35% each of math and code: domain upsampling over the final 10–20% (arXiv 2406.03476, 7B), annealing on math and code in Llama 3, code in the cooldown in arXiv 2408.10914, and OLMo 3's midtraining (arXiv 2512.13961).
 4. **Rows of 2,048 tokens.** The suites' few-shot prompts often run past 1,024 tokens (math answers up to 2,960), which the model read in windows that see only 512 to 1,024 tokens back. Updates keep 262,144 tokens (32 rows × 4 passes).
 5. **Attention windows that grow (SkyLadder, arXiv 2503.15450, NeurIPS 2025).** At a fixed number of tokens, shorter windows train better; SkyLadder starts with windows of 32 positions and widens them in a straight line to the whole row, here at 60% of training (the paper's α = 1/8 reaches its 8K rows at about 64%). Its 120M model gained 1.1 points on average accuracy, 360M 2.4. Sequence-length warmup reports similar gains at 125M (arXiv 2108.06084). The windows cut each document at multiples of the window, as the paper's block-wise mask does, and the key offset does not reach across a cut.
+6. **A mixture of experts with fine-grained experts** in the MLPs of the five layers without STEM's tables (every other layer, as GShard and Switch place them; the first layer stays dense, as DeepSeekMoE's larger models keep it). 63 routed experts an eighth of the MLP's width (320), 7 for each token, so that each token's compute stays the MLP's and the MLP's parameters grow eightfold. This is DeepSeekMoE's 2B shape (arXiv 2401.06066). Finer experts were better in OLMoE (8 to 32 experts: about 10% on HellaSwag and MMLU; arXiv 2409.02060), and granularity 8 was the best in loss and wall-clock time at small budgets in Scaling Laws for Fine-Grained MoE (arXiv 2402.07871). Routing uses DeepSeek-V3's sigmoid affinities, normalized among the chosen experts (arXiv 2412.19437), with the router in float32 as in Switch Transformer. Training drops the routes past 1.25 times an expert's even share, as Switch and ST-MoE train (fewer than 1% dropped once balanced); evaluation drops none. Muon steps each expert's matrix on its own; the router goes to AdamW.
+7. **One shared expert** that every token goes through, as wide as an expert. DeepSeekMoE found isolating shared experts better and recommends one shared to three routed; Towards Greater Leverage (arXiv 2507.17702) finds loss U-shaped in the shared share with none worse, and recommends one. OLMoE found one shared and three routed slightly worse than four routed; the evidence is split.
+8. **Loss-free load balancing** (arXiv 2408.15664, used by DeepSeek-V3): a bias per expert that only the choice sees, moved by 0.001 toward the mean load after each update. Against an auxiliary loss, perplexity 9.50 against 9.56 at 1B and 7.92 against 7.97 at 3B, with far better balance. The load is counted over each update's 262,144 tokens; balancing over the larger batch helped specialization in Demons in the Detail (arXiv 2501.11873).
+
+## What the MoE papers say about this scale
+
+- MoE's advantage shrinks at small budgets: Scaling Laws for Fine-Grained MoE notes that short schedules can favor dense models, and Joint MoE Scaling Laws (arXiv 2502.05172) finds the savings grow with size. This run is about 3e17 FLOPs, below the budgets where they report clear gains (1e18 and up).
+- Speed decides it at this scale: OLMoE's MoE processed 0.63 times the dense model's tokens a second; nanochat's MoE got better per step but lost on time. This bundle's implementation keeps fixed shapes for the compiled model and pads each expert to 1.25 times its share.
+- OLMoE needed a balancing loss to avoid collapse in the first layer; here the first layer is dense and the bias balances the rest.
+- Small sparse models were rarely unstable in ST-MoE, so the router z-loss is left out.
 
 ## Considered and left out
 
@@ -28,4 +38,9 @@ In the tokenizer trained on FineWeb, code takes 1.7–2.0 bytes a token (Markdow
 - The validation BPB is measured in rows of the model's context, so v5's are rows of 2,048 tokens against v4's 1,024. The decision uses the three suites.
 - Half the rows are FineWeb against 80% before, so QA may lose some of what math and code gain.
 - FineMath 4plus (398M tokens) is read about 0.6 times; repeats below four epochs cost little (arXiv 2305.16264).
-- The evaluation reads 76M tokens at a context of 2,048 against 58M at 1,024.
+- The evaluation reads 76M tokens at a context of 2,048 against 58M at 1,024, and the experts run one at a time in evaluation.
+- The experts' parameters (about 130M) and their activations raise memory; research-v4 peaked at 41.6 GB of the H100's 80 GB.
+
+## Papers read for the mixture of experts
+
+OLMoE (arXiv 2409.02060), Loss-Free Balancing (2408.15664), Scaling Laws for Fine-Grained MoE (2402.07871), DeepSeekMoE (2401.06066), DeepSeek-V3 (2412.19437), Towards Greater Leverage (2507.17702), Joint MoE Scaling Laws (2502.05172), Switch Transformer (2101.03961), ST-MoE (2202.08906) and Demons in the Detail (2501.11873): the sections on design choices, balancing, capacity and scaling, through arXiv's HTML.

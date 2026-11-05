@@ -30,7 +30,7 @@ from torch.distributed import init_process_group, destroy_process_group
 
 from averaging import WeightAverage, averaged_updates
 from count_table import CountTable
-from model import GPTConfig, GPT, choose_attention
+from model import GPTConfig, GPT, Experts, choose_attention
 from frame import TIME_BUDGET, UNCOUNTED_UPDATES
 from muon import configure_muon, set_schedule_at
 from rows import bos_token, document_heads, whole_row_heads
@@ -106,6 +106,15 @@ document_attention = True # does attention stay within each document, which begi
 # line to the whole row at attention_window_full of training; 0 reads the whole row throughout.
 attention_window_start = 32
 attention_window_full = 0.6
+# A mixture of experts in the MLPs without STEM's tables (model.Experts): DeepSeekMoE's fine-grained routed experts, an
+# eighth of the MLP's width each, 7 of 63 for each token beside one shared expert, as its 2B model routes, so that each
+# token's compute stays the MLP's; 0 experts keeps the MLPs. The routing bias moves by expert_balance_rate after each
+# update (Loss-Free Balancing).
+experts = 63
+experts_per_token = 7
+expert_width = 320
+shared_experts = 1
+expert_balance_rate = 0.001
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations; with a time budget, only a bound
@@ -275,7 +284,8 @@ model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=bloc
                   backout=backout, bigram_rows_per_token=bigram_rows_per_token, trigram_table=trigram_table,
                   stem=stem, xielu=xielu,
                   document_bos=bos_token(os.path.join(data_dir, 'tokenizer.json')) if document_attention else -1,
-                  smallest_window=attention_window_start,
+                  smallest_window=attention_window_start, experts=experts, experts_per_token=experts_per_token,
+                  expert_width=expert_width, shared_experts=shared_experts,
                   ) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
@@ -300,7 +310,8 @@ elif init_from == 'resume':
               'residual_weights', 'logit_softcap', 'count', 'dispersion', 'bigram_table', 'attention_gate',
               'key_offset', 'dense_connections', 'backout', 'trigram_table', 'stem', 'xielu']:
         model_args[k] = checkpoint_model_args.get(k, False)
-    for k in ['bigram_rows_per_token', 'document_bos', 'smallest_window']:
+    for k in ['bigram_rows_per_token', 'document_bos', 'smallest_window', 'experts', 'experts_per_token',
+              'expert_width', 'shared_experts']:
         model_args[k] = checkpoint_model_args.get(k, getattr(GPTConfig, k))
     # create the model
     gptconf = GPTConfig(**model_args)
@@ -363,20 +374,25 @@ if compile:
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 
-# helps estimate an arbitrarily accurate loss over either split using many batches
+# the mixture's layers, whose routing bias moves after each update
+expert_layers = [module for module in model.modules() if isinstance(module, Experts)]
+
+# helps estimate an arbitrarily accurate loss over either split using many batches; the experts run one at a time
+# outside training, which a compiled model would compile again and again, so the model as written estimates it
 @torch.no_grad()
 def estimate_loss():
     out = {}
-    model.eval()
+    measured = unoptimized_model if compile else model
+    measured.eval()
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
-                logits, loss = model(X, Y)
+                logits, loss = measured(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
-    model.train()
+    measured.train()
     return out
 
 # learning rate decay scheduler (cosine with warmup)
@@ -503,6 +519,8 @@ while True:
     scaler.update()
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
+    for layer in expert_layers:
+        layer.rebalance(expert_balance_rate)
 
     # timing and logging
     if time_budget > 0 and device_type == 'cuda':

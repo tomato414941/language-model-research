@@ -94,8 +94,9 @@ class MuonAdamW(torch.optim.Optimizer):
         state['momentum'].lerp_(p.grad, 1 - momentum)
         nesterov = p.grad.lerp(state['momentum'], momentum)
 
-        # A matrix that holds several projections is treated as that many matrices.
-        matrices = torch.stack(nesterov.chunk(group['chunks'], dim=0))
+        # A matrix that holds several projections is treated as that many matrices, and the experts of a mixture,
+        # held together, each as its own.
+        matrices = nesterov if nesterov.dim() == 3 else torch.stack(nesterov.chunk(group['chunks'], dim=0))
         coefficients = POLAR_EXPRESS if group['polar_express'] else NEWTON_SCHULZ
         update = orthogonalize(matrices, coefficients)
         rows, columns = update.shape[-2:]
@@ -104,7 +105,7 @@ class MuonAdamW(torch.optim.Optimizer):
                 shape = (len(update), rows, 1) if rows >= columns else (len(update), 1, columns)
                 state['second_moment'] = torch.zeros(shape, dtype=update.dtype, device=update.device)
             update = normalize_neurons(update, state['second_moment'], group['beta2'])
-        update = update.flatten(0, 1)
+        update = update.reshape(p.shape)
 
         decay = group['weight_decay'] * p
         if group['cautious_decay']:
@@ -124,6 +125,7 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
     rate and its weights, like the backout's, the x0 weights' rate, as their counterparts in modded-nanogpt do.
     The table of triples and STEM's tables, which start at zero like the table of pairs, take what it takes.
     MUDD's weights get a share of other_lr with a slower second moment, as in modded-nanogpt's record 81.
+    Each expert of a mixture is a matrix of its own to Muon; a router, which scores the experts, goes to AdamW.
     """
     matrices, query_key_value, value_embeddings, reading_table, resid_weights, x0_weights, others = ([] for _ in range(7))
     pair_table, dense = [], []
@@ -142,7 +144,7 @@ def configure_muon(model, muon_lr, other_lr, value_embedding_lr=0.1, polar_expre
             x0_weights.append(p)
         elif name.startswith('dense_'):
             dense.append(p)
-        elif not name.startswith('transformer.h.') or p.dim() != 2:
+        elif not name.startswith('transformer.h.') or p.dim() not in (2, 3) or name.endswith('router.weight'):
             others.append(p)
         elif name.endswith('c_attn.weight'):
             query_key_value.append(p)
