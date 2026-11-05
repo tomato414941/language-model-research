@@ -4,7 +4,7 @@ changes it.
 The allowed data, the training time, the evaluation and the rule that adopts a candidate. The evaluation is AI2's three
 OLMES suites, each the macro average over its tasks of the bits per byte of the correct answer, run by `olmes` at a
 pinned revision with its tasks, examples, prompts and scoring unchanged: this file only connects them to the model and
-the tokenizer. Validation BPB on the held-out FineWeb data is a reference.
+the tokenizer. Validation BPB on the held-out FineWeb data is the yardstick that every run shares, measured unchanged.
 
 A request depends on its task alone, not on the model, and olmes takes hours of CPU to build some tasks' few-shot
 prompts, so `python frame.py requests DIR` builds them all beforehand with olmes's own code, and the evaluation hands
@@ -22,7 +22,6 @@ import time
 from contextlib import nullcontext
 from statistics import mean
 
-import numpy as np
 import torch
 
 # FineWeb's sample/10BT at revision 9bb295d, as prepare.py tokenizes it. Only the user adds allowed data.
@@ -330,52 +329,19 @@ def _count_file(arguments):
     return {"requests": requests, "tokens": tokens}
 
 
-@torch.no_grad()
-def evaluate_bpb(network, validation_path, tokenizer_path, device, rows_per_pass=64):
-    """The reference validation BPB: rows of the model's context and one more token, each beginning at the head of
-    a document and none overlapping, over the whole validation file, as training reads its rows."""
-    from rows import bos_token
-
-    data = np.fromfile(validation_path, dtype=np.uint16)
-    length = network.config.block_size + 1
-    heads = np.flatnonzero(data == bos_token(tokenizer_path))
-    starts, next_free = [], 0
-    for head in heads:
-        if head >= next_free and head + length <= len(data):
-            starts.append(head)
-            next_free = head + length - 1
-    sizes = torch.from_numpy(token_bytes(tokenizer_path)).to(device)
-    training = network.training
-    network.eval()
-    nats = torch.zeros((), dtype=torch.float64, device=device)
-    size = torch.zeros((), dtype=torch.int64, device=device)
-    try:
-        for first in range(0, len(starts), rows_per_pass):
-            rows = np.stack([data[start:start + length] for start in starts[first:first + rows_per_pass]])
-            rows = torch.from_numpy(rows.astype(np.int64)).to(device)
-            inputs, targets = rows[:, :-1].contiguous(), rows[:, 1:].contiguous()
-            logits, _ = network(inputs, targets)
-            losses = torch.nn.functional.cross_entropy(logits.float().flatten(0, 1), targets.flatten(),
-                                                       reduction="none")
-            counted = sizes[targets.flatten()]
-            nats += (losses * (counted > 0)).sum().double()
-            size += counted.sum()
-    finally:
-        network.train(training)
-    return (nats / (math.log(2) * size)).item()
-
-
-def token_bytes(tokenizer_path):
-    """How many bytes of text each token stands for. In byte-level BPE each character of a token is one byte;
-    the BOS token stands for none."""
+def validation_bpb(directory, device):
+    """The validation BPB as every run has been measured (scoring.py): the first 2^20 tokens of FineWeb's held-out file,
+    in rows of the model's context, read by the weights in bfloat16."""
     from tokenizers import Tokenizer
 
-    from rows import bos_token
+    from loading import nanogpt_model
+    from scoring import validation_bits
 
-    tokenizer = Tokenizer.from_file(str(tokenizer_path))
-    sizes = np.array([len(tokenizer.id_to_token(i)) for i in range(tokenizer.get_vocab_size())], dtype=np.int64)
-    sizes[bos_token(tokenizer_path)] = 0
-    return sizes
+    config = torch.load(os.path.join(directory, "ckpt.pt"), map_location="cpu")["config"]
+    data_dir = os.path.join("data", config["dataset"])
+    tokenizer_path = os.path.join(data_dir, "tokenizer.json")
+    model = nanogpt_model(directory, tokenizer_path, device, "bfloat16", 262144)
+    return validation_bits(model, os.path.join(data_dir, "val.bin"), Tokenizer.from_file(tokenizer_path).decode)
 
 
 def load_run(directory, device):
@@ -439,12 +405,7 @@ def evaluate_run(directory, requests_dir, device="cuda", batch_size=OLMES_BATCH,
     import multiprocessing
 
     began = time.time()
-    network, config = load_run(directory, device)
-    data_dir = os.path.join("data", config["dataset"])
-    tokenizer_path = os.path.join(data_dir, "tokenizer.json")
-    with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16) if "cuda" in device else nullcontext():
-        val_bpb = evaluate_bpb(network, os.path.join(data_dir, "val.bin"), tokenizer_path, device)
-    del network
+    val_bpb = validation_bpb(directory, device)
     if "cuda" in device:
         torch.cuda.empty_cache()
     output_dir = os.path.join(directory, "olmes")

@@ -54,13 +54,6 @@ class DecisionTest(unittest.TestCase):
 
 
 class TokenizerTest(FrameTest):
-    def test_counts_the_bytes_each_token_stands_for_and_none_for_bos(self):
-        sizes = frame.token_bytes(self.tokenizer_path)
-        for text in TEXTS[:2]:
-            ids = self.tokenizer.encode(text, add_special_tokens=False).ids
-            self.assertEqual(int(sizes[ids].sum()), len(text.encode("utf-8")))
-        self.assertEqual(sizes[self.bos], 0)
-
     @unittest.skipUnless(HAS_TRANSFORMERS, "olmes's wrapper needs transformers")
     def test_puts_the_bos_token_before_each_text_for_olmes_and_pads_with_it(self):
         tokenizer = frame.olmes_tokenizer(self.tokenizer_path)
@@ -189,33 +182,23 @@ class DatasetsTest(unittest.TestCase):
 
 
 class ValidationTest(FrameTest):
-    def write_validation(self, documents):
-        tokens = np.array([token for text in documents
-                           for token in [self.bos, *self.tokenizer.encode(text, add_special_tokens=False).ids]],
-                          dtype=np.uint16)
-        path = self.directory / "val.bin"
-        tokens.tofile(path)
-        return tokens, path
+    def test_measures_the_validation_bpb_as_scoring_does(self):
+        from loading import nanogpt_model
+        from scoring import validation_bits
 
-    def test_reads_rows_from_document_heads_and_counts_the_bytes_of_their_text(self):
+        data = self.directory / "data" / "tiny"
+        data.mkdir(parents=True)
+        tokens = [token for text in TEXTS for token in [self.bos, *self.tokenizer.encode(text, add_special_tokens=False).ids]]
+        np.array(tokens, dtype=np.uint16).tofile(data / "val.bin")
+        self.tokenizer.save(str(data / "tokenizer.json"))
+        run = self.directory / "run"
+        run.mkdir()
         network = small_model(300)
-        tokens, validation = self.write_validation(TEXTS[:4])
-        bpb = frame.evaluate_bpb(network, validation, self.tokenizer_path, "cpu", rows_per_pass=2)
-
-        sizes = frame.token_bytes(self.tokenizer_path)
-        heads, starts, free = np.flatnonzero(tokens == self.bos), [], 0
-        for head in heads:
-            if head >= free and head + 9 <= len(tokens):
-                starts.append(head)
-                free = head + 8
-        rows = torch.from_numpy(np.stack([tokens[start:start + 9] for start in starts]).astype(np.int64))
-        with torch.no_grad():
-            logits, _ = network(rows[:, :-1].contiguous(), rows[:, 1:].contiguous())
-        losses = torch.nn.functional.cross_entropy(logits.flatten(0, 1), rows[:, 1:].flatten(), reduction="none")
-        counted = torch.from_numpy(sizes)[rows[:, 1:].flatten()]
-        expected = (losses * (counted > 0)).sum().item() / (math.log(2) * counted.sum().item())
-        self.assertGreater(len(starts), 1)
-        self.assertAlmostEqual(bpb, expected, places=5)
+        torch.save({"model": network.state_dict(), "model_args": {**vars(network.config)},
+                    "config": {"dataset": str(data), "count_table": ""}}, run / "ckpt.pt")
+        model = nanogpt_model(run, data / "tokenizer.json", "cpu", "bfloat16", 262144)
+        expected = validation_bits(model, data / "val.bin", self.tokenizer.decode)
+        self.assertAlmostEqual(frame.validation_bpb(run, "cpu"), expected, places=6)
 
 
 if __name__ == "__main__":
