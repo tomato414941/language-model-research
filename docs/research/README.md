@@ -25,5 +25,5 @@ Everything trained and measured in this repository, from any window, follows thi
 ## Records
 
 - Keep one row per run in a table: commit, the three suites' BPB, validation BPB, cost, adopted or not, what changed, sources. Write the reasons in the commit message.
-- Write notes in `topics/` (the current judgment on a theme), `sources/` (what one source says) and `experiments/` (one investigation or experiment) only when they will help later. Link only from `topics/` to the other two, and end each source note with what was read.
+- Write notes only when they will help later.
 - Do not copy the [records](https://github.com/tomato414941/language-model/tree/main/docs/research) of `language-model`; link to them. Leave out chat remarks, and back claims with public papers and records.

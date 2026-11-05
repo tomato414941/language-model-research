@@ -16,15 +16,6 @@ class ResearchNotesTest(unittest.TestCase):
                    if not (note.parent / link).exists()]
         self.assertEqual(missing, [])
 
-    def test_links_only_from_topics_to_the_other_notes(self):
-        for folder in ("sources", "experiments"):
-            linking = [note.name for note in (RESEARCH / folder).glob("*.md") if relative_links(note)]
-            self.assertEqual(linking, [], folder)
-
-    def test_ends_every_source_note_with_what_was_read(self):
-        unmarked = [note.name for note in (RESEARCH / "sources").glob("*.md") if "読" not in note.read_text()[-400:]]
-        self.assertEqual(unmarked, [])
-
 
 if __name__ == "__main__":
     unittest.main()
