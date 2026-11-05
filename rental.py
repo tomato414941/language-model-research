@@ -1,7 +1,7 @@
 """Rents a GPU on Vast.ai, an H100 unless another is named, sends it this repository and the data, starts
 a script, fetches what it made and removes the machine.
 
-Commands: offers [GPU], rent [GPU], send [HOST:DIRECTORY [PATH...]], data HOST:DIRECTORY PATH..., start SCRIPT
+Commands: offers [GPU [COUNTRIES]], rent [GPU [COUNTRIES]], send [HOST:DIRECTORY [PATH...]], data HOST:DIRECTORY PATH..., start SCRIPT
 [ARGUMENT...], shell COMMAND, fetch, destroy, guard MINUTES. `send` sends the committed code, and the data if given
 the machine and directory that hold it: prepare.py's fineweb directory, count_table.py's count-fineweb directory,
 harness.py's questions.jsonl, the harness's datasets cache and constraints.txt, the versions that a try without a
@@ -59,22 +59,23 @@ def in_countries(offer, countries):
     return not countries or (offer.get("geolocation") or "").rsplit(", ", 1)[-1] in countries
 
 
-def find_offers(gpu=GPU):
-    # RENTAL_COUNTRIES, a comma-separated list of country codes, keeps the machine near the data it is sent:
-    # the data passes through this machine from the processing one, and a far machine took four times as long.
-    countries = [code for code in os.environ.get("RENTAL_COUNTRIES", "").split(",") if code]
+def find_offers(gpu=GPU, countries=""):
+    # COUNTRIES, a comma-separated list of country codes, keeps the machine near the data it is sent: the data
+    # passes through this machine from the processing one, and a far machine took four times as long. It can come
+    # from RENTAL_COUNTRIES too, which does not reach a command run with the key.
+    countries = [code for code in (countries or os.environ.get("RENTAL_COUNTRIES", "")).split(",") if code]
     query = {**QUERY, "gpu_name": {"eq": gpu}}
     offers = [offer for offer in rental.search(query, DISK_GB)
               if offer["dph_total"] <= MAX_DOLLARS_PER_HOUR and in_countries(offer, countries)]
     return sorted(offers, key=lambda offer: (offer["dph_total"], -offer.get("inet_up", 0)))
 
 
-def show_offers(gpu=GPU):
-    print(json.dumps([{key: offer.get(key) for key in OFFER_FIELDS} for offer in find_offers(gpu)][:5]))
+def show_offers(gpu=GPU, countries=""):
+    print(json.dumps([{key: offer.get(key) for key in OFFER_FIELDS} for offer in find_offers(gpu, countries)][:5]))
 
 
-def rent(gpu=GPU):
-    offers = find_offers(gpu)
+def rent(gpu=GPU, countries=""):
+    offers = find_offers(gpu, countries)
     if not offers:
         raise SystemExit("no offer within the price")
     began = time.time()
