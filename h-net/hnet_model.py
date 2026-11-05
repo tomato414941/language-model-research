@@ -91,12 +91,14 @@ def outer_mixer(kind, width, index):
     """A layer that mixes the bytes along a row and has no MLP; the three real ones hold about 6 width² weights."""
     if kind == "mamba2":
         without_package_imports("mamba_ssm")
+        from causal_conv import install
         from mamba_ssm.modules.mamba2 import Mamba2
 
-        # The paper's encoder and decoder layers, as in its configs/hnet_1stage_L.json. The fused path calls
-        # causal-conv1d's CUDA functions, which have no build for this PyTorch, so the convolution is PyTorch's.
-        return Mamba2(d_model=width, d_state=128, d_conv=4, expand=2, headdim=64, chunk_size=256, layer_idx=index,
-                      use_mem_eff_path=False)
+        # The paper's encoder and decoder layers, as in its configs/hnet_1stage_L.json, on Mamba-2's fused path,
+        # which recomputes its convolution in the backward pass. causal-conv1d's CUDA functions, which that path
+        # calls, have no build for this PyTorch, so the convolution is causal_conv.py's.
+        install()
+        return Mamba2(d_model=width, d_state=128, d_conv=4, expand=2, headdim=64, chunk_size=256, layer_idx=index)
     if kind == "mamba3":
         from mamba_ssm import Mamba3
 
@@ -220,7 +222,7 @@ class HNet(nn.Module):
         self.input_norm = RMSNorm() if config.separate_embeddings else None
         self.stream_dtype = None
         self.passes = 0
-        self.bytes_per_chunk = float("nan")
+        self.selected = None  # the share of bytes that began a chunk in the last training pass, kept on its device
         if not config.separate_embeddings:
             self.transformer.wte.weight = self.lm_head.weight
 
@@ -257,6 +259,11 @@ class HNet(nn.Module):
             self.project = torch.compile(self._project, dynamic=True)
             self.finish = torch.compile(self._finish, dynamic=True)
         print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
+
+    @property
+    def bytes_per_chunk(self):
+        """Read only when reported, since reading it waits for the GPU."""
+        return float("nan") if self.selected is None else 1 / max(self.selected.item(), 1e-9)
 
     @staticmethod
     def _init_main(module):
@@ -383,7 +390,7 @@ class HNet(nn.Module):
                                                 + (1 - selected) * (1 - probability.mean()))
             loss = loss + self.config.ratio_weight * ratio_loss
             if self.training:
-                self.bytes_per_chunk = 1 / max(selected.item(), 1e-9)
+                self.selected = selected.detach()
                 self.passes += 1
                 if self.passes % REPORT_EVERY == 0:
                     print(f"h-net: {self.passes} passes, {self.bytes_per_chunk:.2f} bytes per chunk", flush=True)
