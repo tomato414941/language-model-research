@@ -29,10 +29,12 @@ python attention_check.py documents
 # machine (frame.py requests), and the tasks' data in its Hugging Face cache, data/hf; loading every task once checks
 # that olmes runs here before training ends.
 export HF_HOME=$PWD/data/hf
+# The image's Python has no ensurepip, which `python -m venv` needs, so uv makes the environment.
 (
-    python -m venv /root/olmes-venv
-    /root/olmes-venv/bin/pip install -q torch==2.8.0 --index-url https://download.pytorch.org/whl/cu128
-    /root/olmes-venv/bin/pip install -q --no-deps -r olmes.txt
+    pip install -q --break-system-packages uv
+    uv venv -q /root/olmes-venv --python "$(which python)"
+    uv pip install -q --python /root/olmes-venv/bin/python torch==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+    uv pip install -q --python /root/olmes-venv/bin/python --no-deps -r olmes.txt
     PATH=/root/olmes-venv/bin:$PATH python frame.py data out/olmes-data data/olmes-requests
 ) > results/olmes-setup.log 2>&1 &
 setup=$!
